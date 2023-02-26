@@ -24,8 +24,7 @@ serde_json.workspace = true
 jsonrpsee-types = { version = "0.18" }
 
 [dev-dependencies]
-# reth
-reth-interfaces = { workspace = true, features = ["test-utils"] }
+reth-interfaces = { path = "../../interfaces", features = ["test-utils"] }
 
 # misc
 rand.workspace = true
