@@ -60,6 +60,8 @@ pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             11052984,
             H256(hex!("649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")),
         )),
+        #[cfg(feature = "optimism")]
+        optimism: None,
     }
     .into()
 });
@@ -100,6 +102,8 @@ pub static GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             4367322,
             H256(hex!("649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")),
         )),
+        #[cfg(feature = "optimism")]
+        optimism: None,
     }
     .into()
 });
@@ -144,6 +148,8 @@ pub static SEPOLIA: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             1273020,
             H256(hex!("649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")),
         )),
+        #[cfg(feature = "optimism")]
+        optimism: None,
     }
     .into()
 });
@@ -221,9 +227,25 @@ pub struct ChainSpec {
     /// The active hard forks and their activation conditions
     pub hardforks: BTreeMap<Hardfork, ForkCondition>,
 
+<<<<<<< HEAD
     /// The deposit contract deployed for PoS.
     #[serde(skip, default)]
     pub deposit_contract: Option<DepositContract>,
+=======
+    #[cfg(feature = "optimism")]
+    /// Optimism configuration
+    pub optimism: Option<OptimismConfig>,
+}
+
+#[cfg(feature = "optimism")]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+/// Optimism configuration.
+pub struct OptimismConfig {
+    /// Elasticity multiplier as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+    pub eip_1559_elasticity: u64,
+    /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+    pub eip_1559_denominator: u64,
+>>>>>>> bfa46418 (chainspec and forks)
 }
 
 impl ChainSpec {
@@ -455,8 +477,13 @@ impl From<Genesis> for ChainSpec {
             genesis_hash: None,
             fork_timestamps: ForkTimestamps::from_hardforks(&hardforks),
             hardforks,
+<<<<<<< HEAD
             paris_block_and_final_difficulty: None,
             deposit_contract: None,
+=======
+            #[cfg(feature = "optimism")]
+            optimism: None,
+>>>>>>> bfa46418 (chainspec and forks)
         }
     }
 }
@@ -539,6 +566,8 @@ pub struct ChainSpecBuilder {
     chain: Option<Chain>,
     genesis: Option<Genesis>,
     hardforks: BTreeMap<Hardfork, ForkCondition>,
+    #[cfg(feature = "optimism")]
+    optimism: Option<OptimismConfig>,
 }
 
 impl ChainSpecBuilder {
@@ -548,6 +577,8 @@ impl ChainSpecBuilder {
             chain: Some(MAINNET.chain),
             genesis: Some(MAINNET.genesis.clone()),
             hardforks: MAINNET.hardforks.clone(),
+            #[cfg(feature = "optimism")]
+            optimism: None,
         }
     }
 
@@ -658,10 +689,24 @@ impl ChainSpecBuilder {
         self
     }
 
+<<<<<<< HEAD
     /// Enable Cancun at genesis.
     pub fn cancun_activated(mut self) -> Self {
         self = self.paris_activated();
         self.hardforks.insert(Hardfork::Cancun, ForkCondition::Timestamp(0));
+=======
+    #[cfg(feature = "optimism")]
+    /// Enable Bedrock at genesis
+    pub fn bedrock_activated(mut self) -> Self {
+        self.hardforks.insert(Hardfork::Bedrock, ForkCondition::Block(0));
+        self
+    }
+
+    #[cfg(feature = "optimism")]
+    /// Enable Bedrock at genesis
+    pub fn regolith_activated(mut self) -> Self {
+        self.hardforks.insert(Hardfork::Regolith, ForkCondition::Timestamp(0));
+>>>>>>> bfa46418 (chainspec and forks)
         self
     }
 
@@ -678,8 +723,13 @@ impl ChainSpecBuilder {
             genesis_hash: None,
             fork_timestamps: ForkTimestamps::from_hardforks(&self.hardforks),
             hardforks: self.hardforks,
+<<<<<<< HEAD
             paris_block_and_final_difficulty: None,
             deposit_contract: None,
+=======
+            #[cfg(feature = "optimism")]
+            optimism: self.optimism,
+>>>>>>> bfa46418 (chainspec and forks)
         }
     }
 }
@@ -690,6 +740,8 @@ impl From<&Arc<ChainSpec>> for ChainSpecBuilder {
             chain: Some(value.chain),
             genesis: Some(value.genesis.clone()),
             hardforks: value.hardforks.clone(),
+            #[cfg(feature = "optimism")]
+            optimism: value.optimism.clone(),
         }
     }
 }
