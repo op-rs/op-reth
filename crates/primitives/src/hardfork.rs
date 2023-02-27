@@ -187,6 +187,8 @@ mod tests {
             fork_timestamps: Default::default(),
             paris_block_and_final_difficulty: None,
             deposit_contract: None,
+            #[cfg(feature = "optimism")]
+            optimism: None,
         };
 
         assert_eq!(Hardfork::Frontier.fork_id(&spec), None);
@@ -202,6 +204,8 @@ mod tests {
             fork_timestamps: Default::default(),
             paris_block_and_final_difficulty: None,
             deposit_contract: None,
+            #[cfg(feature = "optimism")]
+            optimism: None,
         };
 
         assert_eq!(Hardfork::Shanghai.fork_filter(&spec), None);

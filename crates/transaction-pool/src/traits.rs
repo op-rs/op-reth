@@ -582,6 +582,8 @@ impl PooledTransaction {
             Transaction::Legacy(t) => U256::from(t.gas_price) * U256::from(t.gas_limit),
             Transaction::Eip2930(t) => U256::from(t.gas_price) * U256::from(t.gas_limit),
             Transaction::Eip1559(t) => U256::from(t.max_fee_per_gas) * U256::from(t.gas_limit),
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(t) => U256::ZERO,
         };
         let cost = gas_cost + U256::from(transaction.value());
 
@@ -631,7 +633,7 @@ impl PoolTransaction for PooledTransaction {
     fn max_fee_per_gas(&self) -> u128 {
         match &self.transaction.transaction {
             #[cfg(feature = "optimism")]
-            Transaction::Optimism(_) => None,
+            Transaction::Deposit(_) => None,
             Transaction::Legacy(_) => None,
             Transaction::Eip2930(_) => None,
             Transaction::Eip1559(tx) => Some(tx.max_fee_per_gas),
@@ -643,6 +645,8 @@ impl PoolTransaction for PooledTransaction {
     /// This will return `None` for non-EIP1559 transactions
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
         match &self.transaction.transaction {
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => None,
             Transaction::Legacy(_) => None,
             Transaction::Eip2930(_) => None,
             Transaction::Eip1559(tx) => Some(tx.max_priority_fee_per_gas),
