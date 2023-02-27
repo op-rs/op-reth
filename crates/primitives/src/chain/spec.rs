@@ -227,25 +227,23 @@ pub struct ChainSpec {
     /// The active hard forks and their activation conditions
     pub hardforks: BTreeMap<Hardfork, ForkCondition>,
 
-<<<<<<< HEAD
     /// The deposit contract deployed for PoS.
     #[serde(skip, default)]
     pub deposit_contract: Option<DepositContract>,
-=======
-    #[cfg(feature = "optimism")]
+
     /// Optimism configuration
+    #[cfg(feature = "optimism")]
     pub optimism: Option<OptimismConfig>,
 }
 
+/// Optimism configuration.
 #[cfg(feature = "optimism")]
 #[derive(Serialize, Deserialize, Debug, Clone)]
-/// Optimism configuration.
 pub struct OptimismConfig {
     /// Elasticity multiplier as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
     pub eip_1559_elasticity: u64,
     /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
     pub eip_1559_denominator: u64,
->>>>>>> bfa46418 (chainspec and forks)
 }
 
 impl ChainSpec {
@@ -477,13 +475,10 @@ impl From<Genesis> for ChainSpec {
             genesis_hash: None,
             fork_timestamps: ForkTimestamps::from_hardforks(&hardforks),
             hardforks,
-<<<<<<< HEAD
             paris_block_and_final_difficulty: None,
             deposit_contract: None,
-=======
             #[cfg(feature = "optimism")]
             optimism: None,
->>>>>>> bfa46418 (chainspec and forks)
         }
     }
 }
@@ -689,24 +684,24 @@ impl ChainSpecBuilder {
         self
     }
 
-<<<<<<< HEAD
     /// Enable Cancun at genesis.
     pub fn cancun_activated(mut self) -> Self {
         self = self.paris_activated();
         self.hardforks.insert(Hardfork::Cancun, ForkCondition::Timestamp(0));
-=======
-    #[cfg(feature = "optimism")]
+        self
+    }
+
     /// Enable Bedrock at genesis
+    #[cfg(feature = "optimism")]
     pub fn bedrock_activated(mut self) -> Self {
         self.hardforks.insert(Hardfork::Bedrock, ForkCondition::Block(0));
         self
     }
 
-    #[cfg(feature = "optimism")]
     /// Enable Bedrock at genesis
+    #[cfg(feature = "optimism")]
     pub fn regolith_activated(mut self) -> Self {
         self.hardforks.insert(Hardfork::Regolith, ForkCondition::Timestamp(0));
->>>>>>> bfa46418 (chainspec and forks)
         self
     }
 
@@ -723,13 +718,10 @@ impl ChainSpecBuilder {
             genesis_hash: None,
             fork_timestamps: ForkTimestamps::from_hardforks(&self.hardforks),
             hardforks: self.hardforks,
-<<<<<<< HEAD
             paris_block_and_final_difficulty: None,
             deposit_contract: None,
-=======
             #[cfg(feature = "optimism")]
             optimism: self.optimism,
->>>>>>> bfa46418 (chainspec and forks)
         }
     }
 }
