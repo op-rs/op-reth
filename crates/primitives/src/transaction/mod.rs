@@ -1305,11 +1305,15 @@ impl TransactionSigned {
         let tx_type = *data.first().ok_or(DecodeError::InputTooShort)?;
         data.advance(1);
 
+<<<<<<< HEAD
         // If the transaction is a deposit, we need to first ensure that the version
         // byte is correct.
         #[cfg(feature = "optimism")]
+=======
+>>>>>>> 74cee5d0 (Move feature flags below comments)
         // If the transaction is a deposit, we need to first ensure that the version
         // byte is correct.
+        #[cfg(feature = "optimism")]
         if tx_type == DEPOSIT_TX_TYPE {
             let version = *data.first().ok_or(DecodeError::InputTooShort)?;
             if version != DEPOSIT_VERSION {
@@ -1331,6 +1335,7 @@ impl TransactionSigned {
         #[cfg(feature = "optimism")]
         // If the transaction is a deposit, we need to add one to the length to account for the
         // version byte.
+        #[cfg(feature = "optimism")]
         let tx_length = if tx_type == DEPOSIT_TX_TYPE { tx_length + 1 } else { tx_length };
 
         // decode common fields
