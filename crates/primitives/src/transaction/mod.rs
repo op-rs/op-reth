@@ -448,8 +448,8 @@ impl Transaction {
             Transaction::Legacy(TxLegacy { nonce, .. }) => *nonce,
             Transaction::Eip2930(TxEip2930 { nonce, .. }) => *nonce,
             Transaction::Eip1559(TxEip1559 { nonce, .. }) => *nonce,
-            #[cfg(feature = "optimism")]
             // Deposit transactions don't have a nonce, so they default to zero.
+            #[cfg(feature = "optimism")]
             Transaction::Deposit(_) => 0,
         }
     }
@@ -1308,8 +1308,6 @@ impl TransactionSigned {
         // If the transaction is a deposit, we need to first ensure that the version
         // byte is correct.
         #[cfg(feature = "optimism")]
-        // If the transaction is a deposit, we need to first ensure that the version
-        // byte is correct.
         if tx_type == DEPOSIT_TX_TYPE {
             let version = *data.first().ok_or(DecodeError::InputTooShort)?;
             if version != DEPOSIT_VERSION {
@@ -1326,9 +1324,9 @@ impl TransactionSigned {
 
         // length of tx encoding = tx type byte (size = 1) + length of header + payload length
         let tx_length = 1 + header.length() + header.payload_length;
-        #[cfg(feature = "optimism")]
         // If the transaction is a deposit, we need to add one to the length to account for the
         // version byte.
+        #[cfg(feature = "optimism")]
         let tx_length = if tx_type == DEPOSIT_TX_TYPE { tx_length + 1 } else { tx_length };
 
         // decode common fields
