@@ -13,7 +13,7 @@ use reth_codecs::{add_arbitrary_tests, derive_arbitrary, main_codec, Compact};
 use reth_rlp::{
     length_of_length, Decodable, DecodeError, Encodable, Header, EMPTY_LIST_CODE, EMPTY_STRING_CODE,
 };
-use serde::{Deserialize, Serialize};
+use revm_primitives::U256;
 pub use signature::Signature;
 pub use tx_type::{TxType, EIP1559_TX_TYPE_ID, EIP2930_TX_TYPE_ID, LEGACY_TX_TYPE_ID};
 
@@ -721,17 +721,6 @@ impl Transaction {
     /// Encodes only the transaction's fields into the desired buffer, without a RLP header.
     pub(crate) fn encode_fields(&self, out: &mut dyn bytes::BufMut) {
         match self {
-            #[cfg(feature = "optimism")]
-            Transaction::Deposit(TxDeposit { to, mint, value, gas_limit, input, .. }) => {
-                tx_env.gas_limit = *gas_limit;
-                tx_env.gas_price = U256::from(*mint);
-                tx_env.gas_priority_fee = None;
-                tx_env.transact_to = TransactTo::Call(*to);
-                tx_env.value = U256::from(*value);
-                tx_env.data = input.0.clone();
-                tx_env.chain_id = None;
-                tx_env.nonce = None;
-            }
             Transaction::Legacy(TxLegacy {
                 chain_id: _,
                 nonce,
@@ -1197,7 +1186,16 @@ impl TransactionSigned {
                 let header = Header { list: true, payload_length };
                 header.encode(out);
                 self.transaction.encode_fields(out);
-                self.signature.encode(out);
+                // Deposit transactions do not have a signature. If the signature's values are not
+                // zero, then the transaction is invalid.
+                if self.signature().v(self.chain_id()) != 0 ||
+                    self.signature().r != U256::ZERO ||
+                    self.signature().s != U256::ZERO
+                {
+                    // TODO: Ensure that this transaction may never have a non-zero signature
+                    // higher up - we shouldn't be panicking here.
+                    panic!("Deposit transactions must have a zero signature");
+                }
             }
             _ => {
                 let payload_length = self.transaction.fields_len() + self.signature.payload_len();
@@ -1309,6 +1307,8 @@ impl TransactionSigned {
         // If the transaction is a deposit, we need to first ensure that the version
         // byte is correct.
         #[cfg(feature = "optimism")]
+        // If the transaction is a deposit, we need to first ensure that the version
+        // byte is correct.
         if tx_type == DEPOSIT_TX_TYPE {
             let version = *data.first().ok_or(DecodeError::InputTooShort)?;
             if version != DEPOSIT_VERSION {
@@ -1328,6 +1328,8 @@ impl TransactionSigned {
         // If the transaction is a deposit, we need to add one to the length to account for the
         // version byte.
         #[cfg(feature = "optimism")]
+        // If the transaction is a deposit, we need to add one to the length to account for the
+        // version byte.
         let tx_length = if tx_type == DEPOSIT_TX_TYPE { tx_length + 1 } else { tx_length };
 
         // decode common fields
