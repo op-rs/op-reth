@@ -116,14 +116,15 @@ pub enum MockTransaction {
     },
     #[cfg(feature = "optimism")]
     DepositTx {
-        source_hash: H256,
-        from: Address,
+        hash: H256,
+        sender: Address,
+        nonce: u64,
         to: TransactionKind,
         mint: Option<u128>,
-        value: u128,
         gas_limit: u64,
         is_system_transaction: bool,
         input: Bytes,
+        value: U256,
     },
 }
 
@@ -454,11 +455,12 @@ impl FromRecoveredTransaction for MockTransaction {
                 is_system_transaction,
                 input,
             }) => MockTransaction::DepositTx {
-                source_hash,
-                from,
+                nonce: 0u64,
+                hash: source_hash,
+                sender: from,
                 to,
                 mint,
-                value,
+                value: U256::from(value),
                 gas_limit,
                 is_system_transaction,
                 input,
