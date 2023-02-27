@@ -23,13 +23,7 @@ pub(crate) type MockTxPool = TxPool<MockOrdering>;
 pub type MockValidTx = ValidPoolTransaction<MockTransaction>;
 
 #[cfg(feature = "optimism")]
-use reth_primitives::DEPOSIT_TX_TYPE;
-
-#[cfg(feature = "optimism")]
-use reth_primitives::TxDeposit;
-
-#[cfg(feature = "optimism")]
-use reth_primitives::Bytes;
+use reth_primitives::{Bytes, TxDeposit, DEPOSIT_TX_TYPE};
 
 /// Create an empty `TxPool`
 pub(crate) fn mock_tx_pool() -> MockTxPool {
