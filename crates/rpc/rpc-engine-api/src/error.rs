@@ -87,4 +87,9 @@ pub enum EngineApiError {
     /// API encountered an internal error.
     #[error(transparent)]
     Internal(#[from] reth_interfaces::Error),
+    /// If the optimism feature flag is enabled, the payload attributes must have a present
+    /// gas limit for the forkchoice updated method.
+    #[cfg(feature = "optimism")]
+    #[error("Missing gas limit in payload attributes")]
+    MissingGasLimitInPayloadAttributes,
 }

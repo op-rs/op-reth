@@ -31,3 +31,6 @@ thiserror = "1.0.37"
 reth-interfaces = { path = "../../interfaces", features = ["test-utils"] }
 reth-provider = { path = "../../storage/provider", features = ["test-utils"] }
 assert_matches = "1.5.0"
+
+[features]
+optimism = ["reth-primitives/optimism", "reth-rpc-types/optimism"]
