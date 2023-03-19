@@ -229,6 +229,7 @@ pub static OP_GOERLI: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
         (Hardfork::ArrowGlacier, ForkCondition::Block(4061224)),
         (Hardfork::GrayGlacier, ForkCondition::Block(4061224)),
         (Hardfork::Bedrock, ForkCondition::Block(4061224)),
+        (Hardfork::Regolith, ForkCondition::Timestamp(1679079600)),
     ]),
     optimism: Some(OptimismConfig { eip_1559_elasticity: 10, eip_1559_denominator: 50 }),
 });
