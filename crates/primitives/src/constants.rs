@@ -10,10 +10,20 @@ pub const SELECTOR_LEN: usize = 4;
 pub const EIP1559_INITIAL_BASE_FEE: u64 = 1_000_000_000;
 
 /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+#[cfg(not(feature = "optimism"))]
 pub const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u64 = 8;
 
 /// Elasticity multiplier as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+#[cfg(not(feature = "optimism"))]
 pub const EIP1559_ELASTICITY_MULTIPLIER: u64 = 2;
+
+/// Base fee max change denominator for Optimism.
+#[cfg(feature = "optimism")]
+pub const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u64 = 50;
+
+/// Elasticity multiplier for Optimism.
+#[cfg(feature = "optimism")]
+pub const EIP1559_ELASTICITY_MULTIPLIER: u64 = 10;
 
 /// Multiplier for converting gwei to wei.
 pub const GWEI_TO_WEI: u64 = 1_000_000_000;
