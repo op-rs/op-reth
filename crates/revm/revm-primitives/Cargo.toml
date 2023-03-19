@@ -13,4 +13,4 @@ reth-primitives = { path = "../../primitives" }
 revm = { version = "3.0.0" }
 
 [features]
-optimism = []
+optimism = ["reth-primitives/optimism"]
