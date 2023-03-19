@@ -25,4 +25,3 @@ optimism = [
     "reth-interfaces/optimism", 
     "reth-provider/optimism"
 ]
-

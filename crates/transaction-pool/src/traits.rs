@@ -595,8 +595,6 @@ impl PoolTransaction for PooledTransaction {
     /// This will return `None` for non-EIP1559 transactions
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
         match &self.transaction.transaction {
-            #[cfg(feature = "optimism")]
-            Transaction::Deposit(_) => None,
             Transaction::Legacy(_) => None,
             Transaction::Eip2930(_) => None,
             Transaction::Eip1559(tx) => Some(tx.max_priority_fee_per_gas),
@@ -643,6 +641,14 @@ impl FromRecoveredTransaction for PooledTransaction {
                 // Gas price is always set to 0 for deposits in order to zero out ETH refunds,
                 // because they already pay for their gas on L1.
                 U256::ZERO
+            }
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(t) => {
+                // TODO: fix this gas price estimate
+                let gas_price = U256::from(0);
+                let cost = U256::from(gas_price) * U256::from(t.gas_limit) + U256::from(t.value);
+                let effective_gas_price = 0u128;
+                (cost, effective_gas_price)
             }
         };
         let cost = gas_cost + U256::from(tx.value());
