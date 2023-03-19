@@ -3,6 +3,9 @@
 use crate::H256;
 use hex_literal::hex;
 
+/// The first four bytes of the call data for a function call specifies the function to be called.
+pub const SELECTOR_LEN: usize = 4;
+
 /// Initial base fee as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
 pub const EIP1559_INITIAL_BASE_FEE: u64 = 1_000_000_000;
 
@@ -39,3 +42,7 @@ pub const KECCAK_EMPTY: H256 =
 /// Ommer root of empty list.
 pub const EMPTY_OMMER_ROOT: H256 =
     H256(hex!("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+
+/// Withdrawals root of empty withdrawals set.
+pub const EMPTY_WITHDRAWALS: H256 =
+    H256(hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"));

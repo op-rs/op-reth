@@ -9,7 +9,8 @@ use jsonrpsee::{
     types::error::{CallError, ErrorCode},
 };
 use reth_primitives::{
-    hex_literal::hex, Address, BlockId, BlockNumberOrTag, Bytes, NodeRecord, H256, H64, U256,
+    hex_literal::hex, Address, BlockId, BlockNumberOrTag, Bytes, NodeRecord, TxHash, H256, H64,
+    U256,
 };
 use reth_rpc_api::{
     clients::{AdminApiClient, EthApiClient},
@@ -50,6 +51,7 @@ where
     let address = Address::default();
     let index = Index::default();
     let hash = H256::default();
+    let tx_hash = TxHash::default();
     let block_number = BlockNumberOrTag::default();
     let call_request = CallRequest::default();
     let transaction_request = TransactionRequest::default();
@@ -71,41 +73,32 @@ where
     EthApiClient::block_by_number(client, block_number, false).await.unwrap();
     EthApiClient::block_transaction_count_by_number(client, block_number).await.unwrap();
     EthApiClient::block_transaction_count_by_hash(client, hash).await.unwrap();
+    EthApiClient::get_proof(client, address, vec![], None).await.unwrap();
     EthApiClient::block_uncles_count_by_hash(client, hash).await.unwrap();
     EthApiClient::block_uncles_count_by_number(client, block_number).await.unwrap();
+    EthApiClient::uncle_by_block_hash_and_index(client, hash, index).await.unwrap();
+    EthApiClient::uncle_by_block_number_and_index(client, block_number, index).await.unwrap();
+    EthApiClient::sign(client, address, bytes.clone()).await.unwrap_err();
+    EthApiClient::sign_typed_data(client, address, jsonrpsee::core::JsonValue::Null)
+        .await
+        .unwrap_err();
+    EthApiClient::transaction_by_hash(client, tx_hash).await.unwrap();
+    EthApiClient::transaction_by_block_hash_and_index(client, hash, index).await.unwrap();
+    EthApiClient::transaction_by_block_number_and_index(client, block_number, index).await.unwrap();
+    EthApiClient::create_access_list(client, call_request.clone(), Some(block_number.into()))
+        .await
+        .unwrap();
+    EthApiClient::estimate_gas(client, call_request.clone(), Some(block_number.into()))
+        .await
+        .unwrap();
+    EthApiClient::call(client, call_request.clone(), Some(block_number.into()), None)
+        .await
+        .unwrap();
 
     // Unimplemented
     assert!(is_unimplemented(EthApiClient::syncing(client).await.err().unwrap()));
     assert!(is_unimplemented(EthApiClient::author(client).await.err().unwrap()));
-    assert!(is_unimplemented(
-        EthApiClient::uncle_by_block_hash_and_index(client, hash, index).await.err().unwrap()
-    ));
-    assert!(is_unimplemented(
-        EthApiClient::uncle_by_block_number_and_index(client, block_number, index)
-            .await
-            .err()
-            .unwrap()
-    ));
-    assert!(is_unimplemented(EthApiClient::transaction_by_hash(client, hash).await.err().unwrap()));
-    assert!(is_unimplemented(
-        EthApiClient::transaction_by_block_hash_and_index(client, hash, index).await.err().unwrap()
-    ));
-    assert!(is_unimplemented(
-        EthApiClient::transaction_by_block_number_and_index(client, block_number, index)
-            .await
-            .err()
-            .unwrap()
-    ));
     assert!(is_unimplemented(EthApiClient::transaction_receipt(client, hash).await.err().unwrap()));
-    assert!(is_unimplemented(
-        EthApiClient::call(client, call_request.clone(), None).await.err().unwrap()
-    ));
-    assert!(is_unimplemented(
-        EthApiClient::create_access_list(client, call_request.clone(), None).await.err().unwrap()
-    ));
-    assert!(is_unimplemented(
-        EthApiClient::estimate_gas(client, call_request.clone(), None).await.err().unwrap()
-    ));
     assert!(is_unimplemented(EthApiClient::gas_price(client).await.err().unwrap()));
     assert!(is_unimplemented(EthApiClient::max_priority_fee_per_gas(client).await.err().unwrap()));
     assert!(is_unimplemented(EthApiClient::is_mining(client).await.err().unwrap()));
@@ -127,19 +120,7 @@ where
         EthApiClient::send_transaction(client, transaction_request).await.err().unwrap()
     ));
     assert!(is_unimplemented(
-        EthApiClient::sign(client, address, bytes.clone()).await.err().unwrap()
-    ));
-    assert!(is_unimplemented(
         EthApiClient::sign_transaction(client, call_request.clone()).await.err().unwrap()
-    ));
-    assert!(is_unimplemented(
-        EthApiClient::sign_typed_data(client, address, jsonrpsee::core::JsonValue::Null)
-            .await
-            .err()
-            .unwrap()
-    ));
-    assert!(is_unimplemented(
-        EthApiClient::get_proof(client, address, vec![], None).await.err().unwrap()
     ));
 }
 
@@ -182,14 +163,16 @@ where
     };
 
     assert!(is_unimplemented(
-        TraceApiClient::call(client, CallRequest::default(), HashSet::default(), None)
+        TraceApiClient::trace_call(client, CallRequest::default(), HashSet::default(), None)
             .await
             .err()
             .unwrap()
     ));
-    assert!(is_unimplemented(TraceApiClient::call_many(client, vec![], None).await.err().unwrap()));
     assert!(is_unimplemented(
-        TraceApiClient::raw_transaction(client, Bytes::default(), HashSet::default(), None)
+        TraceApiClient::trace_call_many(client, vec![], None).await.err().unwrap()
+    ));
+    assert!(is_unimplemented(
+        TraceApiClient::trace_raw_transaction(client, Bytes::default(), HashSet::default(), None)
             .await
             .err()
             .unwrap()
@@ -206,13 +189,9 @@ where
             .err()
             .unwrap()
     ));
-    assert!(is_unimplemented(TraceApiClient::block(client, block_id).await.err().unwrap()));
-    assert!(is_unimplemented(TraceApiClient::filter(client, trace_filter).await.err().unwrap()));
+    assert!(is_unimplemented(TraceApiClient::trace_block(client, block_id).await.err().unwrap()));
     assert!(is_unimplemented(
-        TraceApiClient::trace(client, H256::default(), vec![]).await.err().unwrap()
-    ));
-    assert!(is_unimplemented(
-        TraceApiClient::transaction_traces(client, H256::default()).await.err().unwrap()
+        TraceApiClient::trace_filter(client, trace_filter).await.err().unwrap()
     ));
 }
 

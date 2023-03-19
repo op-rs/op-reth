@@ -90,8 +90,6 @@ where
         P2PMessage::Hello(hello.clone()).encode(&mut raw_hello_bytes);
         self.inner.send(raw_hello_bytes.into()).await?;
 
-        tracing::trace!("waiting for p2p hello from peer");
-
         let first_message_bytes = tokio::time::timeout(HANDSHAKE_TIMEOUT, self.inner.next())
             .await
             .or(Err(P2PStreamError::HandshakeError(P2PHandshakeError::Timeout)))?
@@ -250,7 +248,15 @@ impl<S> P2PStream<S> {
         let pong = P2PMessage::Pong;
         let mut pong_bytes = BytesMut::with_capacity(pong.length());
         pong.encode(&mut pong_bytes);
-        self.outgoing_messages.push_back(pong_bytes.into());
+        self.outgoing_messages.push_back(pong_bytes.freeze());
+    }
+
+    /// Queues in a _snappy_ encoded [`P2PMessage::Ping`] message.
+    fn send_ping(&mut self) {
+        let ping = P2PMessage::Ping;
+        let mut ping_bytes = BytesMut::with_capacity(ping.length());
+        ping.encode(&mut ping_bytes);
+        self.outgoing_messages.push_back(ping_bytes.freeze());
     }
 
     /// Starts to gracefully disconnect the connection by sending a Disconnect message and stop
@@ -439,17 +445,7 @@ where
         match this.pinger.poll_ping(cx) {
             Poll::Pending => {}
             Poll::Ready(Ok(PingerEvent::Ping)) => {
-                // encode the ping message
-                let mut ping_bytes = BytesMut::new();
-                P2PMessage::Ping.encode(&mut ping_bytes);
-
-                // check if the buffer is full
-                if this.outgoing_messages.len() >= MAX_P2P_CAPACITY {
-                    return Poll::Ready(Err(P2PStreamError::SendBufferFull))
-                }
-
-                // if the sink is not ready, buffer the message
-                this.outgoing_messages.push_back(ping_bytes.into());
+                this.send_ping();
             }
             _ => {
                 // encode the disconnect message
@@ -518,12 +514,9 @@ where
             match ready!(this.inner.as_mut().poll_flush(cx)) {
                 Err(err) => return Poll::Ready(Err(err.into())),
                 Ok(()) => {
-                    if let Some(message) = this.outgoing_messages.pop_front() {
-                        if let Err(err) = this.inner.as_mut().start_send(message) {
-                            return Poll::Ready(Err(err.into()))
-                        }
-                    } else {
-                        return Poll::Ready(Ok(()))
+                    let Some(message) = this.outgoing_messages.pop_front() else { return Poll::Ready(Ok(())) };
+                    if let Err(err) = this.inner.as_mut().start_send(message) {
+                        return Poll::Ready(Err(err.into()))
                     }
                 }
             }
@@ -700,8 +693,22 @@ impl Encodable for P2PMessage {
 /// The [`Decodable`](reth_rlp::Decodable) implementation for [`P2PMessage`] assumes that each of
 /// the message variants are snappy compressed, except for the [`P2PMessage::Hello`] variant since
 /// the hello message is never compressed in the `p2p` subprotocol.
+/// The [`Decodable`] implementation for [`P2PMessage::Ping`] and
+/// [`P2PMessage::Pong`] expects a snappy encoded payload, see [`Encodable`] implementation.
 impl Decodable for P2PMessage {
     fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+        /// Removes the snappy prefix from the Ping/Pong buffer
+        fn advance_snappy_ping_pong_payload(buf: &mut &[u8]) -> Result<(), DecodeError> {
+            if buf.len() < 3 {
+                return Err(DecodeError::InputTooShort)
+            }
+            if buf[..3] != [0x01, 0x00, EMPTY_LIST_CODE] {
+                return Err(DecodeError::Custom("expected snappy payload"))
+            }
+            buf.advance(3);
+            Ok(())
+        }
+
         let message_id = u8::decode(&mut &buf[..])?;
         let id = P2PMessageID::try_from(message_id)
             .or(Err(DecodeError::Custom("unknown p2p message id")))?;
@@ -710,11 +717,11 @@ impl Decodable for P2PMessage {
             P2PMessageID::Hello => Ok(P2PMessage::Hello(HelloMessage::decode(buf)?)),
             P2PMessageID::Disconnect => Ok(P2PMessage::Disconnect(DisconnectReason::decode(buf)?)),
             P2PMessageID::Ping => {
-                buf.advance(1);
+                advance_snappy_ping_pong_payload(buf)?;
                 Ok(P2PMessage::Ping)
             }
             P2PMessageID::Pong => {
-                buf.advance(1);
+                advance_snappy_ping_pong_payload(buf)?;
                 Ok(P2PMessage::Pong)
             }
         }

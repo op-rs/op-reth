@@ -7,6 +7,23 @@ use reth_primitives::{Address, Bytes, H256, U256, U64};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// Result type for parity style transaction trace
+pub type TraceResult = crate::trace::common::TraceResult<TraceOutput, String>;
+
+// === impl TraceResult ===
+
+impl TraceResult {
+    /// Wraps the result type in a [TraceResult::Success] variant
+    pub fn parity_success(result: TraceOutput) -> Self {
+        TraceResult::Success { result }
+    }
+
+    /// Wraps the result type in a [TraceResult::Error] variant
+    pub fn parity_error(error: String) -> Self {
+        TraceResult::Error { error }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TraceType {
@@ -75,11 +92,26 @@ pub enum Action {
     Reward(RewardAction),
 }
 
+/// An external action type.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActionType {
+    /// Contract call.
+    Call,
+    /// Contract creation.
+    Create,
+    /// Contract suicide/selfdestruct.
+    Selfdestruct,
+    /// A block reward.
+    Reward,
+}
+
 /// Call type.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CallType {
     /// None
+    #[default]
     None,
     /// Call
     Call,
@@ -157,13 +189,6 @@ pub enum TraceOutput {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum TraceResult {
-    Success { result: TraceOutput },
-    Error { error: String },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionTrace {
     pub trace_address: Vec<usize>,
@@ -179,10 +204,18 @@ pub struct TransactionTrace {
 pub struct LocalizedTransactionTrace {
     #[serde(flatten)]
     pub trace: TransactionTrace,
+    /// Transaction index within the block, None if pending.
     pub transaction_position: Option<usize>,
+    /// Hash of the transaction
     pub transaction_hash: Option<H256>,
-    pub block_number: U64,
-    pub block_hash: H256,
+    /// Block number the transaction is included in, None if pending.
+    ///
+    /// Note: this deviates from <https://openethereum.github.io/JSONRPC-trace-module#trace_transaction> which always returns a block number
+    pub block_number: Option<u64>,
+    /// Hash of the block, if not pending
+    ///
+    /// Note: this deviates from <https://openethereum.github.io/JSONRPC-trace-module#trace_transaction> which always returns a block number
+    pub block_hash: Option<H256>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

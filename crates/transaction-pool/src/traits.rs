@@ -250,7 +250,9 @@ impl<T> BestTransactions for std::iter::Empty<T> {
 }
 
 /// Trait for transaction types used inside the pool
-pub trait PoolTransaction: fmt::Debug + Send + Sync + FromRecoveredTransaction {
+pub trait PoolTransaction:
+    fmt::Debug + Send + Sync + FromRecoveredTransaction + IntoRecoveredTransaction
+{
     /// Hash of the transaction.
     fn hash(&self) -> &TxHash;
 
@@ -295,6 +297,9 @@ pub trait PoolTransaction: fmt::Debug + Send + Sync + FromRecoveredTransaction {
 
     /// Returns the length of the rlp encoded object
     fn encoded_length(&self) -> usize;
+
+    /// Returns chain_id
+    fn chain_id(&self) -> Option<u64>;
 }
 
 /// The default [PoolTransaction] for the [Pool](crate::Pool).
@@ -302,7 +307,7 @@ pub trait PoolTransaction: fmt::Debug + Send + Sync + FromRecoveredTransaction {
 /// This type is essentially a wrapper around [TransactionSignedEcRecovered] with additional fields
 /// derived from the transaction that are frequently used by the pools for ordering.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct PooledTransaction {
+pub struct PooledTransaction {
     /// EcRecovered transaction info
     pub(crate) transaction: TransactionSignedEcRecovered,
 
@@ -311,6 +316,13 @@ pub(crate) struct PooledTransaction {
 
     /// This is `priority + basefee`for EIP-1559 and `gasPrice` for legacy transactions.
     pub(crate) effective_gas_price: u128,
+}
+
+impl PooledTransaction {
+    /// Return the reference to the underlying transaction.
+    pub fn transaction(&self) -> &TransactionSignedEcRecovered {
+        &self.transaction
+    }
 }
 
 impl PoolTransaction for PooledTransaction {
@@ -393,6 +405,11 @@ impl PoolTransaction for PooledTransaction {
     /// Returns the length of the rlp encoded object
     fn encoded_length(&self) -> usize {
         self.transaction.length()
+    }
+
+    /// Returns chain_id
+    fn chain_id(&self) -> Option<u64> {
+        self.transaction.chain_id()
     }
 }
 

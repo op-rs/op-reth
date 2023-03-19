@@ -32,7 +32,7 @@ use reth_primitives::Bytes;
 
 /// Create an empty `TxPool`
 pub(crate) fn mock_tx_pool() -> MockTxPool {
-    MockTxPool::new(Arc::new(Default::default()), Default::default())
+    MockTxPool::new(Default::default(), Default::default())
 }
 
 /// Sets the value for the field
@@ -404,6 +404,10 @@ impl PoolTransaction for MockTransaction {
 
     fn encoded_length(&self) -> usize {
         0
+    }
+
+    fn chain_id(&self) -> Option<u64> {
+        Some(1)
     }
 }
 

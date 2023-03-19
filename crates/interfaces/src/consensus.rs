@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use reth_primitives::{BlockHash, BlockNumber, SealedBlock, SealedHeader, H256, U256};
+use reth_primitives::{
+    BlockHash, BlockNumber, InvalidTransactionError, SealedBlock, SealedHeader, H256, U256,
+};
 use std::fmt::Debug;
-use tokio::sync::watch::Receiver;
 
 /// Re-export fork choice state
 pub use reth_rpc_types::engine::ForkchoiceState;
@@ -10,9 +11,6 @@ pub use reth_rpc_types::engine::ForkchoiceState;
 #[async_trait]
 #[auto_impl::auto_impl(&, Arc)]
 pub trait Consensus: Debug + Send + Sync {
-    /// Get a receiver for the fork choice state
-    fn fork_choice_state(&self) -> Receiver<ForkchoiceState>;
-
     /// Validate if the header is correct and follows consensus specification.
     ///
     /// This is called before properties that are not in the header itself (like total difficulty)
@@ -23,13 +21,17 @@ pub trait Consensus: Debug + Send + Sync {
         &self,
         header: &SealedHeader,
         parent: &SealedHeader,
-    ) -> Result<(), Error>;
+    ) -> Result<(), ConsensusError>;
 
     /// Validate if the header is correct and follows the consensus specification, including
     /// computed properties (like total difficulty).
     ///
     /// Some consensus engines may want to do additional checks here.
-    fn validate_header(&self, header: &SealedHeader, total_difficulty: U256) -> Result<(), Error>;
+    fn validate_header(
+        &self,
+        header: &SealedHeader,
+        total_difficulty: U256,
+    ) -> Result<(), ConsensusError>;
 
     /// Validate a block disregarding world state, i.e. things that can be checked before sender
     /// recovery and execution.
@@ -38,7 +40,7 @@ pub trait Consensus: Debug + Send + Sync {
     /// 11.1 "Ommer Validation".
     ///
     /// **This should not be called for the genesis block**.
-    fn pre_validate_block(&self, block: &SealedBlock) -> Result<(), Error>;
+    fn pre_validate_block(&self, block: &SealedBlock) -> Result<(), ConsensusError>;
 
     /// After the Merge (aka Paris) block rewards became obsolete.
     ///
@@ -51,7 +53,7 @@ pub trait Consensus: Debug + Send + Sync {
 /// Consensus Errors
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
-pub enum Error {
+pub enum ConsensusError {
     #[error("Block used gas ({gas_used:?}) is greater than gas limit ({gas_limit:?}).")]
     HeaderGasUsedExceedsGasLimit { gas_used: u64, gas_limit: u64 },
     #[error("Block ommer hash ({got:?}) is different from expected: ({expected:?})")]
@@ -71,7 +73,7 @@ pub enum Error {
     #[error("Block number {block_number:?} is mismatch with parent block number {parent_block_number:?}")]
     ParentBlockNumberMismatch { parent_block_number: BlockNumber, block_number: BlockNumber },
     #[error(
-        "Block timestamp {timestamp:?} is in past in comparison with parent timestamp {parent_timestamp:?}."
+    "Block timestamp {timestamp:?} is in past in comparison with parent timestamp {parent_timestamp:?}."
     )]
     TimestampIsInPast { parent_timestamp: u64, timestamp: u64 },
     #[error("Block timestamp {timestamp:?} is in future in comparison of our clock time {present_timestamp:?}.")]
@@ -84,26 +86,6 @@ pub enum Error {
     BaseFeeMissing,
     #[error("Block base fee ({got:?}) is different then expected: ({expected:?}).")]
     BaseFeeDiff { expected: u64, got: u64 },
-    #[error("Transaction eip1559 priority fee is more then max fee.")]
-    TransactionPriorityFeeMoreThenMaxFee,
-    #[error("Transaction chain_id does not match.")]
-    TransactionChainId,
-    #[error("Transaction max fee is less them block base fee.")]
-    TransactionMaxFeeLessThenBaseFee,
-    #[error("Transaction signer does not have account.")]
-    SignerAccountNotExisting,
-    #[error("Transaction signer has bytecode set.")]
-    SignerAccountHasBytecode,
-    #[error("Transaction nonce is not consistent.")]
-    TransactionNonceNotConsistent,
-    #[error("Account does not have enough funds ({available_funds:?}) to cover transaction max fee: {max_fee:?}.")]
-    InsufficientFunds { max_fee: u128, available_funds: u128 },
-    #[error("Eip2930 transaction is enabled after berlin hardfork.")]
-    TransactionEip2930Disabled,
-    #[error("Old legacy transaction before Spurious Dragon should not have chain_id.")]
-    TransactionOldLegacyChainId,
-    #[error("Eip2930 transaction is enabled after london hardfork.")]
-    TransactionEip1559Disabled,
     #[error("Transaction signer recovery error.")]
     TransactionSignerRecoveryError,
     #[error(
@@ -130,4 +112,7 @@ pub enum Error {
     WithdrawalIndexInvalid { got: u64, expected: u64 },
     #[error("Missing withdrawals")]
     BodyWithdrawalsMissing,
+    /// Error for a transaction that violates consensus.
+    #[error(transparent)]
+    InvalidTransaction(#[from] InvalidTransactionError),
 }

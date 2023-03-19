@@ -1,23 +1,24 @@
 use crate::config::revm_spec;
 use reth_primitives::{
-    Address, ChainSpec, Head, Header, Transaction, TransactionKind, TransactionSigned, TxEip1559,
-    TxEip2930, TxLegacy, U256,
+    Address, ChainSpec, Head, Header, Transaction, TransactionKind, TransactionSignedEcRecovered,
+    TxEip1559, TxEip2930, TxLegacy, U256,
 };
-use revm::primitives::{AnalysisKind, BlockEnv, CfgEnv, Env, SpecId, TransactTo, TxEnv};
+use revm::primitives::{AnalysisKind, BlockEnv, CfgEnv, SpecId, TransactTo, TxEnv};
 
 #[cfg(feature = "optimism")]
 use reth_primitives::TxDeposit;
 
 /// Convenience function to call both [fill_cfg_env] and [fill_block_env]
 pub fn fill_cfg_and_block_env(
-    env: &mut Env,
+    cfg: &mut CfgEnv,
+    block_env: &mut BlockEnv,
     chain_spec: &ChainSpec,
     header: &Header,
     total_difficulty: U256,
 ) {
-    fill_cfg_env(&mut env.cfg, chain_spec, header, total_difficulty);
-    let after_merge = env.cfg.spec_id >= SpecId::MERGE;
-    fill_block_env(&mut env.block, header, after_merge);
+    fill_cfg_env(cfg, chain_spec, header, total_difficulty);
+    let after_merge = cfg.spec_id >= SpecId::MERGE;
+    fill_block_env(block_env, header, after_merge);
 }
 
 /// Fill [CfgEnv] fields according to the chain spec and given header
@@ -41,7 +42,7 @@ pub fn fill_cfg_env(
     cfg_env.chain_id = U256::from(chain_spec.chain().id());
     cfg_env.spec_id = spec_id;
     cfg_env.perf_all_precompiles_have_balance = false;
-    cfg_env.perf_analyse_created_bytecodes = AnalysisKind::Raw;
+    cfg_env.perf_analyse_created_bytecodes = AnalysisKind::Analyse;
 }
 /// Fill block environment from Block.
 pub fn fill_block_env(block_env: &mut BlockEnv, header: &Header, after_merge: bool) {
@@ -59,8 +60,23 @@ pub fn fill_block_env(block_env: &mut BlockEnv, header: &Header, after_merge: bo
     block_env.gas_limit = U256::from(header.gas_limit);
 }
 
-/// Fill transaction environment from Transaction.
-pub fn fill_tx_env(tx_env: &mut TxEnv, transaction: &TransactionSigned, sender: Address) {
+/// Returns a new [TxEnv] filled with the transaction's data.
+pub fn tx_env_with_recovered(transaction: &TransactionSignedEcRecovered) -> TxEnv {
+    let mut tx_env = TxEnv::default();
+    fill_tx_env(&mut tx_env, transaction.as_ref(), transaction.signer());
+    tx_env
+}
+
+/// Fill transaction environment from [TransactionSignedEcRecovered].
+pub fn fill_tx_env_with_recovered(tx_env: &mut TxEnv, transaction: &TransactionSignedEcRecovered) {
+    fill_tx_env(tx_env, transaction.as_ref(), transaction.signer())
+}
+
+/// Fill transaction environment from a [Transaction] and the given sender address.
+pub fn fill_tx_env<T>(tx_env: &mut TxEnv, transaction: T, sender: Address)
+where
+    T: AsRef<Transaction>,
+{
     tx_env.caller = sender;
     match transaction.as_ref() {
         #[cfg(feature = "optimism")]
@@ -101,6 +117,7 @@ pub fn fill_tx_env(tx_env: &mut TxEnv, transaction: &TransactionSigned, sender: 
             tx_env.data = input.0.clone();
             tx_env.chain_id = *chain_id;
             tx_env.nonce = Some(*nonce);
+            tx_env.access_list.clear();
         }
         Transaction::Eip2930(TxEip2930 {
             nonce,

@@ -1,8 +1,10 @@
+mod common;
 mod receipt;
 mod request;
 mod signature;
 mod typed;
 
+pub use common::TransactionInfo;
 pub use receipt::TransactionReceipt;
 pub use request::TransactionRequest;
 pub use signature::Signature;
@@ -74,7 +76,7 @@ impl Transaction {
     ///
     /// The block hash, number, and tx index fields should be from the original block where the
     /// transaction was mined.
-    pub(crate) fn from_recovered_with_block_context(
+    pub fn from_recovered_with_block_context(
         tx: TransactionSignedEcRecovered,
         block_hash: H256,
         block_number: BlockNumber,
@@ -87,9 +89,9 @@ impl Transaction {
         tx
     }
 
-    /// Create a new rpc transaction result for a pending signed transaction, setting block
+    /// Create a new rpc transaction result for a _pending_ signed transaction, setting block
     /// environment related fields to `None`.
-    pub(crate) fn from_recovered(tx: TransactionSignedEcRecovered) -> Self {
+    pub fn from_recovered(tx: TransactionSignedEcRecovered) -> Self {
         let signer = tx.signer();
         let signed_tx = tx.into_signed();
 
@@ -146,7 +148,7 @@ impl Transaction {
             max_fee_per_gas,
             max_priority_fee_per_gas: signed_tx.max_priority_fee_per_gas().map(U128::from),
             signature: Some(Signature::from_primitive_signature(
-                signed_tx.signature().clone(),
+                *signed_tx.signature(),
                 signed_tx.chain_id(),
             )),
             gas: U256::from(signed_tx.gas_limit()),
@@ -155,5 +157,40 @@ impl Transaction {
             access_list,
             transaction_type: Some(U64::from(signed_tx.tx_type() as u8)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serde_transaction() {
+        let transaction = Transaction {
+            hash: H256::from_low_u64_be(1),
+            nonce: U256::from(2),
+            block_hash: Some(H256::from_low_u64_be(3)),
+            block_number: Some(U256::from(4)),
+            transaction_index: Some(U256::from(5)),
+            from: Address::from_low_u64_be(6),
+            to: Some(Address::from_low_u64_be(7)),
+            value: U256::from(8),
+            gas_price: Some(U128::from(9)),
+            gas: U256::from(10),
+            input: Bytes::from(vec![11, 12, 13]),
+            signature: Some(Signature { v: U256::from(14), r: U256::from(14), s: U256::from(14) }),
+            chain_id: Some(U64::from(17)),
+            access_list: None,
+            transaction_type: Some(U64::from(20)),
+            max_fee_per_gas: Some(U128::from(21)),
+            max_priority_fee_per_gas: Some(U128::from(22)),
+        };
+        let serialized = serde_json::to_string(&transaction).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000001","nonce":"0x2","blockHash":"0x0000000000000000000000000000000000000000000000000000000000000003","blockNumber":"0x4","transactionIndex":"0x5","from":"0x0000000000000000000000000000000000000006","to":"0x0000000000000000000000000000000000000007","value":"0x8","gasPrice":"0x9","gas":"0xa","maxFeePerGas":"0x15","maxPriorityFeePerGas":"0x16","input":"0x0b0c0d","r":"0xe","s":"0xe","v":"0xe","chainId":"0x11","type":"0x14"}"#
+        );
+        let deserialized: Transaction = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(transaction, deserialized);
     }
 }

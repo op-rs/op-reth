@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use reth_primitives::{
-    Account, Address, BlockHash, BlockNumber, Header, IntegerList, Receipt, StorageEntry,
+    Account, Address, BlockHash, BlockNumber, Bytecode, Header, IntegerList, Receipt, StorageEntry,
     StorageTrieEntry, TransactionSigned, TransitionId, TxHash, TxNumber, H256,
 };
 
@@ -58,8 +58,8 @@ pub const TABLES: [(TableType, &str); 27] = [
     (TableType::Table, AccountsTrie::const_name()),
     (TableType::DupSort, StoragesTrie::const_name()),
     (TableType::Table, TxSenders::const_name()),
-    (TableType::Table, Config::const_name()),
     (TableType::Table, SyncStage::const_name()),
+    (TableType::Table, SyncStageProgress::const_name()),
 ];
 
 #[macro_export]
@@ -290,13 +290,13 @@ table!(
 );
 
 table!(
-    /// Configuration values.
-    ( Config ) ConfigKey | ConfigValue
+    /// Stores the highest synced block number of each stage.
+    ( SyncStage ) StageId | BlockNumber
 );
 
 table!(
-    /// Stores the highest synced block number of each stage.
-    ( SyncStage ) StageId | BlockNumber
+    /// Stores arbitrary data to keep track of a stage first-sync progress.
+    ( SyncStageProgress ) StageId | Vec<u8>
 );
 
 ///
@@ -305,15 +305,8 @@ table!(
 /// List with transaction numbers.
 pub type TransitionList = IntegerList;
 /// Encoded stage id.
-pub type StageId = Vec<u8>;
+pub type StageId = String;
 
 //
 // TODO: Temporary types, until they're properly defined alongside with the Encode and Decode Trait
 //
-
-/// Temporary placeholder type for DB.
-pub type ConfigKey = Vec<u8>;
-/// Temporary placeholder type for DB.
-pub type ConfigValue = Vec<u8>;
-/// Temporary placeholder type for DB.
-pub type Bytecode = Vec<u8>;

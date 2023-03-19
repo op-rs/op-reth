@@ -7,7 +7,7 @@ use crate::{
     prometheus_exporter,
 };
 use clap::{Parser, ValueEnum};
-use reth_consensus::beacon::BeaconConsensus;
+use reth_beacon_consensus::BeaconConsensus;
 use reth_downloaders::bodies::bodies::BodiesDownloaderBuilder;
 use reth_primitives::ChainSpec;
 use reth_provider::{ShareableDatabase, Transaction};
@@ -54,7 +54,7 @@ pub struct Command {
         default_value = "mainnet",
         value_parser = chain_spec_value_parser
     )]
-    chain: ChainSpec,
+    chain: Arc<ChainSpec>,
 
     /// Enable Prometheus metrics.
     ///
@@ -123,7 +123,7 @@ impl Command {
 
         match self.stage {
             StageEnum::Bodies => {
-                let (consensus, _) = BeaconConsensus::builder().build(self.chain.clone());
+                let consensus = Arc::new(BeaconConsensus::new(self.chain.clone()));
 
                 let mut config = config;
                 config.peers.connect_trusted_nodes_only = self.network.trusted_only;
@@ -171,8 +171,9 @@ impl Command {
                 stage.execute(&mut tx, input).await?;
             }
             StageEnum::Execution => {
-                let mut stage =
-                    ExecutionStage { chain_spec: self.chain.clone(), commit_threshold: num_blocks };
+                let factory = reth_executor::Factory::new(self.chain.clone());
+                let mut stage = ExecutionStage::new(factory, 10_000);
+                stage.commit_threshold = num_blocks;
                 if !self.skip_unwind {
                     stage.unwind(&mut tx, unwind).await?;
                 }

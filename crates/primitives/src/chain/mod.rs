@@ -1,4 +1,7 @@
-use crate::U256;
+use crate::{
+    net::{goerli_nodes, mainnet_nodes, sepolia_nodes},
+    NodeRecord, U256,
+};
 use ethers_core::types::U64;
 use reth_codecs::add_arbitrary_tests;
 use reth_rlp::{Decodable, Encodable};
@@ -87,6 +90,17 @@ impl Chain {
         }
         None
     }
+
+    /// Returns bootnodes for the given chain.
+    pub fn bootnodes(self) -> Option<Vec<NodeRecord>> {
+        use ethers_core::types::Chain::*;
+        match self.try_into().ok()? {
+            Mainnet => Some(mainnet_nodes()),
+            Goerli => Some(goerli_nodes()),
+            Sepolia => Some(sepolia_nodes()),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Chain {
@@ -169,16 +183,16 @@ impl FromStr for Chain {
 }
 
 impl Encodable for Chain {
-    fn length(&self) -> usize {
-        match self {
-            Self::Named(chain) => u64::from(*chain).length(),
-            Self::Id(id) => id.length(),
-        }
-    }
     fn encode(&self, out: &mut dyn reth_rlp::BufMut) {
         match self {
             Self::Named(chain) => u64::from(*chain).encode(out),
             Self::Id(id) => id.encode(out),
+        }
+    }
+    fn length(&self) -> usize {
+        match self {
+            Self::Named(chain) => u64::from(*chain).length(),
+            Self::Id(id) => id.length(),
         }
     }
 }

@@ -10,7 +10,7 @@ use reth_db::{
 };
 use reth_interfaces::Result;
 use reth_primitives::{
-    Account, Address, Bytes, StorageKey, StorageValue, TransitionId, H256, U256,
+    Account, Address, BlockNumber, Bytecode, Bytes, StorageKey, StorageValue, TransitionId, H256,
 };
 use std::marker::PhantomData;
 
@@ -56,6 +56,7 @@ impl<'a, 'b, TX: DbTx<'a>> AccountProvider for HistoricalStateProviderRef<'a, 'b
                 .tx
                 .cursor_dup_read::<tables::AccountChangeSet>()?
                 .seek_by_key_subkey(changeset_transition_id, address)?
+                .filter(|acc| acc.address == address)
                 .ok_or(ProviderError::AccountChangeset {
                     transition_id: changeset_transition_id,
                     address,
@@ -71,8 +72,21 @@ impl<'a, 'b, TX: DbTx<'a>> AccountProvider for HistoricalStateProviderRef<'a, 'b
 
 impl<'a, 'b, TX: DbTx<'a>> BlockHashProvider for HistoricalStateProviderRef<'a, 'b, TX> {
     /// Get block hash by number.
-    fn block_hash(&self, number: U256) -> Result<Option<H256>> {
-        self.tx.get::<tables::CanonicalHeaders>(number.to::<u64>()).map_err(Into::into)
+    fn block_hash(&self, number: u64) -> Result<Option<H256>> {
+        self.tx.get::<tables::CanonicalHeaders>(number).map_err(Into::into)
+    }
+
+    fn canonical_hashes_range(&self, start: BlockNumber, end: BlockNumber) -> Result<Vec<H256>> {
+        let range = start..end;
+        self.tx
+            .cursor_read::<tables::CanonicalHeaders>()
+            .map(|mut cursor| {
+                cursor
+                    .walk_range(range)?
+                    .map(|result| result.map(|(_, hash)| hash).map_err(Into::into))
+                    .collect::<Result<Vec<_>>>()
+            })?
+            .map_err(Into::into)
     }
 }
 
@@ -95,6 +109,7 @@ impl<'a, 'b, TX: DbTx<'a>> StateProvider for HistoricalStateProviderRef<'a, 'b, 
                 .tx
                 .cursor_dup_read::<tables::StorageChangeSet>()?
                 .seek_by_key_subkey((changeset_transition_id, address).into(), storage_key)?
+                .filter(|entry| entry.key == storage_key)
                 .ok_or(ProviderError::StorageChangeset {
                     transition_id: changeset_transition_id,
                     address,
@@ -107,14 +122,24 @@ impl<'a, 'b, TX: DbTx<'a>> StateProvider for HistoricalStateProviderRef<'a, 'b, 
             Ok(self
                 .tx
                 .cursor_dup_read::<tables::PlainStorageState>()?
-                .seek_by_key_subkey(address, storage_key)
-                .map(|r| r.map(|entry| entry.value))?)
+                .seek_by_key_subkey(address, storage_key)?
+                .filter(|entry| entry.key == storage_key)
+                .map(|entry| entry.value))
         }
     }
 
     /// Get account code by its hash
-    fn bytecode_by_hash(&self, code_hash: H256) -> Result<Option<Bytes>> {
-        self.tx.get::<tables::Bytecodes>(code_hash).map_err(Into::into).map(|r| r.map(Bytes::from))
+    fn bytecode_by_hash(&self, code_hash: H256) -> Result<Option<Bytecode>> {
+        self.tx.get::<tables::Bytecodes>(code_hash).map_err(Into::into)
+    }
+
+    /// Get account and storage proofs.
+    fn proof(
+        &self,
+        _address: Address,
+        _keys: &[H256],
+    ) -> Result<(Vec<Bytes>, H256, Vec<Vec<Bytes>>)> {
+        Err(ProviderError::HistoryStateRoot.into())
     }
 }
 

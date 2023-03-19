@@ -10,17 +10,18 @@ use reth_db::{
 };
 use reth_interfaces::Result;
 use reth_primitives::{
-    Block, BlockHash, BlockId, BlockNumber, ChainInfo, ChainSpec, Hardfork, Head, Header,
+    Block, BlockHash, BlockId, BlockNumber, ChainInfo, ChainSpec, Hardfork, Head, Header, Receipt,
     TransactionSigned, TxHash, TxNumber, Withdrawal, H256, U256,
 };
 use reth_revm_primitives::{
     config::revm_spec,
     env::{fill_block_env, fill_cfg_and_block_env, fill_cfg_env},
 };
-use revm_primitives::{BlockEnv, CfgEnv, Env, SpecId};
+use revm_primitives::{BlockEnv, CfgEnv, SpecId};
 use std::{ops::RangeBounds, sync::Arc};
 
 mod state;
+use crate::traits::ReceiptProvider;
 pub use state::{
     chain::ChainState,
     historical::{HistoricalStateProvider, HistoricalStateProviderRef},
@@ -39,8 +40,8 @@ pub struct ShareableDatabase<DB> {
 
 impl<DB> ShareableDatabase<DB> {
     /// create new database provider
-    pub fn new(db: DB, chain_spec: ChainSpec) -> Self {
-        Self { db, chain_spec: Arc::new(chain_spec) }
+    pub fn new(db: DB, chain_spec: Arc<ChainSpec>) -> Self {
+        Self { db, chain_spec }
     }
 }
 
@@ -62,11 +63,7 @@ impl<DB: Database> HeaderProvider for ShareableDatabase<DB> {
     }
 
     fn header_by_number(&self, num: BlockNumber) -> Result<Option<Header>> {
-        if let Some(hash) = self.db.view(|tx| tx.get::<tables::CanonicalHeaders>(num))?? {
-            self.header(&hash)
-        } else {
-            Ok(None)
-        }
+        Ok(self.db.view(|tx| tx.get::<tables::Headers>(num))??)
     }
 
     fn header_td(&self, hash: &BlockHash) -> Result<Option<U256>> {
@@ -97,10 +94,20 @@ impl<DB: Database> HeaderProvider for ShareableDatabase<DB> {
 }
 
 impl<DB: Database> BlockHashProvider for ShareableDatabase<DB> {
-    fn block_hash(&self, number: U256) -> Result<Option<H256>> {
-        // TODO: This unwrap is potentially unsafe
+    fn block_hash(&self, number: u64) -> Result<Option<H256>> {
+        self.db.view(|tx| tx.get::<tables::CanonicalHeaders>(number))?.map_err(Into::into)
+    }
+
+    fn canonical_hashes_range(&self, start: BlockNumber, end: BlockNumber) -> Result<Vec<H256>> {
+        let range = start..end;
         self.db
-            .view(|tx| tx.get::<tables::CanonicalHeaders>(number.try_into().unwrap()))?
+            .view(|tx| {
+                let mut cursor = tx.cursor_read::<tables::CanonicalHeaders>()?;
+                cursor
+                    .walk_range(range)?
+                    .map(|result| result.map(|(_, hash)| hash).map_err(Into::into))
+                    .collect::<Result<Vec<_>>>()
+            })?
             .map_err(Into::into)
     }
 }
@@ -109,10 +116,10 @@ impl<DB: Database> BlockIdProvider for ShareableDatabase<DB> {
     fn chain_info(&self) -> Result<ChainInfo> {
         let best_number = self
             .db
-            .view(|tx| tx.get::<tables::SyncStage>("Finish".as_bytes().to_vec()))?
+            .view(|tx| tx.get::<tables::SyncStage>("Finish".to_string()))?
             .map_err(Into::<reth_interfaces::db::Error>::into)?
             .unwrap_or_default();
-        let best_hash = self.block_hash(U256::from(best_number))?.unwrap_or_default();
+        let best_hash = self.block_hash(best_number)?.unwrap_or_default();
         Ok(ChainInfo { best_hash, best_number, last_finalized: None, safe_finalized: None })
     }
 
@@ -179,8 +186,8 @@ impl<DB: Database> TransactionsProvider for ShareableDatabase<DB> {
             let tx = self.db.tx()?;
             if let Some(body) = tx.get::<tables::BlockBodies>(number)? {
                 let tx_range = body.tx_id_range();
-                if tx_range.is_empty() {
-                    Ok(Some(Vec::default()))
+                return if tx_range.is_empty() {
+                    Ok(Some(Vec::new()))
                 } else {
                     let mut tx_cursor = tx.cursor_read::<tables::Transactions>()?;
                     let transactions = tx_cursor
@@ -189,12 +196,9 @@ impl<DB: Database> TransactionsProvider for ShareableDatabase<DB> {
                         .collect::<std::result::Result<Vec<_>, _>>()?;
                     Ok(Some(transactions))
                 }
-            } else {
-                Ok(None)
             }
-        } else {
-            Ok(None)
         }
+        Ok(None)
     }
 
     fn transactions_by_block_range(
@@ -223,34 +227,85 @@ impl<DB: Database> TransactionsProvider for ShareableDatabase<DB> {
     }
 }
 
+impl<DB: Database> ReceiptProvider for ShareableDatabase<DB> {
+    fn receipt(&self, id: TxNumber) -> Result<Option<Receipt>> {
+        self.db.view(|tx| tx.get::<tables::Receipts>(id))?.map_err(Into::into)
+    }
+
+    fn receipt_by_hash(&self, hash: TxHash) -> Result<Option<Receipt>> {
+        self.db
+            .view(|tx| {
+                if let Some(id) = tx.get::<tables::TxHashNumber>(hash)? {
+                    tx.get::<tables::Receipts>(id)
+                } else {
+                    Ok(None)
+                }
+            })?
+            .map_err(Into::into)
+    }
+
+    fn receipts_by_block(&self, block: BlockId) -> Result<Option<Vec<Receipt>>> {
+        if let Some(number) = self.block_number_for_id(block)? {
+            let tx = self.db.tx()?;
+            if let Some(body) = tx.get::<tables::BlockBodies>(number)? {
+                let tx_range = body.tx_id_range();
+                return if tx_range.is_empty() {
+                    Ok(Some(Vec::new()))
+                } else {
+                    let mut tx_cursor = tx.cursor_read::<tables::Receipts>()?;
+                    let transactions = tx_cursor
+                        .walk_range(tx_range)?
+                        .map(|result| result.map(|(_, tx)| tx))
+                        .collect::<std::result::Result<Vec<_>, _>>()?;
+                    Ok(Some(transactions))
+                }
+            }
+        }
+        Ok(None)
+    }
+}
+
 impl<DB: Database> WithdrawalsProvider for ShareableDatabase<DB> {
     fn withdrawals_by_block(&self, id: BlockId, timestamp: u64) -> Result<Option<Vec<Withdrawal>>> {
         if self.chain_spec.fork(Hardfork::Shanghai).active_at_timestamp(timestamp) {
             if let Some(number) = self.block_number_for_id(id)? {
-                Ok(self
+                return Ok(self
                     .db
                     .view(|tx| tx.get::<tables::BlockWithdrawals>(number))??
                     .map(|w| w.withdrawals))
-            } else {
-                Ok(None)
             }
-        } else {
-            Ok(None)
         }
+        Ok(None)
+    }
+
+    fn latest_withdrawal(&self) -> Result<Option<Withdrawal>> {
+        let latest_block_withdrawal =
+            self.db.view(|tx| tx.cursor_read::<tables::BlockWithdrawals>()?.last())?;
+        latest_block_withdrawal
+            .map(|block_withdrawal_pair| {
+                block_withdrawal_pair
+                    .and_then(|(_, block_withdrawal)| block_withdrawal.withdrawals.last().cloned())
+            })
+            .map_err(Into::into)
     }
 }
 
 impl<DB: Database> EvmEnvProvider for ShareableDatabase<DB> {
-    fn fill_env_at(&self, env: &mut Env, at: BlockId) -> Result<()> {
+    fn fill_env_at(&self, cfg: &mut CfgEnv, block_env: &mut BlockEnv, at: BlockId) -> Result<()> {
         let hash = self.block_hash_for_id(at)?.ok_or(ProviderError::HeaderNotFound)?;
         let header = self.header(&hash)?.ok_or(ProviderError::HeaderNotFound)?;
-        self.fill_env_with_header(env, &header)
+        self.fill_env_with_header(cfg, block_env, &header)
     }
 
-    fn fill_env_with_header(&self, env: &mut Env, header: &Header) -> Result<()> {
+    fn fill_env_with_header(
+        &self,
+        cfg: &mut CfgEnv,
+        block_env: &mut BlockEnv,
+        header: &Header,
+    ) -> Result<()> {
         let total_difficulty =
             self.header_td_by_number(header.number)?.ok_or(ProviderError::HeaderNotFound)?;
-        fill_cfg_and_block_env(env, &self.chain_spec, header, total_difficulty);
+        fill_cfg_and_block_env(cfg, block_env, &self.chain_spec, header, total_difficulty);
         Ok(())
     }
 
@@ -297,6 +352,7 @@ impl<DB: Database> EvmEnvProvider for ShareableDatabase<DB> {
 impl<DB: Database> StateProviderFactory for ShareableDatabase<DB> {
     type HistorySP<'a> = HistoricalStateProvider<'a,<DB as DatabaseGAT<'a>>::TX> where Self: 'a;
     type LatestSP<'a> = LatestStateProvider<'a,<DB as DatabaseGAT<'a>>::TX> where Self: 'a;
+
     /// Storage provider for latest block
     fn latest(&self) -> Result<Self::LatestSP<'_>> {
         Ok(LatestStateProvider::new(self.db.tx()?))
@@ -331,6 +387,8 @@ impl<DB: Database> StateProviderFactory for ShareableDatabase<DB> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::ShareableDatabase;
     use crate::{BlockIdProvider, StateProviderFactory};
     use reth_db::mdbx::{test_utils::create_test_db, EnvKind, WriteMap};
@@ -340,7 +398,7 @@ mod tests {
     fn common_history_provider() {
         let chain_spec = ChainSpecBuilder::mainnet().build();
         let db = create_test_db::<WriteMap>(EnvKind::RW);
-        let provider = ShareableDatabase::new(db, chain_spec);
+        let provider = ShareableDatabase::new(db, Arc::new(chain_spec));
         let _ = provider.latest();
     }
 
@@ -348,7 +406,7 @@ mod tests {
     fn default_chain_info() {
         let chain_spec = ChainSpecBuilder::mainnet().build();
         let db = create_test_db::<WriteMap>(EnvKind::RW);
-        let provider = ShareableDatabase::new(db, chain_spec);
+        let provider = ShareableDatabase::new(db, Arc::new(chain_spec));
 
         let chain_info = provider.chain_info().expect("should be ok");
         assert_eq!(chain_info.best_number, 0);

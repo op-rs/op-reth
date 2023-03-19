@@ -19,7 +19,8 @@ use reth_primitives::{
 };
 use reth_rlp::Encodable;
 use reth_transaction_pool::{
-    error::PoolResult, PropagateKind, PropagatedTransactions, TransactionPool,
+    error::PoolResult, PoolTransaction, PropagateKind, PropagatedTransactions, TransactionPool,
+    ValidPoolTransaction,
 };
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -35,6 +36,9 @@ use tracing::trace;
 
 /// Cache limit of transactions to keep track of for a single peer.
 const PEER_TRANSACTION_CACHE_LIMIT: usize = 1024 * 10;
+
+/// Soft limit for NewPooledTransactions
+const NEW_POOLED_TRANSACTION_HASHES_SOFT_LIMIT: usize = 4096;
 
 /// The future for inserting a function into the pool
 pub type PoolImportFuture = Pin<Box<dyn Future<Output = PoolResult<TxHash>> + Send + 'static>>;
@@ -223,7 +227,7 @@ where
         let max_num_full = (self.peers.len() as f64).sqrt() as usize + 1;
 
         // Note: Assuming ~random~ order due to random state of the peers map hasher
-        for (idx, (peer_id, peer)) in self.peers.iter_mut().enumerate() {
+        for (peer_idx, (peer_id, peer)) in self.peers.iter_mut().enumerate() {
             // filter all transactions unknown to the peer
             let mut hashes = PooledTransactionsHashesBuilder::new(peer.version);
             let mut full_transactions = Vec::new();
@@ -233,20 +237,27 @@ where
                     full_transactions.push(Arc::clone(&tx.transaction));
                 }
             }
-            let hashes = hashes.build();
+            let mut new_pooled_hashes = hashes.build();
 
             if !full_transactions.is_empty() {
-                if idx > max_num_full {
-                    for hash in hashes.iter_hashes().copied() {
+                // determine whether to send full tx objects or hashes.
+                if peer_idx > max_num_full {
+                    // enforce tx soft limit per message for the (unlikely) event the number of
+                    // hashes exceeds it
+                    new_pooled_hashes.truncate(NEW_POOLED_TRANSACTION_HASHES_SOFT_LIMIT);
+
+                    for hash in new_pooled_hashes.iter_hashes().copied() {
                         propagated.0.entry(hash).or_default().push(PropagateKind::Hash(*peer_id));
                     }
                     // send hashes of transactions
-                    self.network.send_transactions_hashes(*peer_id, hashes);
+                    self.network.send_transactions_hashes(*peer_id, new_pooled_hashes);
                 } else {
+                    // TODO ensure max message size
+
                     // send full transactions
                     self.network.send_transactions(*peer_id, full_transactions);
 
-                    for hash in hashes.into_iter_hashes() {
+                    for hash in new_pooled_hashes.into_iter_hashes() {
                         propagated.0.entry(hash).or_default().push(PropagateKind::Full(*peer_id));
                     }
                 }
@@ -337,7 +348,7 @@ where
                 self.peers.remove(&peer_id);
             }
             NetworkEvent::SessionEstablished { peer_id, messages, version, .. } => {
-                // insert a new peer
+                // insert a new peer into the peerset
                 self.peers.insert(
                     peer_id,
                     Peer {
@@ -349,15 +360,26 @@ where
                     },
                 );
 
-                // Send a `NewPooledTransactionHashes` to the peer with _all_ transactions in the
+                // Send a `NewPooledTransactionHashes` to the peer with up to
+                // `NEW_POOLED_TRANSACTION_HASHES_SOFT_LIMIT` transactions in the
                 // pool
                 if !self.network.is_syncing() {
-                    todo!("get access to full tx");
-                    // let msg = NewPooledTransactionHashes66(self.pool.pooled_transactions());
-                    // self.network.send_message(NetworkHandleMessage::SendPooledTransactionHashes {
-                    //     peer_id,
-                    //     msg,
-                    // })
+                    let peer = self.peers.get_mut(&peer_id).expect("is present; qed");
+
+                    let mut msg_builder = PooledTransactionsHashesBuilder::new(version);
+
+                    for pooled_tx in self
+                        .pool
+                        .pooled_transactions()
+                        .into_iter()
+                        .take(NEW_POOLED_TRANSACTION_HASHES_SOFT_LIMIT)
+                    {
+                        peer.transactions.insert(*pooled_tx.hash());
+                        msg_builder.push_pooled(pooled_tx);
+                    }
+
+                    let msg = msg_builder.build();
+                    self.network.send_transactions_hashes(peer_id, msg);
                 }
             }
             // TODO Add remaining events
@@ -409,6 +431,8 @@ where
                         let pool_transaction = <Pool::Transaction as FromRecoveredTransaction>::from_recovered_transaction(tx);
 
                         let pool = self.pool.clone();
+
+                        #[allow(clippy::redundant_async_block)]
                         let import = Box::pin(async move {
                             pool.add_external_transaction(pool_transaction).await
                         });
@@ -517,7 +541,7 @@ where
     }
 }
 
-/// A transaction that's about to be propagated
+/// A transaction that's about to be propagated to multiple peers.
 struct PropagateTransaction {
     tx_type: u8,
     length: usize,
@@ -546,6 +570,18 @@ enum PooledTransactionsHashesBuilder {
 // === impl PooledTransactionsHashesBuilder ===
 
 impl PooledTransactionsHashesBuilder {
+    /// Push a transaction from the pool to the list.
+    fn push_pooled<T: PoolTransaction>(&mut self, pooled_tx: Arc<ValidPoolTransaction<T>>) {
+        match self {
+            PooledTransactionsHashesBuilder::Eth66(msg) => msg.0.push(*pooled_tx.hash()),
+            PooledTransactionsHashesBuilder::Eth68(msg) => {
+                msg.hashes.push(*pooled_tx.hash());
+                msg.sizes.push(pooled_tx.encoded_length);
+                msg.types.push(pooled_tx.transaction.tx_type());
+            }
+        }
+    }
+
     fn push(&mut self, tx: &PropagateTransaction) {
         match self {
             PooledTransactionsHashesBuilder::Eth66(msg) => msg.0.push(tx.hash()),

@@ -9,19 +9,14 @@ description = "Commonly used types in reth."
 
 [dependencies]
 # reth
-reth-rlp = { path = "../rlp", features = [
-    "std",
-    "derive",
-    "ethereum-types",
-] }
+reth-rlp = { path = "../rlp", features = ["std", "derive", "ethereum-types"] }
 reth-rlp-derive = { path = "../rlp/rlp-derive" }
 reth-codecs = { version = "0.1.0", path = "../storage/codecs" }
 
-revm-primitives = { version="1.0.0", features = ["serde"] }
+revm-primitives = { version = "1.0", features = ["serde"] }
 
 # ethereum
 ethers-core = { git = "https://github.com/gakonst/ethers-rs", default-features = false }
-parity-scale-codec = { version = "3.2.1", features = ["derive", "bytes"] }
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 crunchy = { version = "0.2.2", default-features = false, features = ["limit_256"] }
 
@@ -31,7 +26,7 @@ fixed-hash = { version = "0.8", default-features = false, features = [
 ] }
 
 # crypto
-secp256k1 = { version = "0.24.2", default-features = false, features = [
+secp256k1 = { version = "0.26.0", default-features = false, features = [
     "global-context",
     "alloc",
     "recovery",
@@ -72,16 +67,20 @@ serde_json = "1.0"
 hex-literal = "0.3"
 test-fuzz = "3.0.4"
 rand = "0.8"
-revm-primitives = "1.0.0"
+revm-primitives = { version = "1.0", features = ["arbitrary"] }
 arbitrary = { version = "1.1.7", features = ["derive"] }
 proptest = { version = "1.0" }
 proptest-derive = "0.3"
 
 # necessary so we don't hit a "undeclared 'std'": 
 # https://github.com/paradigmxyz/reth/pull/177#discussion_r1021172198 
-secp256k1 = "0.24.2"
+secp256k1 = "0.26.0"
 criterion = "0.4.0"
-pprof = { version = "0.11", features = ["flamegraph", "frame-pointer", "criterion"] }
+pprof = { version = "0.11", features = [
+    "flamegraph",
+    "frame-pointer",
+    "criterion",
+] }
 
 [features]
 default = []
@@ -92,6 +91,7 @@ arbitrary = [
     "dep:proptest",
     "dep:proptest-derive",
 ]
+test-utils = []
 
 [[bench]]
 name = "recover_ecdsa_crit"

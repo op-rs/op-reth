@@ -29,7 +29,7 @@ pub struct Command {
     /// - Linux: `$XDG_DATA_HOME/reth/db` or `$HOME/.local/share/reth/db`
     /// - Windows: `{FOLDERID_RoamingAppData}/reth/db`
     /// - macOS: `$HOME/Library/Application Support/reth/db`
-    #[arg(long, value_name = "PATH", verbatim_doc_comment, default_value_t)]
+    #[arg(global = true, long, value_name = "PATH", verbatim_doc_comment, default_value_t)]
     db: PlatformPath<DbPath>,
 
     #[clap(subcommand)]
@@ -151,8 +151,10 @@ impl Command {
                                         );
                                         return Ok(());
                                     }
-                                    let map = tool.list::<tables::$table>($start, $len)?;
-                                    tui::DbListTUI::<tables::$table>::show_tui(map, $start, total_entries)
+
+                                    tui::DbListTUI::<_, tables::$table>::new(|start, count| {
+                                        tool.list::<tables::$table>(start, count).unwrap()
+                                    }, $start, $len, total_entries).run()
                                 })??
                             },)*
                             _ => {
@@ -176,7 +178,6 @@ impl Command {
                     BlockTransitionIndex,
                     TxTransitionIndex,
                     SyncStage,
-                    TxHashNumber,
                     Transactions
                 ]);
             }
@@ -206,8 +207,8 @@ impl<'a, DB: Database> DbTool<'a, DB> {
         let chain = random_block_range(0..len, Default::default(), 0..64);
 
         self.db.update(|tx| {
-            chain.iter().try_for_each(|block| {
-                insert_canonical_block(tx, block, true)?;
+            chain.into_iter().try_for_each(|block| {
+                insert_canonical_block(tx, block, None, true)?;
                 Ok::<_, eyre::Error>(())
             })
         })??;

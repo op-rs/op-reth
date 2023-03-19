@@ -1,13 +1,14 @@
 use crate::{
-    AccountProvider, BlockHashProvider, BlockIdProvider, BlockProvider, EvmEnvProvider,
-    HeaderProvider, StateProvider, StateProviderFactory, TransactionsProvider,
+    traits::ReceiptProvider, AccountProvider, BlockHashProvider, BlockIdProvider, BlockProvider,
+    EvmEnvProvider, HeaderProvider, StateProvider, StateProviderFactory, TransactionsProvider,
 };
 use reth_interfaces::Result;
 use reth_primitives::{
-    Account, Address, Block, BlockHash, BlockId, BlockNumber, Bytes, ChainInfo, Header, StorageKey,
-    StorageValue, TransactionSigned, TxHash, TxNumber, H256, U256,
+    Account, Address, Block, BlockHash, BlockId, BlockNumber, Bytecode, Bytes, ChainInfo, Header,
+    Receipt, StorageKey, StorageValue, TransactionSigned, TxHash, TxNumber, H256, KECCAK_EMPTY,
+    U256,
 };
-use revm_primitives::{BlockEnv, CfgEnv, Env};
+use revm_primitives::{BlockEnv, CfgEnv};
 use std::ops::RangeBounds;
 
 /// Supports various api interfaces for testing purposes.
@@ -17,8 +18,12 @@ pub struct NoopProvider;
 
 /// Noop implementation for testing purposes
 impl BlockHashProvider for NoopProvider {
-    fn block_hash(&self, _number: U256) -> Result<Option<H256>> {
+    fn block_hash(&self, _number: u64) -> Result<Option<H256>> {
         Ok(None)
+    }
+
+    fn canonical_hashes_range(&self, _start: BlockNumber, _end: BlockNumber) -> Result<Vec<H256>> {
+        Ok(vec![])
     }
 }
 
@@ -63,6 +68,20 @@ impl TransactionsProvider for NoopProvider {
     }
 }
 
+impl ReceiptProvider for NoopProvider {
+    fn receipt(&self, _id: TxNumber) -> Result<Option<Receipt>> {
+        Ok(None)
+    }
+
+    fn receipt_by_hash(&self, _hash: TxHash) -> Result<Option<Receipt>> {
+        Ok(None)
+    }
+
+    fn receipts_by_block(&self, _block: BlockId) -> Result<Option<Vec<Receipt>>> {
+        Ok(None)
+    }
+}
+
 impl HeaderProvider for NoopProvider {
     fn header(&self, _block_hash: &BlockHash) -> Result<Option<Header>> {
         Ok(None)
@@ -96,17 +115,35 @@ impl StateProvider for NoopProvider {
         Ok(None)
     }
 
-    fn bytecode_by_hash(&self, _code_hash: H256) -> Result<Option<Bytes>> {
+    fn bytecode_by_hash(&self, _code_hash: H256) -> Result<Option<Bytecode>> {
         Ok(None)
+    }
+
+    fn proof(
+        &self,
+        _address: Address,
+        _keys: &[H256],
+    ) -> Result<(Vec<Bytes>, H256, Vec<Vec<Bytes>>)> {
+        Ok((vec![], KECCAK_EMPTY, vec![]))
     }
 }
 
 impl EvmEnvProvider for NoopProvider {
-    fn fill_env_at(&self, _env: &mut Env, _at: BlockId) -> Result<()> {
+    fn fill_env_at(
+        &self,
+        _cfg: &mut CfgEnv,
+        _block_env: &mut BlockEnv,
+        _at: BlockId,
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn fill_env_with_header(&self, _env: &mut Env, _header: &Header) -> Result<()> {
+    fn fill_env_with_header(
+        &self,
+        _cfg: &mut CfgEnv,
+        _block_env: &mut BlockEnv,
+        _header: &Header,
+    ) -> Result<()> {
         Ok(())
     }
 

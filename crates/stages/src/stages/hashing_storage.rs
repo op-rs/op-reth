@@ -1,18 +1,16 @@
 use crate::{ExecInput, ExecOutput, Stage, StageError, StageId, UnwindInput, UnwindOutput};
 use num_traits::Zero;
+use reth_codecs::Compact;
 use reth_db::{
-    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO},
+    cursor::DbDupCursorRO,
     database::Database,
     models::TransitionIdAddress,
     tables,
     transaction::{DbTx, DbTxMut},
 };
-use reth_primitives::{keccak256, Address, StorageEntry, H256, U256};
+use reth_primitives::{keccak256, Address, StorageEntry, StorageHashingCheckpoint};
 use reth_provider::Transaction;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
-};
+use std::{collections::BTreeMap, fmt::Debug};
 use tracing::*;
 
 /// The [`StageId`] of the storage hashing stage.
@@ -32,6 +30,43 @@ pub struct StorageHashingStage {
 impl Default for StorageHashingStage {
     fn default() -> Self {
         Self { clean_threshold: 500_000, commit_threshold: 100_000 }
+    }
+}
+
+impl StorageHashingStage {
+    /// Saves the hashing progress
+    pub fn save_checkpoint<DB: Database>(
+        &mut self,
+        tx: &Transaction<'_, DB>,
+        checkpoint: StorageHashingCheckpoint,
+    ) -> Result<(), StageError> {
+        debug!(target: "sync::stages::storage_hashing::exec", checkpoint = ?checkpoint, "Saving inner storage hashing checkpoint");
+
+        let mut buf = vec![];
+        checkpoint.to_compact(&mut buf);
+
+        Ok(tx.put::<tables::SyncStageProgress>(STORAGE_HASHING.0.into(), buf)?)
+    }
+
+    /// Gets the hashing progress
+    pub fn get_checkpoint<DB: Database>(
+        &self,
+        tx: &Transaction<'_, DB>,
+    ) -> Result<StorageHashingCheckpoint, StageError> {
+        let buf =
+            tx.get::<tables::SyncStageProgress>(STORAGE_HASHING.0.into())?.unwrap_or_default();
+
+        if buf.is_empty() {
+            return Ok(StorageHashingCheckpoint::default())
+        }
+
+        let (checkpoint, _) = StorageHashingCheckpoint::from_compact(&buf, buf.len());
+
+        if checkpoint.address.is_some() {
+            debug!(target: "sync::stages::storage_hashing::exec", checkpoint = ?checkpoint, "Continuing inner storage hashing checkpoint");
+        }
+
+        Ok(checkpoint)
     }
 }
 
@@ -60,136 +95,103 @@ impl<DB: Database> Stage<DB> for StorageHashingStage {
         // AccountHashing table. Also, if we start from genesis, we need to hash from scratch, as
         // genesis accounts are not in changeset, along with their storages.
         if to_transition - from_transition > self.clean_threshold || stage_progress == 0 {
-            tx.clear::<tables::HashedStorage>()?;
-            tx.commit()?;
+            let mut checkpoint = self.get_checkpoint(tx)?;
 
-            let mut current_key = None;
-            let mut current_subkey = None;
+            if checkpoint.address.is_none() ||
+                // Checkpoint is no longer valid if the range of transitions changed. 
+                // An already hashed storage may have been changed with the new range, and therefore should be hashed again. 
+                checkpoint.to != to_transition ||
+                checkpoint.from != from_transition
+            {
+                tx.clear::<tables::HashedStorage>()?;
+
+                checkpoint = StorageHashingCheckpoint::default();
+                self.save_checkpoint(tx, checkpoint)?;
+            }
+
+            let mut current_key = checkpoint.address.take();
+            let mut current_subkey = checkpoint.storage.take();
             let mut keccak_address = None;
 
-            loop {
-                let mut hashed_batch = BTreeMap::new();
-                let mut remaining = self.commit_threshold as usize;
-                {
-                    let mut storage = tx.cursor_dup_read::<tables::PlainStorageState>()?;
-                    while !remaining.is_zero() {
-                        hashed_batch.extend(
-                            storage
-                                .walk_dup(current_key, current_subkey)?
-                                .take(remaining)
-                                .map(|res| {
-                                    res.map(|(address, slot)| {
-                                        // Address caching for the first iteration when current_key
-                                        // is None
-                                        let keccak_address =
-                                            if let Some(keccak_address) = keccak_address {
-                                                keccak_address
-                                            } else {
-                                                keccak256(address)
-                                            };
+            let mut hashed_batch = BTreeMap::new();
+            let mut remaining = self.commit_threshold as usize;
+            {
+                let mut storage = tx.cursor_dup_read::<tables::PlainStorageState>()?;
+                while !remaining.is_zero() {
+                    hashed_batch.extend(
+                        storage
+                            .walk_dup(current_key, current_subkey)?
+                            .take(remaining)
+                            .map(|res| {
+                                res.map(|(address, slot)| {
+                                    // Address caching for the first iteration when current_key
+                                    // is None
+                                    let keccak_address =
+                                        if let Some(keccak_address) = keccak_address {
+                                            keccak_address
+                                        } else {
+                                            keccak256(address)
+                                        };
 
-                                        // TODO cache map keccak256(slot.key) ?
-                                        ((keccak_address, keccak256(slot.key)), slot.value)
-                                    })
+                                    // TODO cache map keccak256(slot.key) ?
+                                    ((keccak_address, keccak256(slot.key)), slot.value)
                                 })
-                                .collect::<Result<BTreeMap<_, _>, _>>()?,
-                        );
+                            })
+                            .collect::<Result<BTreeMap<_, _>, _>>()?,
+                    );
 
-                        remaining = self.commit_threshold as usize - hashed_batch.len();
+                    remaining = self.commit_threshold as usize - hashed_batch.len();
 
-                        if let Some((address, slot)) = storage.next_dup()? {
-                            // There's still some remaining elements on this key, so we need to save
-                            // the cursor position for the next
-                            // iteration
+                    if let Some((address, slot)) = storage.next_dup()? {
+                        // There's still some remaining elements on this key, so we need to save
+                        // the cursor position for the next
+                        // iteration
 
-                            current_key = Some(address);
-                            current_subkey = Some(slot.key);
+                        current_key = Some(address);
+                        current_subkey = Some(slot.key);
+                    } else {
+                        // Go to the next key
+                        current_key = storage.next_no_dup()?.map(|(key, _)| key);
+                        current_subkey = None;
+
+                        // Cache keccak256(address) for the next key if it exists
+                        if let Some(address) = current_key {
+                            keccak_address = Some(keccak256(address));
                         } else {
-                            // Go to the next key
-                            current_key = storage.next_no_dup()?.map(|(key, _)| key);
-                            current_subkey = None;
-
-                            // Cache keccak256(address) for the next key if it exists
-                            if let Some(address) = current_key {
-                                keccak_address = Some(keccak256(address));
-                            } else {
-                                // We have reached the end of table
-                                break
-                            }
+                            // We have reached the end of table
+                            break
                         }
                     }
                 }
+            }
 
-                // iterate and put presorted hashed slots
-                hashed_batch.into_iter().try_for_each(|((addr, key), value)| {
-                    tx.put::<tables::HashedStorage>(addr, StorageEntry { key, value })
-                })?;
+            // iterate and put presorted hashed slots
+            hashed_batch.into_iter().try_for_each(|((addr, key), value)| {
+                tx.put::<tables::HashedStorage>(addr, StorageEntry { key, value })
+            })?;
 
-                tx.commit()?;
+            if let Some(address) = &current_key {
+                checkpoint.address = Some(*address);
+                checkpoint.storage = current_subkey;
+                checkpoint.from = from_transition;
+                checkpoint.to = to_transition;
+            }
 
-                // We have reached the end of table
-                if current_key.is_none() {
-                    break
-                }
+            self.save_checkpoint(tx, checkpoint)?;
+
+            if current_key.is_some() {
+                return Ok(ExecOutput { stage_progress, done: false })
             }
         } else {
-            let mut plain_storage = tx.cursor_dup_read::<tables::PlainStorageState>()?;
-            let mut hashed_storage = tx.cursor_dup_write::<tables::HashedStorage>()?;
-
             // Aggregate all transition changesets and and make list of storages that have been
             // changed.
-            tx.cursor_read::<tables::StorageChangeSet>()?
-                .walk_range(
-                    TransitionIdAddress((from_transition, Address::zero()))..
-                        TransitionIdAddress((to_transition, Address::zero())),
-                )?
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                // fold all storages and save its old state so we can remove it from HashedStorage
-                // it is needed as it is dup table.
-                .fold(
-                    BTreeMap::new(),
-                    |mut accounts: BTreeMap<Address, BTreeSet<H256>>,
-                     (TransitionIdAddress((_, address)), storage_entry)| {
-                        accounts.entry(address).or_default().insert(storage_entry.key);
-                        accounts
-                    },
-                )
-                .into_iter()
-                // iterate over plain state and get newest storage value.
-                // Assumption we are okay with is that plain state represent
-                // `previous_stage_progress` state.
-                .map(|(address, storage)| {
-                    storage
-                        .into_iter()
-                        .map(|key| {
-                            plain_storage
-                                .seek_by_key_subkey(address, key)
-                                .map(|ret| (keccak256(key), ret.map(|e| e.value)))
-                        })
-                        .collect::<Result<BTreeMap<_, _>, _>>()
-                        .map(|storage| (keccak256(address), storage))
-                })
-                .collect::<Result<BTreeMap<_, _>, _>>()?
-                .into_iter()
-                // Hash the address and key and apply them to HashedStorage (if Storage is None
-                // just remove it);
-                .try_for_each(|(address, storage)| {
-                    storage.into_iter().try_for_each(|(key, val)| -> Result<(), StageError> {
-                        if hashed_storage
-                            .seek_by_key_subkey(address, key)?
-                            .filter(|entry| entry.key == key)
-                            .is_some()
-                        {
-                            hashed_storage.delete_current()?;
-                        }
-
-                        if let Some(value) = val {
-                            hashed_storage.upsert(address, StorageEntry { key, value })?;
-                        }
-                        Ok(())
-                    })
-                })?;
+            let lists =
+                tx.get_addresses_and_keys_of_changed_storages(from_transition, to_transition)?;
+            // iterate over plain state and get newest storage value.
+            // Assumption we are okay with is that plain state represent
+            // `previous_stage_progress` state.
+            let storages = tx.get_plainstate_storages(lists.into_iter())?;
+            tx.insert_storage_for_hashing(storages.into_iter())?;
         }
 
         info!(target: "sync::stages::hashing_storage", "Stage finished");
@@ -205,47 +207,10 @@ impl<DB: Database> Stage<DB> for StorageHashingStage {
         let from_transition_rev = tx.get_block_transition(input.unwind_to)?;
         let to_transition_rev = tx.get_block_transition(input.stage_progress)?;
 
-        let mut hashed_storage = tx.cursor_dup_write::<tables::HashedStorage>()?;
-
-        // Aggregate all transition changesets and make list of accounts that have been changed.
-        tx.cursor_read::<tables::StorageChangeSet>()?
-            .walk_range(
-                TransitionIdAddress((from_transition_rev, Address::zero()))..
-                    TransitionIdAddress((to_transition_rev, Address::zero())),
-            )?
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .rev()
-            // fold all account to get the old balance/nonces and account that needs to be removed
-            .fold(
-                BTreeMap::new(),
-                |mut accounts: BTreeMap<(Address, H256), U256>,
-                 (TransitionIdAddress((_, address)), storage_entry)| {
-                    accounts.insert((address, storage_entry.key), storage_entry.value);
-                    accounts
-                },
-            )
-            .into_iter()
-            // hash addresses and collect it inside sorted BTreeMap.
-            // We are doing keccak only once per address.
-            .map(|((address, key), value)| ((keccak256(address), keccak256(key)), value))
-            .collect::<BTreeMap<_, _>>()
-            .into_iter()
-            // Apply values to HashedStorage (if Value is zero just remove it);
-            .try_for_each(|((address, key), value)| -> Result<(), StageError> {
-                if hashed_storage
-                    .seek_by_key_subkey(address, key)?
-                    .filter(|entry| entry.key == key)
-                    .is_some()
-                {
-                    hashed_storage.delete_current()?;
-                }
-
-                if value != U256::ZERO {
-                    hashed_storage.upsert(address, StorageEntry { key, value })?;
-                }
-                Ok(())
-            })?;
+        tx.unwind_storage_hashing(
+            TransitionIdAddress((from_transition_rev, Address::zero()))..
+                TransitionIdAddress((to_transition_rev, Address::zero())),
+        )?;
 
         Ok(UnwindOutput { stage_progress: input.unwind_to })
     }
@@ -258,9 +223,8 @@ mod tests {
         stage_test_suite_ext, ExecuteStageTestRunner, StageTestRunner, TestRunnerError,
         TestTransaction, UnwindStageTestRunner, PREV_STAGE_ID,
     };
-    use assert_matches::assert_matches;
     use reth_db::{
-        cursor::DbCursorRW,
+        cursor::{DbCursorRO, DbCursorRW},
         mdbx::{tx::Tx, WriteMap, RW},
         models::{StoredBlockBody, TransitionIdAddress},
     };
@@ -293,18 +257,25 @@ mod tests {
 
         runner.seed_execution(input).expect("failed to seed execution");
 
-        let rx = runner.execute(input);
+        loop {
+            if let Ok(result) = runner.execute(input).await.unwrap() {
+                if !result.done {
+                    // Continue from checkpoint
+                    continue
+                } else {
+                    assert!(result.stage_progress == previous_stage);
 
-        // Assert the successful result
-        let result = rx.await.unwrap();
-        assert_matches!(
-            result,
-            Ok(ExecOutput { done, stage_progress })
-                if done && stage_progress == previous_stage
-        );
+                    // Validate the stage execution
+                    assert!(
+                        runner.validate_execution(input, Some(result)).is_ok(),
+                        "execution validation"
+                    );
 
-        // Validate the stage execution
-        assert!(runner.validate_execution(input, result.ok()).is_ok(), "execution validation");
+                    break
+                }
+            }
+            panic!("Failed execution");
+        }
     }
 
     struct StorageHashingTestRunner {

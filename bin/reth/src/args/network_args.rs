@@ -2,12 +2,11 @@
 
 use crate::dirs::{KnownPeersPath, PlatformPath};
 use clap::Args;
-use reth_discv4::bootnodes::mainnet_nodes;
 use reth_net_nat::NatResolver;
 use reth_network::NetworkConfigBuilder;
-use reth_primitives::{ChainSpec, NodeRecord};
+use reth_primitives::{mainnet_nodes, ChainSpec, NodeRecord};
 use reth_staged_sync::Config;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 /// Parameters for configuring the network more granularity via CLI
 #[derive(Debug, Args)]
@@ -50,11 +49,16 @@ pub struct NetworkArgs {
 impl NetworkArgs {
     /// Build a [`NetworkConfigBuilder`] from a [`Config`] and a [`ChainSpec`], in addition to the
     /// values in this option struct.
-    pub fn network_config(&self, config: &Config, chain_spec: ChainSpec) -> NetworkConfigBuilder {
-        let peers_file = (!self.no_persist_peers).then_some(&self.peers_file);
+    pub fn network_config(
+        &self,
+        config: &Config,
+        chain_spec: Arc<ChainSpec>,
+    ) -> NetworkConfigBuilder {
+        let chain_bootnodes = chain_spec.chain.bootnodes().unwrap_or_else(mainnet_nodes);
+
         let network_config_builder = config
-            .network_config(self.nat, peers_file.map(|f| f.as_ref().to_path_buf()))
-            .boot_nodes(self.bootnodes.clone().unwrap_or_else(mainnet_nodes))
+            .network_config(self.nat, self.persistent_peers_file())
+            .boot_nodes(self.bootnodes.clone().unwrap_or(chain_bootnodes))
             .chain_spec(chain_spec);
 
         self.discovery.apply_to_builder(network_config_builder)
@@ -87,6 +91,10 @@ pub struct DiscoveryArgs {
     /// Disable Discv4 discovery.
     #[arg(long, conflicts_with = "disable_discovery")]
     disable_discv4_discovery: bool,
+
+    /// The UDP port to use for P2P discovery/networking.
+    #[arg(long = "discovery.port")]
+    pub port: Option<u16>,
 }
 
 impl DiscoveryArgs {

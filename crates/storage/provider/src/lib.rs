@@ -11,8 +11,9 @@
 /// Various provider traits.
 mod traits;
 pub use traits::{
-    AccountProvider, BlockHashProvider, BlockIdProvider, BlockProvider, EvmEnvProvider,
-    HeaderProvider, StateProvider, StateProviderFactory, TransactionsProvider, WithdrawalsProvider,
+    AccountProvider, BlockExecutor, BlockHashProvider, BlockIdProvider, BlockProvider,
+    EvmEnvProvider, ExecutorFactory, HeaderProvider, ReceiptProvider, StateProvider,
+    StateProviderFactory, TransactionsProvider, WithdrawalsProvider,
 };
 
 /// Provider trait implementations.
@@ -21,6 +22,12 @@ pub use providers::{
     HistoricalStateProvider, HistoricalStateProviderRef, LatestStateProvider,
     LatestStateProviderRef, ShareableDatabase,
 };
+
+/// Helper type for loading Merkle Patricia Trees from the database
+pub mod trie;
+
+/// Execution result
+pub mod post_state;
 
 /// Helper types for interacting with the database
 mod transaction;

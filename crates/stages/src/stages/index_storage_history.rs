@@ -1,16 +1,8 @@
 use crate::{ExecInput, ExecOutput, Stage, StageError, StageId, UnwindInput, UnwindOutput};
-use itertools::Itertools;
-use reth_db::{
-    cursor::{DbCursorRO, DbCursorRW},
-    database::{Database, DatabaseGAT},
-    models::{sharded_key::NUM_OF_INDICES_IN_SHARD, storage_sharded_key::StorageShardedKey},
-    tables,
-    transaction::{DbTx, DbTxMut, DbTxMutGAT},
-    TransitionList,
-};
-use reth_primitives::{Address, TransitionId, H256};
+use reth_db::{database::Database, models::TransitionIdAddress};
+use reth_primitives::Address;
 use reth_provider::Transaction;
-use std::{collections::BTreeMap, fmt::Debug};
+use std::fmt::Debug;
 use tracing::*;
 
 /// The [`StageId`] of the storage history indexing stage.
@@ -18,7 +10,7 @@ pub const INDEX_STORAGE_HISTORY: StageId = StageId("IndexStorageHistory");
 
 /// Stage is indexing history the account changesets generated in
 /// [`ExecutionStage`][crate::stages::ExecutionStage]. For more information
-/// on index sharding take a look at [`tables::StorageHistory`].
+/// on index sharding take a look at [`reth_db::tables::StorageHistory`].
 #[derive(Debug)]
 pub struct IndexStorageHistoryStage {
     /// Number of blocks after which the control
@@ -57,58 +49,9 @@ impl<DB: Database> Stage<DB> for IndexStorageHistoryStage {
             std::cmp::min(stage_progress + self.commit_threshold, previous_stage_progress);
         let to_transition = tx.get_block_transition(to_block)?;
 
-        let storage_chageset = tx
-            .cursor_read::<tables::StorageChangeSet>()?
-            .walk(Some((from_transition, Address::zero()).into()))?
-            .take_while(|res| {
-                res.as_ref().map(|(k, _)| k.transition_id() < to_transition).unwrap_or_default()
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // fold all storages to one set of changes
-        let storage_changeset_lists = storage_chageset.into_iter().fold(
-            BTreeMap::new(),
-            |mut storages: BTreeMap<(Address, H256), Vec<u64>>, (index, storage)| {
-                storages
-                    .entry((index.address(), storage.key))
-                    .or_default()
-                    .push(index.transition_id());
-                storages
-            },
-        );
-
-        for ((address, storage_key), mut indices) in storage_changeset_lists {
-            let mut last_shard = take_last_storage_shard(tx, address, storage_key)?;
-            last_shard.append(&mut indices);
-
-            // chunk indices and insert them in shards of N size.
-            let mut chunks = last_shard
-                .iter()
-                .chunks(NUM_OF_INDICES_IN_SHARD)
-                .into_iter()
-                .map(|chunks| chunks.map(|i| *i as usize).collect::<Vec<usize>>())
-                .collect::<Vec<_>>();
-            let last_chunk = chunks.pop();
-
-            // chunk indices and insert them in shards of N size.
-            chunks.into_iter().try_for_each(|list| {
-                tx.put::<tables::StorageHistory>(
-                    StorageShardedKey::new(
-                        address,
-                        storage_key,
-                        *list.last().expect("Chuck does not return empty list") as TransitionId,
-                    ),
-                    TransitionList::new(list).expect("Indices are presorted and not empty"),
-                )
-            })?;
-            // Insert last list with u64::MAX
-            if let Some(last_list) = last_chunk {
-                tx.put::<tables::StorageHistory>(
-                    StorageShardedKey::new(address, storage_key, u64::MAX),
-                    TransitionList::new(last_list).expect("Indices are presorted and not empty"),
-                )?;
-            }
-        }
+        let indices =
+            tx.get_storage_transition_ids_from_changeset(from_transition, to_transition)?;
+        tx.insert_storage_history_index(indices)?;
 
         info!(target: "sync::stages::index_storage_history", "Stage finished");
         Ok(ExecOutput { stage_progress: to_block, done: true })
@@ -124,110 +67,32 @@ impl<DB: Database> Stage<DB> for IndexStorageHistoryStage {
         let from_transition_rev = tx.get_block_transition(input.unwind_to)?;
         let to_transition_rev = tx.get_block_transition(input.stage_progress)?;
 
-        let mut cursor = tx.cursor_write::<tables::StorageHistory>()?;
+        tx.unwind_storage_history_indices(
+            TransitionIdAddress((from_transition_rev, Address::zero()))..
+                TransitionIdAddress((to_transition_rev, Address::zero())),
+        )?;
 
-        let storage_changesets = tx
-            .cursor_read::<tables::StorageChangeSet>()?
-            .walk(Some((from_transition_rev, Address::zero()).into()))?
-            .take_while(|res| {
-                res.as_ref().map(|(k, _)| k.transition_id() < to_transition_rev).unwrap_or_default()
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let last_indices = storage_changesets
-            .into_iter()
-            // reverse so we can get lowest transition id where we need to unwind account.
-            .rev()
-            // fold all storages and get last transition index
-            .fold(
-                BTreeMap::new(),
-                |mut accounts: BTreeMap<(Address, H256), u64>, (index, storage)| {
-                    // we just need address and lowest transition id.
-                    accounts.insert((index.address(), storage.key), index.transition_id());
-                    accounts
-                },
-            );
-        for ((address, storage_key), rem_index) in last_indices {
-            let shard_part =
-                unwind_storage_history_shards::<DB>(&mut cursor, address, storage_key, rem_index)?;
-
-            // check last shard_part, if present, items needs to be reinserted.
-            if !shard_part.is_empty() {
-                // there are items in list
-                tx.put::<tables::StorageHistory>(
-                    StorageShardedKey::new(address, storage_key, u64::MAX),
-                    TransitionList::new(shard_part)
-                        .expect("There is at least one element in list and it is sorted."),
-                )?;
-            }
-        }
         Ok(UnwindOutput { stage_progress: input.unwind_to })
     }
 }
 
-/// Load last shard and check if it is full and remove if it is not. If list is empty, last shard
-/// was full or there is no shards at all.
-pub fn take_last_storage_shard<DB: Database>(
-    tx: &Transaction<'_, DB>,
-    address: Address,
-    storage_key: H256,
-) -> Result<Vec<u64>, StageError> {
-    let mut cursor = tx.cursor_read::<tables::StorageHistory>()?;
-    let last = cursor.seek_exact(StorageShardedKey::new(address, storage_key, u64::MAX))?;
-    if let Some((storage_shard_key, list)) = last {
-        // delete old shard so new one can be inserted.
-        tx.delete::<tables::StorageHistory>(storage_shard_key, None)?;
-        let list = list.iter(0).map(|i| i as u64).collect::<Vec<_>>();
-        return Ok(list)
-    }
-    Ok(Vec::new())
-}
-
-/// Unwind all history shards. For boundary shard, remove it from database and
-/// return last part of shard with still valid items. If all full shard were removed, return list
-/// would be empty but this does not mean that there is none shard left but that there is no
-/// splitted shards.
-pub fn unwind_storage_history_shards<DB: Database>(
-    cursor: &mut <<DB as DatabaseGAT<'_>>::TXMut as DbTxMutGAT<'_>>::CursorMut<
-        tables::StorageHistory,
-    >,
-    address: Address,
-    storage_key: H256,
-    transition_id: TransitionId,
-) -> Result<Vec<usize>, StageError> {
-    let mut item = cursor.seek_exact(StorageShardedKey::new(address, storage_key, u64::MAX))?;
-
-    while let Some((storage_sharded_key, list)) = item {
-        // there is no more shard for address
-        if storage_sharded_key.address != address ||
-            storage_sharded_key.sharded_key.key != storage_key
-        {
-            // there is no more shard for address and storage_key.
-            break
-        }
-        cursor.delete_current()?;
-        // check first item and if it is more and eq than `transition_id` delete current
-        // item.
-        let first = list.iter(0).next().expect("List can't empty");
-        if first >= transition_id as usize {
-            item = cursor.prev()?;
-            continue
-        } else if transition_id <= storage_sharded_key.sharded_key.highest_transition_id {
-            // if first element is in scope whole list would be removed.
-            // so at least this first element is present.
-            return Ok(list.iter(0).take_while(|i| *i < transition_id as usize).collect::<Vec<_>>())
-        } else {
-            return Ok(list.iter(0).collect::<Vec<_>>())
-        }
-    }
-    Ok(Vec::new())
-}
 #[cfg(test)]
 mod tests {
 
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::test_utils::{TestTransaction, PREV_STAGE_ID};
-    use reth_db::models::{ShardedKey, TransitionIdAddress};
-    use reth_primitives::{hex_literal::hex, StorageEntry, H160, U256};
+    use reth_db::{
+        models::{
+            storage_sharded_key::{StorageShardedKey, NUM_OF_INDICES_IN_SHARD},
+            ShardedKey, TransitionIdAddress,
+        },
+        tables,
+        transaction::DbTxMut,
+        TransitionList,
+    };
+    use reth_primitives::{hex_literal::hex, StorageEntry, H160, H256, U256};
 
     const ADDRESS: H160 = H160(hex!("0000000000000000000000000000000000000001"));
     const STORAGE_KEY: H256 =
@@ -282,8 +147,8 @@ mod tests {
     }
 
     async fn run(tx: &TestTransaction, run_to: u64) {
-        let mut input = ExecInput::default();
-        input.previous_stage = Some((PREV_STAGE_ID, run_to));
+        let input =
+            ExecInput { previous_stage: Some((PREV_STAGE_ID, run_to)), ..Default::default() };
         let mut stage = IndexStorageHistoryStage::default();
         let mut tx = tx.inner();
         let out = stage.execute(&mut tx, input).await.unwrap();
@@ -292,9 +157,7 @@ mod tests {
     }
 
     async fn unwind(tx: &TestTransaction, unwind_from: u64, unwind_to: u64) {
-        let mut input = UnwindInput::default();
-        input.stage_progress = unwind_from;
-        input.unwind_to = unwind_to;
+        let input = UnwindInput { stage_progress: unwind_from, unwind_to, ..Default::default() };
         let mut stage = IndexStorageHistoryStage::default();
         let mut tx = tx.inner();
         let out = stage.unwind(&mut tx, input).await.unwrap();
@@ -357,8 +220,7 @@ mod tests {
     async fn insert_index_to_full_shard() {
         // init
         let tx = TestTransaction::default();
-        let mut input = ExecInput::default();
-        input.previous_stage = Some((PREV_STAGE_ID, 5));
+        let _input = ExecInput { previous_stage: Some((PREV_STAGE_ID, 5)), ..Default::default() };
 
         // change does not matter only that account is present in changeset.
         let full_list = vec![3; NUM_OF_INDICES_IN_SHARD];

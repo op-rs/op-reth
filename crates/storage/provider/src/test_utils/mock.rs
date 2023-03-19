@@ -1,14 +1,15 @@
 use crate::{
-    AccountProvider, BlockHashProvider, BlockIdProvider, BlockProvider, EvmEnvProvider,
-    HeaderProvider, StateProvider, StateProviderFactory, TransactionsProvider,
+    traits::ReceiptProvider, AccountProvider, BlockHashProvider, BlockIdProvider, BlockProvider,
+    EvmEnvProvider, HeaderProvider, StateProvider, StateProviderFactory, TransactionsProvider,
 };
 use parking_lot::Mutex;
 use reth_interfaces::Result;
 use reth_primitives::{
-    keccak256, Account, Address, Block, BlockHash, BlockId, BlockNumber, BlockNumberOrTag, Bytes,
-    ChainInfo, Header, StorageKey, StorageValue, TransactionSigned, TxHash, H256, U256,
+    keccak256, Account, Address, Block, BlockHash, BlockId, BlockNumber, BlockNumberOrTag,
+    Bytecode, Bytes, ChainInfo, Header, Receipt, StorageKey, StorageValue, TransactionSigned,
+    TxHash, TxNumber, H256, U256,
 };
-use revm_primitives::{BlockEnv, CfgEnv, Env};
+use revm_primitives::{BlockEnv, CfgEnv};
 use std::{collections::HashMap, ops::RangeBounds, sync::Arc};
 
 /// A mock implementation for Provider interfaces.
@@ -26,7 +27,7 @@ pub struct MockEthProvider {
 #[derive(Debug, Clone)]
 pub struct ExtendedAccount {
     account: Account,
-    bytecode: Option<Bytes>,
+    bytecode: Option<Bytecode>,
     storage: HashMap<StorageKey, StorageValue>,
 }
 
@@ -44,7 +45,7 @@ impl ExtendedAccount {
     pub fn with_bytecode(mut self, bytecode: Bytes) -> Self {
         let hash = keccak256(&bytecode);
         self.account.bytecode_hash = Some(hash);
-        self.bytecode = Some(bytecode);
+        self.bytecode = Some(Bytecode::new_raw(bytecode.into()));
         self
     }
 }
@@ -123,7 +124,12 @@ impl HeaderProvider for MockEthProvider {
         range: impl RangeBounds<reth_primitives::BlockNumber>,
     ) -> Result<Vec<Header>> {
         let lock = self.headers.lock();
-        Ok(lock.values().filter(|header| range.contains(&header.number)).cloned().collect())
+
+        let mut headers: Vec<_> =
+            lock.values().filter(|header| range.contains(&header.number)).cloned().collect();
+        headers.sort_by_key(|header| header.number);
+
+        Ok(headers)
     }
 }
 
@@ -155,21 +161,37 @@ impl TransactionsProvider for MockEthProvider {
     }
 }
 
+impl ReceiptProvider for MockEthProvider {
+    fn receipt(&self, _id: TxNumber) -> Result<Option<Receipt>> {
+        Ok(None)
+    }
+
+    fn receipt_by_hash(&self, _hash: TxHash) -> Result<Option<Receipt>> {
+        Ok(None)
+    }
+
+    fn receipts_by_block(&self, _block: BlockId) -> Result<Option<Vec<Receipt>>> {
+        Ok(None)
+    }
+}
+
 impl BlockHashProvider for MockEthProvider {
-    fn block_hash(&self, number: U256) -> Result<Option<H256>> {
+    fn block_hash(&self, number: u64) -> Result<Option<H256>> {
         let lock = self.blocks.lock();
 
-        let hash =
-            lock.iter().find_map(
-                |(hash, b)| {
-                    if b.number == number.to::<u64>() {
-                        Some(*hash)
-                    } else {
-                        None
-                    }
-                },
-            );
+        let hash = lock.iter().find_map(|(hash, b)| (b.number == number).then_some(*hash));
         Ok(hash)
+    }
+
+    fn canonical_hashes_range(&self, start: BlockNumber, end: BlockNumber) -> Result<Vec<H256>> {
+        let range = start..end;
+        let lock = self.blocks.lock();
+
+        let mut hashes: Vec<_> =
+            lock.iter().filter(|(_, block)| range.contains(&block.number)).collect();
+        hashes.sort_by_key(|(_, block)| block.number);
+
+        Ok(hashes.into_iter().map(|(hash, _)| *hash).collect())
     }
 }
 
@@ -190,7 +212,7 @@ impl BlockIdProvider for MockEthProvider {
 
     fn block_number(&self, hash: H256) -> Result<Option<reth_primitives::BlockNumber>> {
         let lock = self.blocks.lock();
-        let num = lock.iter().find_map(|(h, b)| if *h == hash { Some(b.number) } else { None });
+        let num = lock.iter().find_map(|(h, b)| (*h == hash).then_some(b.number));
         Ok(num)
     }
 }
@@ -226,7 +248,7 @@ impl StateProvider for MockEthProvider {
         Ok(lock.get(&account).and_then(|account| account.storage.get(&storage_key)).cloned())
     }
 
-    fn bytecode_by_hash(&self, code_hash: H256) -> Result<Option<Bytes>> {
+    fn bytecode_by_hash(&self, code_hash: H256) -> Result<Option<Bytecode>> {
         let lock = self.accounts.lock();
         Ok(lock.values().find_map(|account| {
             match (account.account.bytecode_hash.as_ref(), account.bytecode.as_ref()) {
@@ -237,14 +259,32 @@ impl StateProvider for MockEthProvider {
             }
         }))
     }
+
+    fn proof(
+        &self,
+        _address: Address,
+        _keys: &[H256],
+    ) -> Result<(Vec<Bytes>, H256, Vec<Vec<Bytes>>)> {
+        todo!()
+    }
 }
 
 impl EvmEnvProvider for MockEthProvider {
-    fn fill_env_at(&self, _env: &mut Env, _at: BlockId) -> Result<()> {
+    fn fill_env_at(
+        &self,
+        _cfg: &mut CfgEnv,
+        _block_env: &mut BlockEnv,
+        _at: BlockId,
+    ) -> Result<()> {
         unimplemented!()
     }
 
-    fn fill_env_with_header(&self, _env: &mut Env, _header: &Header) -> Result<()> {
+    fn fill_env_with_header(
+        &self,
+        _cfg: &mut CfgEnv,
+        _block_env: &mut BlockEnv,
+        _header: &Header,
+    ) -> Result<()> {
         unimplemented!()
     }
 

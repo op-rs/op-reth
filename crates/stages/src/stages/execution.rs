@@ -9,12 +9,11 @@ use reth_db::{
     tables,
     transaction::{DbTx, DbTxMut},
 };
-use reth_executor::execution_result::AccountChangeSet;
 use reth_interfaces::provider::ProviderError;
-use reth_primitives::{Address, Block, ChainSpec, Hardfork, StorageEntry, H256, MAINNET, U256};
-use reth_provider::{LatestStateProviderRef, Transaction};
-use reth_revm::database::{State, SubState};
-use std::fmt::Debug;
+use reth_primitives::{Address, Block, U256};
+use reth_provider::{
+    post_state::PostState, BlockExecutor, ExecutorFactory, LatestStateProviderRef, Transaction,
+};
 use tracing::*;
 
 /// The [`StageId`] of the execution stage.
@@ -48,21 +47,27 @@ pub const EXECUTION: StageId = StageId("Execution");
 /// - [tables::AccountHistory] to remove change set and apply old values to
 /// - [tables::PlainAccountState] [tables::StorageHistory] to remove change set and apply old values
 /// to [tables::PlainStorageState]
-#[derive(Debug)]
-pub struct ExecutionStage {
-    /// Executor configuration.
-    pub chain_spec: ChainSpec,
+// false positive, we cannot derive it if !DB: Debug.
+#[allow(missing_debug_implementations)]
+pub struct ExecutionStage<EF: ExecutorFactory> {
+    /// The stage's internal executor
+    pub executor_factory: EF,
     /// Commit threshold
     pub commit_threshold: u64,
 }
 
-impl Default for ExecutionStage {
-    fn default() -> Self {
-        Self { chain_spec: MAINNET.clone(), commit_threshold: 1_000 }
+impl<EF: ExecutorFactory> ExecutionStage<EF> {
+    /// Create new execution stage with specified config.
+    pub fn new(executor_factory: EF, commit_threshold: u64) -> Self {
+        Self { executor_factory, commit_threshold }
     }
-}
 
-impl ExecutionStage {
+    /// Create execution stage with executor factory and default commit threshold set to 10_000
+    /// blocks
+    pub fn new_default_threshold(executor_factory: EF) -> Self {
+        Self { executor_factory, commit_threshold: 10_000 }
+    }
+
     /// Execute the stage.
     pub fn execute_inner<DB: Database>(
         &self,
@@ -87,7 +92,6 @@ impl ExecutionStage {
         let mut tx_cursor = tx.cursor_read::<tables::Transactions>()?;
         // Skip sender recovery and load signer from database.
         let mut tx_sender = tx.cursor_read::<tables::TxSenders>()?;
-
         // Get block headers and bodies
         let block_batch = headers_cursor
             .walk_range(start_block..=end_block)?
@@ -106,10 +110,11 @@ impl ExecutionStage {
             .collect::<Result<Vec<_>, _>>()?;
 
         // Create state provider with cached state
-        let mut state_provider = SubState::new(State::new(LatestStateProviderRef::new(&**tx)));
+
+        let mut executor = self.executor_factory.with_sp(LatestStateProviderRef::new(&**tx));
 
         // Fetch transactions, execute them and generate results
-        let mut block_change_patches = Vec::with_capacity(block_batch.len());
+        let mut changesets = PostState::default();
         for (header, td, body, ommers, withdrawals) in block_batch.into_iter() {
             let block_number = header.number;
             tracing::trace!(target: "sync::stages::execution", ?block_number, "Execute block.");
@@ -143,122 +148,20 @@ impl ExecutionStage {
 
             trace!(target: "sync::stages::execution", number = block_number, txs = transactions.len(), "Executing block");
 
-            let changeset = reth_executor::executor::execute_and_verify_receipt(
-                &Block { header, body: transactions, ommers, withdrawals },
-                td,
-                Some(signers),
-                &self.chain_spec,
-                &mut state_provider,
-            )
-            .map_err(|error| StageError::ExecutionError { block: block_number, error })?;
-            block_change_patches.push((changeset, block_number));
+            // Configure the executor to use the current state.
+            let changeset = executor
+                .execute_and_verify_receipt(
+                    &Block { header, body: transactions, ommers, withdrawals },
+                    td,
+                    Some(signers),
+                )
+                .map_err(|error| StageError::ExecutionError { block: block_number, error })?;
+            changesets.extend(changeset);
         }
 
-        // Get last tx count so that we can know amount of transaction in the block.
-        let mut current_transition_id = tx.get_block_transition(last_block)?;
-        info!(target: "sync::stages::execution", current_transition_id, blocks = block_change_patches.len(), "Inserting execution results");
-
-        // apply changes to plain database.
-        for (results, block_number) in block_change_patches.into_iter() {
-            let spurious_dragon_active =
-                self.chain_spec.fork(Hardfork::SpuriousDragon).active_at_block(block_number);
-            // insert state change set
-            for result in results.tx_changesets.into_iter() {
-                for (address, account_change_set) in result.changeset.into_iter() {
-                    let AccountChangeSet { account, wipe_storage, storage } = account_change_set;
-                    // apply account change to db. Updates AccountChangeSet and PlainAccountState
-                    // tables.
-                    trace!(target: "sync::stages::execution", ?address, current_transition_id, ?account, wipe_storage, "Applying account changeset");
-                    account.apply_to_db(
-                        &**tx,
-                        address,
-                        current_transition_id,
-                        spurious_dragon_active,
-                    )?;
-
-                    let storage_id = TransitionIdAddress((current_transition_id, address));
-
-                    // cast key to H256 and trace the change
-                    let storage = storage
-                        .into_iter()
-                        .map(|(key, (old_value,new_value))| {
-                            let hkey = H256(key.to_be_bytes());
-                            trace!(target: "sync::stages::execution", ?address, current_transition_id, ?hkey, ?old_value, ?new_value, "Applying storage changeset");
-                            (hkey, old_value,new_value)
-                        })
-                        .collect::<Vec<_>>();
-
-                    let mut cursor_storage_changeset =
-                        tx.cursor_write::<tables::StorageChangeSet>()?;
-                    cursor_storage_changeset.seek_exact(storage_id)?;
-
-                    if wipe_storage {
-                        // iterate over storage and save them before entry is deleted.
-                        tx.cursor_read::<tables::PlainStorageState>()?
-                            .walk(Some(address))?
-                            .take_while(|res| {
-                                res.as_ref().map(|(k, _)| *k == address).unwrap_or_default()
-                            })
-                            .try_for_each(|entry| {
-                                let (_, old_value) = entry?;
-                                cursor_storage_changeset.append(storage_id, old_value)
-                            })?;
-
-                        // delete all entries
-                        tx.delete::<tables::PlainStorageState>(address, None)?;
-
-                        // insert storage changeset
-                        for (key, _, new_value) in storage {
-                            // old values are already cleared.
-                            if new_value != U256::ZERO {
-                                tx.put::<tables::PlainStorageState>(
-                                    address,
-                                    StorageEntry { key, value: new_value },
-                                )?;
-                            }
-                        }
-                    } else {
-                        // insert storage changeset
-                        for (key, old_value, new_value) in storage {
-                            let old_entry = StorageEntry { key, value: old_value };
-                            let new_entry = StorageEntry { key, value: new_value };
-                            // insert into StorageChangeSet
-                            cursor_storage_changeset.append(storage_id, old_entry)?;
-
-                            // Always delete old value as duplicate table, put will not override it
-                            tx.delete::<tables::PlainStorageState>(address, Some(old_entry))?;
-                            if new_value != U256::ZERO {
-                                tx.put::<tables::PlainStorageState>(address, new_entry)?;
-                            }
-                        }
-                    }
-                }
-                // insert bytecode
-                for (hash, bytecode) in result.new_bytecodes.into_iter() {
-                    // make different types of bytecode. Checked and maybe even analyzed (needs to
-                    // be packed). Currently save only raw bytes.
-                    let bytecode = bytecode.bytes();
-                    trace!(target: "sync::stages::execution", ?hash, ?bytecode, len = bytecode.len(), "Inserting bytecode");
-                    tx.put::<tables::Bytecodes>(hash, bytecode[..bytecode.len()].to_vec())?;
-
-                    // NOTE: bytecode bytes are not inserted in change set and can be found in
-                    // separate table
-                }
-                current_transition_id += 1;
-            }
-
-            // If there are any post block changes, we will add account changesets to db.
-            for (address, changeset) in results.block_changesets.into_iter() {
-                trace!(target: "sync::stages::execution", ?address, current_transition_id, "Applying block reward");
-                changeset.apply_to_db(
-                    &**tx,
-                    address,
-                    current_transition_id,
-                    spurious_dragon_active,
-                )?;
-            }
-            current_transition_id += 1;
-        }
+        // put execution results to database
+        let first_transition_id = tx.get_block_transition(last_block)?;
+        changesets.write_to_db(&**tx, first_transition_id)?;
 
         let done = !capped;
         info!(target: "sync::stages::execution", stage_progress = end_block, done, "Sync iteration finished");
@@ -266,15 +169,8 @@ impl ExecutionStage {
     }
 }
 
-impl ExecutionStage {
-    /// Create new execution stage with specified config.
-    pub fn new(chain_spec: ChainSpec, commit_threshold: u64) -> Self {
-        Self { chain_spec, commit_threshold }
-    }
-}
-
 #[async_trait::async_trait]
-impl<DB: Database> Stage<DB> for ExecutionStage {
+impl<EF: ExecutorFactory, DB: Database> Stage<DB> for ExecutionStage<EF> {
     /// Return the id of the stage
     fn id(&self) -> StageId {
         EXECUTION
@@ -392,20 +288,29 @@ impl<DB: Database> Stage<DB> for ExecutionStage {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::{Deref, DerefMut};
-
-    use crate::test_utils::{TestTransaction, PREV_STAGE_ID};
-
     use super::*;
+    use crate::test_utils::{TestTransaction, PREV_STAGE_ID};
     use reth_db::{
         mdbx::{test_utils::create_test_db, EnvKind, WriteMap},
         models::AccountBeforeTx,
     };
+    use reth_executor::Factory;
     use reth_primitives::{
-        hex_literal::hex, keccak256, Account, ChainSpecBuilder, SealedBlock, H160, U256,
+        hex_literal::hex, keccak256, Account, Bytecode, ChainSpecBuilder, SealedBlock,
+        StorageEntry, H160, H256, U256,
     };
     use reth_provider::insert_canonical_block;
     use reth_rlp::Decodable;
+    use std::{
+        ops::{Deref, DerefMut},
+        sync::Arc,
+    };
+
+    fn stage() -> ExecutionStage<Factory> {
+        let factory =
+            Factory::new(Arc::new(ChainSpecBuilder::mainnet().berlin_activated().build()));
+        ExecutionStage::new(factory, 100)
+    }
 
     #[tokio::test]
     async fn sanity_execution_of_block() {
@@ -422,8 +327,8 @@ mod tests {
         let genesis = SealedBlock::decode(&mut genesis_rlp).unwrap();
         let mut block_rlp = hex!("f90262f901f9a075c371ba45999d87f4542326910a11af515897aebce5265d3f6acd1f1161f82fa01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa098f2dcd87c8ae4083e7017a05456c14eea4b1db2032126e27b3b1563d57d7cc0a08151d548273f6683169524b66ca9fe338b9ce42bc3540046c828fd939ae23bcba03f4e5c2ec5b2170b711d97ee755c160457bb58d8daa338e835ec02ae6860bbabb901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000083020000018502540be40082a8798203e800a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f863f861800a8405f5e10094100000000000000000000000000000000000000080801ba07e09e26678ed4fac08a249ebe8ed680bf9051a5e14ad223e4b2b9d26e0208f37a05f6e3f188e3e6eab7d7d3b6568f5eac7d687b08d307d3154ccd8c87b4630509bc0").as_slice();
         let block = SealedBlock::decode(&mut block_rlp).unwrap();
-        insert_canonical_block(tx.deref_mut(), &genesis, true).unwrap();
-        insert_canonical_block(tx.deref_mut(), &block, true).unwrap();
+        insert_canonical_block(tx.deref_mut(), genesis, None, true).unwrap();
+        insert_canonical_block(tx.deref_mut(), block.clone(), None, true).unwrap();
         tx.commit().unwrap();
 
         // insert pre state
@@ -445,14 +350,10 @@ mod tests {
                 Account { nonce: 0, balance, bytecode_hash: None },
             )
             .unwrap();
-        db_tx.put::<tables::Bytecodes>(code_hash, code.to_vec()).unwrap();
+        db_tx.put::<tables::Bytecodes>(code_hash, Bytecode::new_raw(code.to_vec().into())).unwrap();
         tx.commit().unwrap();
 
-        // execute
-        let mut execution_stage = ExecutionStage {
-            chain_spec: ChainSpecBuilder::mainnet().berlin_activated().build(),
-            ..Default::default()
-        };
+        let mut execution_stage = stage();
         let output = execution_stage.execute(&mut tx, input).await.unwrap();
         tx.commit().unwrap();
         assert_eq!(output, ExecOutput { stage_progress: 1, done: true });
@@ -515,8 +416,8 @@ mod tests {
         let genesis = SealedBlock::decode(&mut genesis_rlp).unwrap();
         let mut block_rlp = hex!("f90262f901f9a075c371ba45999d87f4542326910a11af515897aebce5265d3f6acd1f1161f82fa01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa098f2dcd87c8ae4083e7017a05456c14eea4b1db2032126e27b3b1563d57d7cc0a08151d548273f6683169524b66ca9fe338b9ce42bc3540046c828fd939ae23bcba03f4e5c2ec5b2170b711d97ee755c160457bb58d8daa338e835ec02ae6860bbabb901000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000083020000018502540be40082a8798203e800a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f863f861800a8405f5e10094100000000000000000000000000000000000000080801ba07e09e26678ed4fac08a249ebe8ed680bf9051a5e14ad223e4b2b9d26e0208f37a05f6e3f188e3e6eab7d7d3b6568f5eac7d687b08d307d3154ccd8c87b4630509bc0").as_slice();
         let block = SealedBlock::decode(&mut block_rlp).unwrap();
-        insert_canonical_block(tx.deref_mut(), &genesis, true).unwrap();
-        insert_canonical_block(tx.deref_mut(), &block, true).unwrap();
+        insert_canonical_block(tx.deref_mut(), genesis, None, true).unwrap();
+        insert_canonical_block(tx.deref_mut(), block.clone(), None, true).unwrap();
         tx.commit().unwrap();
 
         // variables
@@ -532,18 +433,16 @@ mod tests {
 
         db_tx.put::<tables::PlainAccountState>(acc1, acc1_info).unwrap();
         db_tx.put::<tables::PlainAccountState>(acc2, acc2_info).unwrap();
-        db_tx.put::<tables::Bytecodes>(code_hash, code.to_vec()).unwrap();
+        db_tx.put::<tables::Bytecodes>(code_hash, Bytecode::new_raw(code.to_vec().into())).unwrap();
         tx.commit().unwrap();
 
         // execute
-        let mut execution_stage = ExecutionStage {
-            chain_spec: ChainSpecBuilder::mainnet().berlin_activated().build(),
-            ..Default::default()
-        };
+        let mut execution_stage = stage();
         let _ = execution_stage.execute(&mut tx, input).await.unwrap();
         tx.commit().unwrap();
 
-        let o = ExecutionStage::default()
+        let mut stage = stage();
+        let o = stage
             .unwind(&mut tx, UnwindInput { stage_progress: 1, unwind_to: 0, bad_block: None })
             .await
             .unwrap();
@@ -584,8 +483,8 @@ mod tests {
         let genesis = SealedBlock::decode(&mut genesis_rlp).unwrap();
         let mut block_rlp = hex!("f9025ff901f7a0c86e8cc0310ae7c531c758678ddbfd16fc51c8cef8cec650b032de9869e8b94fa01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa050554882fbbda2c2fd93fdc466db9946ea262a67f7a76cc169e714f105ab583da00967f09ef1dfed20c0eacfaa94d5cd4002eda3242ac47eae68972d07b106d192a0e3c8b47fbfc94667ef4cceb17e5cc21e3b1eebd442cebb27f07562b33836290db90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001830f42408238108203e800a00000000000000000000000000000000000000000000000000000000000000000880000000000000000f862f860800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba072ed817487b84ba367d15d2f039b5fc5f087d0a8882fbdf73e8cb49357e1ce30a0403d800545b8fc544f92ce8124e2255f8c3c6af93f28243a120585d4c4c6a2a3c0").as_slice();
         let block = SealedBlock::decode(&mut block_rlp).unwrap();
-        insert_canonical_block(tx.deref_mut(), &genesis, true).unwrap();
-        insert_canonical_block(tx.deref_mut(), &block, true).unwrap();
+        insert_canonical_block(tx.deref_mut(), genesis, None, true).unwrap();
+        insert_canonical_block(tx.deref_mut(), block.clone(), None, true).unwrap();
         tx.commit().unwrap();
 
         // variables
@@ -606,7 +505,7 @@ mod tests {
         // set account
         db_tx.put::<tables::PlainAccountState>(caller_address, caller_info).unwrap();
         db_tx.put::<tables::PlainAccountState>(destroyed_address, destroyed_info).unwrap();
-        db_tx.put::<tables::Bytecodes>(code_hash, code.to_vec()).unwrap();
+        db_tx.put::<tables::Bytecodes>(code_hash, Bytecode::new_raw(code.to_vec().into())).unwrap();
         // set storage to check when account gets destroyed.
         db_tx
             .put::<tables::PlainStorageState>(
@@ -624,10 +523,7 @@ mod tests {
         tx.commit().unwrap();
 
         // execute
-        let mut execution_stage = ExecutionStage {
-            chain_spec: ChainSpecBuilder::mainnet().berlin_activated().build(),
-            ..Default::default()
-        };
+        let mut execution_stage = stage();
         let _ = execution_stage.execute(&mut tx, input).await.unwrap();
         tx.commit().unwrap();
 

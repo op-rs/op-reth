@@ -65,10 +65,10 @@ impl MockDiscovery {
         let mut tasks = JoinSet::<()>::new();
 
         let udp = Arc::clone(&socket);
-        tasks.spawn(async move { receive_loop(udp, ingress_tx, local_enr.id).await });
+        tasks.spawn(receive_loop(udp, ingress_tx, local_enr.id));
 
         let udp = Arc::clone(&socket);
-        tasks.spawn(async move { send_loop(udp, egress_rx).await });
+        tasks.spawn(send_loop(udp, egress_rx));
 
         let (tx, command_rx) = mpsc::channel(128);
         let this = Self {
@@ -130,17 +130,14 @@ impl Stream for MockDiscovery {
         let this = self.get_mut();
         // process all incoming commands
         while let Poll::Ready(maybe_cmd) = this.command_rx.poll_recv(cx) {
-            if let Some(cmd) = maybe_cmd {
-                match cmd {
-                    MockCommand::MockPong { node_id } => {
-                        this.queue_pong(node_id);
-                    }
-                    MockCommand::MockNeighbours { target, nodes } => {
-                        this.queue_neighbours(target, nodes);
-                    }
+            let Some(cmd) = maybe_cmd else { return Poll::Ready(None) };
+            match cmd {
+                MockCommand::MockPong { node_id } => {
+                    this.queue_pong(node_id);
                 }
-            } else {
-                return Poll::Ready(None)
+                MockCommand::MockNeighbours { target, nodes } => {
+                    this.queue_neighbours(target, nodes);
+                }
             }
         }
 

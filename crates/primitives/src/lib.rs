@@ -14,7 +14,9 @@ mod bits;
 mod block;
 pub mod bloom;
 mod chain;
+mod checkpoints;
 pub mod constants;
+pub mod contract;
 mod error;
 pub mod filter;
 mod forkid;
@@ -23,7 +25,6 @@ mod hardfork;
 mod header;
 mod hex_bytes;
 mod integer_list;
-mod jsonu256;
 mod log;
 mod net;
 mod peer;
@@ -35,9 +36,11 @@ mod withdrawal;
 /// Helper function for calculating Merkle proofs and hashes
 pub mod proofs;
 
-pub use account::Account;
+pub use account::{Account, Bytecode};
 pub use bits::H512;
-pub use block::{Block, BlockHashOrNumber, BlockId, BlockNumberOrTag, SealedBlock};
+pub use block::{
+    Block, BlockHashOrNumber, BlockId, BlockNumberOrTag, SealedBlock, SealedBlockWithSenders,
+};
 pub use bloom::Bloom;
 #[cfg(feature = "optimism")]
 pub use chain::OP_GOERLI;
@@ -45,6 +48,7 @@ pub use chain::{
     AllGenesisFormats, Chain, ChainInfo, ChainSpec, ChainSpecBuilder, ForkCondition, GOERLI,
     MAINNET, SEPOLIA,
 };
+pub use checkpoints::{AccountHashingCheckpoint, ProofCheckpoint, StorageHashingCheckpoint};
 pub use constants::{
     EMPTY_OMMER_ROOT, GOERLI_GENESIS, KECCAK_EMPTY, MAINNET_GENESIS, SEPOLIA_GENESIS,
 };
@@ -54,16 +58,21 @@ pub use hardfork::Hardfork;
 pub use header::{Head, Header, HeadersDirection, SealedHeader};
 pub use hex_bytes::Bytes;
 pub use integer_list::IntegerList;
-pub use jsonu256::JsonU256;
 pub use log::Log;
-pub use net::NodeRecord;
+pub use net::{
+    goerli_nodes, mainnet_nodes, sepolia_nodes, NodeRecord, GOERLI_BOOTNODES, MAINNET_BOOTNODES,
+    SEPOLIA_BOOTNODES,
+};
 pub use peer::{PeerId, WithPeerId};
 pub use receipt::Receipt;
+pub use revm_primitives::JumpMap;
+pub use serde_helper::JsonU256;
 pub use storage::{StorageEntry, StorageTrieEntry};
 pub use transaction::{
-    AccessList, AccessListItem, FromRecoveredTransaction, IntoRecoveredTransaction, Signature,
+    util::secp256k1::sign_message, AccessList, AccessListItem, AccessListWithGasUsed,
+    FromRecoveredTransaction, IntoRecoveredTransaction, InvalidTransactionError, Signature,
     Transaction, TransactionKind, TransactionSigned, TransactionSignedEcRecovered, TxEip1559,
-    TxEip2930, TxLegacy, TxType,
+    TxEip2930, TxLegacy, TxType, EIP1559_TX_TYPE_ID, EIP2930_TX_TYPE_ID, LEGACY_TX_TYPE_ID,
 };
 #[cfg(feature = "optimism")]
 pub use transaction::{TxDeposit, DEPOSIT_TX_TYPE, DEPOSIT_VERSION};
@@ -112,9 +121,7 @@ pub mod utils {
 }
 
 /// Helpers for working with serde
-pub mod serde_helper {
-    pub use crate::jsonu256::deserialize_json_u256;
-}
+pub mod serde_helper;
 
 /// Returns the keccak256 hash for the given data.
 #[inline]
@@ -127,3 +134,6 @@ pub fn keccak256(data: impl AsRef<[u8]>) -> H256 {
     hasher.finalize(&mut buf);
     buf.into()
 }
+
+#[cfg(any(test, feature = "arbitrary"))]
+pub use arbitrary;

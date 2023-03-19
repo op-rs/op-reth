@@ -9,3 +9,11 @@
 
 /// An inspector implementation for an EIP2930 Accesslist
 pub mod access_list;
+
+/// An inspector stack abstracting the implementation details of
+/// each inspector and allowing to hook on block/transaciton execution,
+/// used in the main RETH executor.
+pub mod stack;
+
+/// An inspector for recording traces
+pub mod tracing;

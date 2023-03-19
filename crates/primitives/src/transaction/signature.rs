@@ -6,7 +6,7 @@ use reth_rlp::{Decodable, DecodeError, Encodable};
 /// transaction and used to determine the sender of
 /// the transaction; formally Tr and Ts. This is expanded in Appendix F of yellow paper.
 #[main_codec]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Signature {
     /// The R field of the signature; the point on the curve.
     pub r: U256,
@@ -103,6 +103,17 @@ impl Signature {
         // NOTE: we are removing error from underlying crypto library as it will restrain primitive
         // errors and we care only if recovery is passing or not.
         secp256k1::recover(&sig, hash.as_fixed_bytes()).ok()
+    }
+
+    /// Turn this signature into its byte
+    /// (hex) representation.
+    pub fn to_bytes(&self) -> [u8; 65] {
+        let mut sig = [0u8; 65];
+        sig[..32].copy_from_slice(&self.r.to_be_bytes::<32>());
+        sig[32..64].copy_from_slice(&self.s.to_be_bytes::<32>());
+        let v = u8::from(self.odd_y_parity) + 27;
+        sig[64] = v;
+        sig
     }
 }
 

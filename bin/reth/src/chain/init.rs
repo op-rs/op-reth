@@ -36,30 +36,22 @@ pub struct InitCommand {
         default_value = "mainnet",
         value_parser = genesis_value_parser
     )]
-    chain: ChainSpec,
+    chain: Arc<ChainSpec>,
 }
 
 impl InitCommand {
     /// Execute the `init` command
     pub async fn execute(&self) -> eyre::Result<()> {
-        info!(target: "reth::cli", "reth import starting");
+        info!(target: "reth::cli", "reth init starting");
 
         info!(target: "reth::cli", path = %self.db, "Opening database");
         let db = Arc::new(init_db(&self.db)?);
         info!(target: "reth::cli", "Database opened");
 
         info!(target: "reth::cli", "Writing genesis block");
-        let genesis_hash = init_genesis(db, self.chain.clone())?;
+        let hash = init_genesis(db, self.chain.clone())?;
 
-        if genesis_hash != self.chain.genesis_hash() {
-            // TODO: better error text
-            return Err(eyre::eyre!(
-                "Genesis hash mismatch: expected {}, got {}",
-                self.chain.genesis_hash(),
-                genesis_hash
-            ))
-        }
-
+        info!(target: "reth::cli", hash = ?hash, "Genesis block written");
         Ok(())
     }
 }

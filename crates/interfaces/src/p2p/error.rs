@@ -125,7 +125,7 @@ pub enum DownloadError {
         hash: H256,
         /// The details of validation failure
         #[source]
-        error: consensus::Error,
+        error: consensus::ConsensusError,
     },
     /// Error when checking that the current [`Header`] has the parent's hash as the parent_hash
     /// field, and that they have sequential block numbers.
@@ -147,6 +147,14 @@ pub enum DownloadError {
         received: H256,
         /// The hash of the expected tip
         expected: H256,
+    },
+    /// Received a tip with an invalid tip number
+    #[error("Received invalid tip number: {received:?}. Expected {expected:?}.")]
+    InvalidTipNumber {
+        /// The block number of the received tip
+        received: u64,
+        /// The block number of the expected tip
+        expected: u64,
     },
     /// Received a response to a request with unexpected start block
     #[error("Headers response starts at unexpected block: {received:?}. Expected {expected:?}.")]
@@ -172,7 +180,7 @@ pub enum DownloadError {
         hash: H256,
         /// The details of validation failure
         #[source]
-        error: consensus::Error,
+        error: consensus::ConsensusError,
     },
     /// Received more bodies than requested.
     #[error("Received more bodies than requested. Expected: {expected}. Received: {received}")]

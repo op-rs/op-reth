@@ -1,11 +1,10 @@
 use jsonrpsee::{core::RpcResult as Result, proc_macros::rpc};
 use reth_primitives::{
-    rpc::transaction::eip2930::AccessListWithGasUsed, Address, BlockId, BlockNumberOrTag, Bytes,
-    H256, H64, U256, U64,
+    AccessListWithGasUsed, Address, BlockId, BlockNumberOrTag, Bytes, H256, H64, U256, U64,
 };
 use reth_rpc_types::{
-    CallRequest, EIP1186AccountProofResponse, FeeHistory, Index, RichBlock, SyncStatus,
-    Transaction, TransactionReceipt, TransactionRequest, Work,
+    state::StateOverride, CallRequest, EIP1186AccountProofResponse, FeeHistory, Index, RichBlock,
+    SyncStatus, Transaction, TransactionReceipt, TransactionRequest, Work,
 };
 
 /// Eth rpc interface: <https://ethereum.github.io/execution-apis/api-documentation/>
@@ -135,7 +134,12 @@ pub trait EthApi {
 
     /// Executes a new message call immediately without creating a transaction on the block chain.
     #[method(name = "eth_call")]
-    async fn call(&self, request: CallRequest, block_number: Option<BlockId>) -> Result<Bytes>;
+    async fn call(
+        &self,
+        request: CallRequest,
+        block_number: Option<BlockId>,
+        state_overrides: Option<StateOverride>,
+    ) -> Result<Bytes>;
 
     /// Generates an access list for a transaction.
     ///
