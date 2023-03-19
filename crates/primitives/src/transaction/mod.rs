@@ -181,7 +181,7 @@ pub enum Transaction {
     Eip2930(TxEip2930),
     /// A transaction with a priority fee ([EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)).
     Eip1559(TxEip1559),
-    /// Deposit transaction.
+    /// Optimism deposit transaction.
     #[cfg(feature = "optimism")]
     Deposit(TxDeposit),
 }
