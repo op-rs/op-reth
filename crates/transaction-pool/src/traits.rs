@@ -632,11 +632,11 @@ impl PoolTransaction for PooledTransaction {
     /// This is also commonly referred to as the "Gas Fee Cap" (`GasFeeCap`).
     fn max_fee_per_gas(&self) -> u128 {
         match &self.transaction.transaction {
-            #[cfg(feature = "optimism")]
-            Transaction::Deposit(_) => None,
             Transaction::Legacy(_) => None,
             Transaction::Eip2930(_) => None,
             Transaction::Eip1559(tx) => Some(tx.max_fee_per_gas),
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => None,
         }
     }
 
@@ -645,11 +645,11 @@ impl PoolTransaction for PooledTransaction {
     /// This will return `None` for non-EIP1559 transactions
     fn max_priority_fee_per_gas(&self) -> Option<u128> {
         match &self.transaction.transaction {
-            #[cfg(feature = "optimism")]
-            Transaction::Deposit(_) => None,
             Transaction::Legacy(_) => None,
             Transaction::Eip2930(_) => None,
             Transaction::Eip1559(tx) => Some(tx.max_priority_fee_per_gas),
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => None,
         }
     }
 

@@ -16,6 +16,10 @@ pub const EIP1559_TX_TYPE_ID: u8 = 2;
 #[allow(unused)]
 pub(crate) const EIP4844_TX_TYPE_ID: u8 = 3;
 
+/// Identifier for [TxDeposit](crate::TxDeposit) transaction.
+#[cfg(feature = "optimism")]
+pub(crate) const DEPOSIT_TX_TYPE_ID: u8 = 126;
+
 /// Transaction Type
 ///
 /// Currently being used as 2-bit type when encoding it to [`Compact`] on
@@ -48,7 +52,7 @@ impl From<TxType> for u8 {
             TxType::EIP1559 => EIP1559_TX_TYPE_ID,
             TxType::EIP4844 => EIP4844_TX_TYPE_ID,
             #[cfg(feature = "optimism")]
-            TxType::DEPOSIT => 126,
+            TxType::DEPOSIT => DEPOSIT_TX_TYPE_ID,
         }
     }
 }
