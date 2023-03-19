@@ -659,6 +659,10 @@ impl ForkCondition {
 
 #[cfg(test)]
 mod tests {
+    use bytes::BytesMut;
+    use ethers_core::types as EtherType;
+    use reth_rlp::Encodable;
+
     use crate::{
         AllGenesisFormats, Chain, ChainSpec, ChainSpecBuilder, ForkCondition, ForkHash, ForkId,
         Genesis, Hardfork, Head, GOERLI, H256, MAINNET, SEPOLIA, U256,

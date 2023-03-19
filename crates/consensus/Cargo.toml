@@ -21,4 +21,4 @@ reth-provider = { path = "../storage/provider", features = ["test-utils"] }
 assert_matches = "1.5.0"
 
 [features]
-optimism = []
+optimism = ["reth-primitives/optimism"]
