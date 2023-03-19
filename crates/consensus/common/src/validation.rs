@@ -10,8 +10,6 @@ use std::{
     time::SystemTime,
 };
 
-use reth_primitives::constants;
-
 #[cfg(feature = "optimism")]
 use reth_primitives::TxDeposit;
 
@@ -69,11 +67,6 @@ pub fn validate_transaction_regarding_header(
     base_fee: Option<u64>,
 ) -> Result<(), ConsensusError> {
     let chain_id = match transaction {
-        #[cfg(feature = "optimism")]
-        Transaction::Deposit(TxDeposit { .. }) => {
-            // TODO: get the chain id
-            None
-        }
         Transaction::Legacy(TxLegacy { chain_id, .. }) => {
             // EIP-155: Simple replay attack protection: https://eips.ethereum.org/EIPS/eip-155
             if chain_spec.fork(Hardfork::SpuriousDragon).active_at_block(at_block_number) &&
@@ -108,6 +101,11 @@ pub fn validate_transaction_regarding_header(
             }
 
             Some(*chain_id)
+        }
+        #[cfg(feature = "optimism")]
+        Transaction::Deposit(TxDeposit { .. }) => {
+            // TODO: I believe the chain id should be None here, but have to confirm.
+            None
         }
     };
     if let Some(chain_id) = chain_id {
