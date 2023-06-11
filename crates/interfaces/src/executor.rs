@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum Error {
     #[error("EVM reported invalid transaction ({hash:?}): {message}")]
     EVM { hash: H256, message: String },
-    #[error("Example of error.")]
+    #[error("Verification failed")]
     VerificationFailed,
     #[error("Fatal internal error")]
     ExecutionFatalError,

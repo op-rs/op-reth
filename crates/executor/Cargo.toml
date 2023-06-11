@@ -55,3 +55,4 @@ parking_lot = "0.12"
 
 [features]
 test-utils = ["parking_lot"]
+optimism = []
