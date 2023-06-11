@@ -46,6 +46,7 @@ pub enum BlockExecutionError {
     CanonicalRevert { inner: String },
     #[error("Transaction error on commit: {inner:?}")]
     CanonicalCommit { inner: String },
+<<<<<<< HEAD
     // === tree errors ===
     // TODO(mattsse): move this to tree error
     #[error("Block hash {block_hash} not found in blockchain tree chain")]
@@ -74,4 +75,10 @@ impl BlockExecutionError {
     pub fn is_fatal(&self) -> bool {
         matches!(self, Self::CanonicalCommit { .. } | Self::CanonicalRevert { .. })
     }
+=======
+    #[error("Transaction error on pipeline status update: {inner:?}")]
+    PipelineStatusUpdate { inner: String },
+    #[error("DB Error during transaction execution: {inner:?}")]
+    DBError { inner: String },
+>>>>>>> 6266b9f3 (feat: receipts, l1 cost wip)
 }
