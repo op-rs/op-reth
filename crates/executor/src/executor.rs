@@ -385,6 +385,9 @@ where
 
         self.init_env(&block.header, total_difficulty);
 
+        #[cfg(feature = "optimism")]
+        let mut l1_cost_oracle = crate::optimism::OptimismGasCostOracle::default();
+
         let mut cumulative_gas_used = 0;
         let mut post_state = PostState::with_tx_capacity(block.body.len());
         for (transaction, sender) in block.body.iter().zip(senders.into_iter()) {
@@ -407,6 +410,15 @@ where
             // Execute transaction.
             let ResultAndState { result, state } = self.transact(transaction, sender)?;
 
+            #[cfg(feature = "optimism")]
+            let l1_cost = l1_cost_oracle
+                .calculate_l1_cost(self.db(), block.header.number, transaction.clone())
+                .map_err(|db_err| Error::DBError { inner: db_err.to_string() })?;
+
+            // TODO: inject l1 cost into resulting state
+            // TODO: better manage the optimism flag in this function
+
+            #[cfg(feature = "optimism")]
             if transaction.is_deposit() && !matches!(result, ExecutionResult::Success { .. }) {
                 // If the deposit transaction failed, the deposit must still be included.
                 // In this case, we need to increment the sender nonce and disregard the
@@ -425,6 +437,7 @@ where
                     cumulative_gas_used,
                     bloom: Bloom::zero(),
                     logs: vec![],
+                    deposit_nonce: None, // TODO: add correct deposit nonce
                 });
                 post_state.finish_transition();
                 continue
@@ -452,6 +465,8 @@ where
                 cumulative_gas_used,
                 bloom: logs_bloom(logs.iter()),
                 logs,
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None, // TODO: add correct deposit nonce
             });
             post_state.finish_transition();
         }

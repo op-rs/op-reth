@@ -40,6 +40,8 @@ mod test {
             cumulative_gas_used: 0,
             bloom: Default::default(),
             logs: vec![],
+            #[cfg(feature = "optimism")]
+            deposit_nonce: None,
         }]]);
 
         let mut out = vec![];
@@ -108,6 +110,8 @@ mod test {
                             },
                         ],
                         success: false,
+                        #[cfg(feature = "optimism")]
+                        deposit_nonce: None,
                     },
                 ],
             ]),
@@ -142,6 +146,8 @@ mod test {
                                 },
                             ],
                             success: false,
+                            #[cfg(feature = "optimism")]
+                            deposit_nonce: None,
                         },
                     ],
                 ]),

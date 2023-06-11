@@ -20,6 +20,9 @@ pub struct Receipt {
     pub bloom: Bloom,
     /// Log send from contracts.
     pub logs: Vec<Log>,
+    /// Deposit nonce for Optimism deposit transactions
+    #[cfg(feature = "optimism")]
+    pub deposit_nonce: Option<u64>,
 }
 
 impl Receipt {
@@ -31,6 +34,13 @@ impl Receipt {
         rlp_head.payload_length += self.cumulative_gas_used.length();
         rlp_head.payload_length += self.bloom.length();
         rlp_head.payload_length += self.logs.length();
+        #[cfg(feature = "optimism")]
+        if self.tx_type == TxType::DEPOSIT {
+            // Transactions pre-Regolith don't have a deposit nonce
+            if let Some(nonce) = self.deposit_nonce {
+                rlp_head.payload_length += nonce.length();
+            }
+        }
 
         rlp_head
     }
@@ -42,6 +52,10 @@ impl Receipt {
         self.cumulative_gas_used.encode(out);
         self.bloom.encode(out);
         self.logs.encode(out);
+        #[cfg(feature = "optimism")]
+        if let Some(nonce) = self.deposit_nonce {
+            nonce.encode(out);
+        }
     }
 
     /// Encode receipt with or without the header data.
@@ -61,13 +75,10 @@ impl Receipt {
         }
 
         match self.tx_type {
-            TxType::EIP2930 => {
-                out.put_u8(0x01);
-            }
-            TxType::EIP1559 => {
-                out.put_u8(0x02);
-            }
-            _ => unreachable!("legacy handled; qed."),
+            TxType::EIP2930 => out.put_u8(0x01),
+            TxType::EIP1559 => out.put_u8(0x02),
+            TxType::DEPOSIT => out.put_u8(0x7E),
+            TxType::Legacy => unreachable!("legacy handled; qed."),
         }
         out.put_slice(payload.as_ref());
     }
@@ -86,13 +97,28 @@ impl Receipt {
             return Err(reth_rlp::DecodeError::UnexpectedString)
         }
         let started_len = b.len();
-        let this = Self {
-            tx_type,
-            success: reth_rlp::Decodable::decode(b)?,
-            cumulative_gas_used: reth_rlp::Decodable::decode(b)?,
-            bloom: reth_rlp::Decodable::decode(b)?,
-            logs: reth_rlp::Decodable::decode(b)?,
+
+        let this = match tx_type {
+            #[cfg(feature = "optimism")]
+            TxType::DEPOSIT => Self {
+                tx_type,
+                success: reth_rlp::Decodable::decode(b)?,
+                cumulative_gas_used: reth_rlp::Decodable::decode(b)?,
+                bloom: reth_rlp::Decodable::decode(b)?,
+                logs: reth_rlp::Decodable::decode(b)?,
+                deposit_nonce: Some(reth_rlp::Decodable::decode(b)?),
+            },
+            _ => Self {
+                tx_type,
+                success: reth_rlp::Decodable::decode(b)?,
+                cumulative_gas_used: reth_rlp::Decodable::decode(b)?,
+                bloom: reth_rlp::Decodable::decode(b)?,
+                logs: reth_rlp::Decodable::decode(b)?,
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None,
+            },
         };
+
         let consumed = started_len - b.len();
         if consumed != rlp_head.payload_length {
             return Err(reth_rlp::DecodeError::ListLengthMismatch {
@@ -144,6 +170,9 @@ impl Decodable for Receipt {
                 } else if receipt_type == 0x02 {
                     buf.advance(1);
                     Self::decode_receipt(buf, TxType::EIP1559)
+                } else if receipt_type == 0x7E {
+                    buf.advance(1);
+                    Self::decode_receipt(buf, TxType::DEPOSIT)
                 } else {
                     Err(reth_rlp::DecodeError::Custom("invalid receipt type"))
                 }
@@ -189,6 +218,8 @@ mod tests {
                 data: Bytes::from_str("0100ff").unwrap().0.into(),
             }],
             success: false,
+            #[cfg(feature = "optimism")]
+            deposit_nonce: None,
         };
 
         receipt.encode(&mut data);
@@ -223,6 +254,8 @@ mod tests {
                 data: Bytes::from_str("0100ff").unwrap().0.into(),
             }],
             success: false,
+            #[cfg(feature = "optimism")]
+            deposit_nonce: None,
         };
 
         let receipt = Receipt::decode(&mut &data[..]).unwrap();

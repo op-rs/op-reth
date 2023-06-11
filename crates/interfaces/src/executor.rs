@@ -64,4 +64,6 @@ pub enum Error {
     CanonicalCommit { inner: String },
     #[error("Transaction error on pipeline status update: {inner:?}")]
     PipelineStatusUpdate { inner: String },
+    #[error("DB Error during transaction execution: {inner:?}")]
+    DBError { inner: String },
 }
