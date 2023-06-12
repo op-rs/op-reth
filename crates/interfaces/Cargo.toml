@@ -47,4 +47,5 @@ secp256k1 = { version = "0.26.0", default-features = false, features = [
 
 [features]
 bench = []
+optimism = []
 test-utils = ["tokio-stream/sync", "secp256k1"]
