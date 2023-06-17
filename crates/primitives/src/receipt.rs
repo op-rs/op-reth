@@ -20,9 +20,6 @@ pub struct Receipt {
     pub bloom: Bloom,
     /// Log send from contracts.
     pub logs: Vec<Log>,
-    /// Deposit nonce for Optimism deposit transactions
-    #[cfg(feature = "optimism")]
-    pub deposit_nonce: Option<u64>,
 }
 
 impl Receipt {
@@ -34,13 +31,6 @@ impl Receipt {
         rlp_head.payload_length += self.cumulative_gas_used.length();
         rlp_head.payload_length += self.bloom.length();
         rlp_head.payload_length += self.logs.length();
-        #[cfg(feature = "optimism")]
-        if self.tx_type == TxType::DEPOSIT {
-            // Transactions pre-Regolith don't have a deposit nonce
-            if let Some(nonce) = self.deposit_nonce {
-                rlp_head.payload_length += nonce.length();
-            }
-        }
 
         rlp_head
     }
@@ -52,10 +42,6 @@ impl Receipt {
         self.cumulative_gas_used.encode(out);
         self.bloom.encode(out);
         self.logs.encode(out);
-        #[cfg(feature = "optimism")]
-        if let Some(nonce) = self.deposit_nonce {
-            nonce.encode(out);
-        }
     }
 
     /// Encode receipt with or without the header data.
@@ -106,7 +92,6 @@ impl Receipt {
                 cumulative_gas_used: reth_rlp::Decodable::decode(b)?,
                 bloom: reth_rlp::Decodable::decode(b)?,
                 logs: reth_rlp::Decodable::decode(b)?,
-                deposit_nonce: Some(reth_rlp::Decodable::decode(b)?),
             },
             _ => Self {
                 tx_type,
@@ -114,8 +99,6 @@ impl Receipt {
                 cumulative_gas_used: reth_rlp::Decodable::decode(b)?,
                 bloom: reth_rlp::Decodable::decode(b)?,
                 logs: reth_rlp::Decodable::decode(b)?,
-                #[cfg(feature = "optimism")]
-                deposit_nonce: None,
             },
         };
 
@@ -218,8 +201,6 @@ mod tests {
                 data: Bytes::from_str("0100ff").unwrap().0.into(),
             }],
             success: false,
-            #[cfg(feature = "optimism")]
-            deposit_nonce: None,
         };
 
         receipt.encode(&mut data);
@@ -254,8 +235,6 @@ mod tests {
                 data: Bytes::from_str("0100ff").unwrap().0.into(),
             }],
             success: false,
-            #[cfg(feature = "optimism")]
-            deposit_nonce: None,
         };
 
         let receipt = Receipt::decode(&mut &data[..]).unwrap();
