@@ -448,11 +448,11 @@ where
                 // state changes. The tx is invalid so it is also recorded as using all gas.
                 let sender_account =
                     self.db().load_account(sender).map_err(|_| Error::ProviderError)?;
-                let old = to_reth_acc(&sender_account.info);
+                let old_sender_info = to_reth_acc(&sender_account.info);
                 sender_account.info.nonce += 1;
-                let new = to_reth_acc(&sender_account.info);
+                let new_sender_info = to_reth_acc(&sender_account.info);
 
-                post_state.change_account(sender, old, new);
+                post_state.change_account(sender, old_sender_info, new_sender_info);
                 cumulative_gas_used += transaction.gas_limit();
 
                 post_state.add_receipt(Receipt {
@@ -461,6 +461,8 @@ where
                     cumulative_gas_used,
                     bloom: Bloom::zero(),
                     logs: vec![],
+                    #[cfg(feature = "optimism")]
+                    deposit_nonce: Some(transaction.nonce()),
                 });
                 post_state.finish_transition();
                 continue
@@ -473,8 +475,17 @@ where
                 &mut post_state,
             );
 
-            // append gas used
-            cumulative_gas_used += result.gas_used();
+            #[cfg(feature = "optimism")]
+            if transaction.is_deposit() {
+                cumulative_gas_used += transaction.gas_limit()
+            } else {
+                cumulative_gas_used += result.gas_used()
+            }
+
+            #[cfg(not(feature = "optimism"))]
+            {
+                cumulative_gas_used += result.gas_used();
+            }
 
             // cast revm logs to reth logs
             let logs: Vec<Log> = result.logs().into_iter().map(into_reth_log).collect();
@@ -488,6 +499,8 @@ where
                 cumulative_gas_used,
                 bloom: logs_bloom(logs.iter()),
                 logs,
+                #[cfg(feature = "optimism")]
+                deposit_nonce: Some(transaction.nonce()),
             });
             post_state.finish_transition();
         }
