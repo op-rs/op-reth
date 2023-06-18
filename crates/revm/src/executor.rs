@@ -370,8 +370,17 @@ where
                 &mut post_state,
             );
 
-            // append gas used
-            cumulative_gas_used += result.gas_used();
+            #[cfg(feature = "optimism")]
+            if transaction.is_deposit() {
+                cumulative_gas_used += transaction.gas_limit()
+            } else {
+                cumulative_gas_used += result.gas_used()
+            }
+
+            #[cfg(not(feature = "optimism"))]
+            {
+                cumulative_gas_used += result.gas_used();
+            }
 
             // Push transaction changeset and calculate header bloom filter for receipt.
             post_state.add_receipt(
