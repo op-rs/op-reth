@@ -359,42 +359,46 @@ where
                 );
             }
 
-            // Execute transaction.
-            let ResultAndState { result, state } = self.transact(transaction, sender)?;
-
-            // commit changes
-            self.commit_changes(
-                block.number,
-                state,
-                self.chain_spec.fork(Hardfork::SpuriousDragon).active_at_block(block.number),
-                &mut post_state,
-            );
-
-            #[cfg(feature = "optimism")]
-            if transaction.is_deposit() {
-                cumulative_gas_used += transaction.gas_limit()
-            } else {
-                cumulative_gas_used += result.gas_used()
-            }
-
             #[cfg(not(feature = "optimism"))]
             {
-                cumulative_gas_used += result.gas_used();
-            }
+                // The sum of the transaction’s gas limit, Tg, and the gas utilised in this block
+                // prior, must be no greater than the block’s gasLimit.
+                let block_available_gas = block.header.gas_limit - cumulative_gas_used;
+                if transaction.gas_limit() > block_available_gas {
+                    return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
+                        transaction_gas_limit: transaction.gas_limit(),
+                        block_available_gas,
+                    }
+                    .into())
+                }
+                // Execute transaction.
+                let ResultAndState { result, state } = self.transact(transaction, sender)?;
 
-            // Push transaction changeset and calculate header bloom filter for receipt.
-            post_state.add_receipt(
-                block.number,
-                Receipt {
-                    tx_type: transaction.tx_type(),
-                    // Success flag was added in `EIP-658: Embedding transaction status code in
-                    // receipts`.
-                    success: result.is_success(),
-                    cumulative_gas_used,
-                    logs,
-                },
-            );
-            post_state.finish_transition();
+                // commit changes
+                self.commit_changes(
+                    block.number,
+                    state,
+                    self.chain_spec.fork(Hardfork::SpuriousDragon).active_at_block(block.number),
+                    &mut post_state,
+                );
+
+                // append gas used
+                cumulative_gas_used += result.gas_used();
+
+                // Push transaction changeset and calculate header bloom filter for receipt.
+                post_state.add_receipt(
+                    block.number,
+                    Receipt {
+                        tx_type: transaction.tx_type(),
+                        // Success flag was added in `EIP-658: Embedding transaction status code in
+                        // receipts`.
+                        success: result.is_success(),
+                        cumulative_gas_used,
+                        // convert to reth log
+                        logs: result.into_logs().into_iter().map(into_reth_log).collect(),
+                    },
+                );
+            }
         }
 
         Ok((post_state, cumulative_gas_used))
