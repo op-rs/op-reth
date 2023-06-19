@@ -67,7 +67,6 @@ pub enum BlockExecutionError {
     #[cfg(feature = "optimism")]
     #[error("Insufficient funds to cover transaction L1 cost: want {want}, have {have}")]
     InsufficientFundsForL1Cost { want: u64, have: u64 },
-<<<<<<< HEAD
 }
 
 impl BlockExecutionError {
@@ -75,6 +74,4 @@ impl BlockExecutionError {
     pub fn is_fatal(&self) -> bool {
         matches!(self, Self::CanonicalCommit { .. } | Self::CanonicalRevert { .. })
     }
-=======
->>>>>>> 891b841f (wip: removed receipts changes + improved gas handling)
 }
