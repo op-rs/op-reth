@@ -111,3 +111,26 @@ impl L1BlockInfo {
             .div(U256::from(1_000_000))
     }
 }
+
+/// Get the L1 fee recipient address
+pub fn get_l1_fee_recipient() -> Address {
+    Address::from_str(L1_FEE_RECIPIENT).unwrap()
+}
+
+/// Get the base fee recipient address
+pub fn get_base_fee_recipient() -> Address {
+    Address::from_str(BASE_FEE_RECIPIENT).unwrap()
+}
+
+/// Route any fee to a recipient account
+pub fn route_fee_to_vault<DB: StateProvider>(
+    db: &mut SubState<DB>,
+    fee: u64,
+    gas_used: u64,
+    recipient: Address,
+) -> Result<(), Error> {
+    let mut account = db.load_account(recipient).map_err(|_| Error::ProviderError)?;
+    let amount_to_send = U256::from(fee.saturating_add(gas_used));
+    account.info.balance = account.info.balance.saturating_add(amount_to_send);
+    Ok(())
+}
