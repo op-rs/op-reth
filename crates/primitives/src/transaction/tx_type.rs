@@ -88,7 +88,7 @@ impl Compact for TxType {
                 3 => TxType::EIP4844,
                 #[cfg(feature = "optimism")]
                 126 => TxType::DEPOSIT,
-                _ => panic!("unknown transaction type {identifier}"),
+                _ => TxType::EIP1559,
             },
             buf,
         )

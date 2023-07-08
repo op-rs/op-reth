@@ -184,6 +184,8 @@ mod tests {
             genesis: Genesis::default(),
             genesis_hash: None,
             hardforks: BTreeMap::from([(Hardfork::Frontier, ForkCondition::Never)]),
+            fork_timestamps: Default::default(),
+            paris_block_and_final_difficulty: None,
             #[cfg(feature = "optimism")]
             optimism: None,
         };
@@ -198,6 +200,8 @@ mod tests {
             genesis: Genesis::default(),
             genesis_hash: None,
             hardforks: BTreeMap::from([(Hardfork::Shanghai, ForkCondition::Never)]),
+            fork_timestamps: Default::default(),
+            paris_block_and_final_difficulty: None,
             #[cfg(feature = "optimism")]
             optimism: None,
         };

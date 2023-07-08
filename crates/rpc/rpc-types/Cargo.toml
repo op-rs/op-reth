@@ -28,7 +28,13 @@ jsonrpsee-types = { workspace = true, optional = true }
 default = ["jsonrpsee-types"]
 
 [dev-dependencies]
-reth-interfaces = { path = "../../interfaces", features = ["test-utils"] }
+# reth
+reth-interfaces = { workspace = true, features = ["test-utils"] }
+
+# misc
+rand = { workspace = true }
+assert_matches = "1.5"
+similar-asserts = "1.4"
 
 # misc
 rand.workspace = true
