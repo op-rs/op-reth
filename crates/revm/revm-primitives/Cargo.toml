@@ -10,9 +10,9 @@ description = "core reth specific revm utilities"
 
 [dependencies]
 # reth
-reth-primitives = { path = "../../primitives" }
+reth-primitives = { workspace = true }
 
-revm = { version = "3.0.0" }
+revm = { workspace = true }
 
 [features]
 optimism = ["reth-primitives/optimism"]
