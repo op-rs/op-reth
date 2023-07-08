@@ -167,33 +167,6 @@ pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
     .into()
 });
 
-/// The Optimism Goerli spec
-#[cfg(feature = "optimism")]
-pub static OP_GOERLI: Lazy<ChainSpec> = Lazy::new(|| ChainSpec {
-    chain: Chain::optimism_goerli(),
-    genesis: serde_json::from_str(include_str!("../../res/genesis/goerli_op.json"))
-        .expect("Can't deserialize Optimism Goerli genesis json"),
-    genesis_hash: Some(H256(hex!(
-        "c1fc15cd51159b1f1e5cbc4b82e85c1447ddfa33c52cf1d98d14fba0d6354be1"
-    ))),
-    fork_timestamps: ForkTimestamps::default(),
-    paris_block_and_final_difficulty: None,
-    hardforks: BTreeMap::from([
-        (Hardfork::Byzantium, ForkCondition::Block(0)),
-        (Hardfork::Constantinople, ForkCondition::Block(0)),
-        (Hardfork::Petersburg, ForkCondition::Block(0)),
-        (Hardfork::Istanbul, ForkCondition::Block(0)),
-        (Hardfork::MuirGlacier, ForkCondition::Block(0)),
-        (Hardfork::Berlin, ForkCondition::Block(0)),
-        (Hardfork::London, ForkCondition::Block(4061224)),
-        (Hardfork::ArrowGlacier, ForkCondition::Block(4061224)),
-        (Hardfork::GrayGlacier, ForkCondition::Block(4061224)),
-        (Hardfork::Bedrock, ForkCondition::Block(4061224)),
-        (Hardfork::Regolith, ForkCondition::Timestamp(1679079600)),
-    ]),
-    optimism: Some(OptimismConfig { eip_1559_elasticity: 10, eip_1559_denominator: 50 }),
-});
-
 /// An Ethereum chain specification.
 ///
 /// A chain specification describes:
