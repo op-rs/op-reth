@@ -638,14 +638,7 @@ impl FromRecoveredTransaction for PooledTransaction {
             Transaction::Deposit(_) => {
                 // Gas price is always set to 0 for deposits in order to zero out ETH refunds,
                 // because they already pay for their gas on L1.
-<<<<<<< HEAD
                 U256::ZERO
-=======
-                let gas_price = U256::from(0);
-                let cost = U256::from(t.value);
-                let effective_gas_price = 0u128;
-                (cost, effective_gas_price)
->>>>>>> 4b146858 (Start resolving conflicts)
             }
         };
         let cost = gas_cost + U256::from(tx.value());
