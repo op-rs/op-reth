@@ -41,3 +41,12 @@ reth-provider = { workspace = true, features = ["test-utils"] }
 reth-tracing = { path = "../../tracing" }
 
 assert_matches = "1.5"
+
+[features]
+optimism = [
+  "reth-consensus-common/optimism",
+  "reth-primitives/optimism",
+  "reth-interfaces/optimism",
+  "reth-provider/optimism",
+  "reth-rpc-types/optimism",
+]
