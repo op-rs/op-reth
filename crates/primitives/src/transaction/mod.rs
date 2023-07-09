@@ -11,8 +11,6 @@ use reth_codecs::{add_arbitrary_tests, derive_arbitrary, Compact};
 use reth_rlp::{
     length_of_length, Decodable, DecodeError, Encodable, Header, EMPTY_LIST_CODE, EMPTY_STRING_CODE,
 };
-#[cfg(feature = "optimism")]
-use revm_primitives::U256;
 use serde::{Deserialize, Serialize};
 pub use signature::Signature;
 use std::mem;
@@ -127,6 +125,8 @@ impl Transaction {
             Transaction::Legacy(tx) => tx.nonce = nonce,
             Transaction::Eip2930(tx) => tx.nonce = nonce,
             Transaction::Eip1559(tx) => tx.nonce = nonce,
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_tx) => { /* noop */ }
         }
     }
 
@@ -136,6 +136,8 @@ impl Transaction {
             Transaction::Legacy(tx) => tx.value = value,
             Transaction::Eip2930(tx) => tx.value = value,
             Transaction::Eip1559(tx) => tx.value = value,
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(tx) => tx.value = value,
         }
     }
 
@@ -145,6 +147,8 @@ impl Transaction {
             Transaction::Legacy(tx) => tx.input = input,
             Transaction::Eip2930(tx) => tx.input = input,
             Transaction::Eip1559(tx) => tx.input = input,
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(tx) => tx.input = input,
         }
     }
 
@@ -176,6 +180,11 @@ impl Compact for Transaction {
             Transaction::Eip1559(tx) => {
                 tx.to_compact(buf);
                 2
+            }
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(tx) => {
+                tx.to_compact(buf);
+                126
             }
         }
     }
@@ -339,6 +348,8 @@ impl Transaction {
             Transaction::Eip1559(TxEip1559 { max_priority_fee_per_gas, .. }) => {
                 *max_priority_fee_per_gas
             }
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => 0,
         }
     }
 
@@ -350,6 +361,8 @@ impl Transaction {
             Transaction::Legacy(tx) => tx.gas_price,
             Transaction::Eip2930(tx) => tx.gas_price,
             Transaction::Eip1559(dynamic_tx) => dynamic_tx.effective_gas_price(base_fee),
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => 0,
         }
     }
 
