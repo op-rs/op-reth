@@ -28,8 +28,6 @@ use std::{
 
 #[cfg(feature = "optimism")]
 use crate::optimism;
-#[cfg(feature = "optimism")]
-use reth_primitives::Log;
 
 /// Main block executor
 pub struct Executor<DB>
