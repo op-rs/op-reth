@@ -20,4 +20,9 @@ assert_matches = "1.5.0"
 mockall = "0.11.3"
 
 [features]
-optimism = ["reth-primitives/optimism"]
+optimism = [
+    "reth-primitives/optimism", 
+    "reth-interfaces/optimism", 
+    "reth-provider/optimism"
+]
+
