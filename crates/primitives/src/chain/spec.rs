@@ -159,7 +159,10 @@ pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             (Hardfork::Paris, ForkCondition::Block(0)),
             (Hardfork::Regolith, ForkCondition::Timestamp(1679079600)),
         ]),
-        optimism: Some(OptimismConfig { eip_1559_elasticity: 10, eip_1559_denominator: 50 }),
+        optimism: Some(OptimismConfig {
+            eip_1559_elasticity: crate::constants::EIP1559_ELASTICITY_MULTIPLIER,
+            eip_1559_denominator: crate::constants::EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+        }),
     }
     .into()
 });
