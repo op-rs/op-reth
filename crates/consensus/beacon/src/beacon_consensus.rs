@@ -99,7 +99,7 @@ fn validate_header_extradata(header: &Header) -> Result<(), ConsensusError> {
 
 /// Returns true if the beacon chain consensus is active for a block with the given header and total difficulty.
 ///
-/// This is the case if the block is after the London hardfork or the chain is configured to use optimism.
+/// This is the case if the block is after the Paris hardfork or the chain is configured to use optimism.
 fn is_beacon_consensus_active(chain_spec: &ChainSpec,
     header: &Header,
     total_difficulty: U256,
