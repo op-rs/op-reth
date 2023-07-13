@@ -325,13 +325,13 @@ where
                 // Route the l1 cost and base fee to the appropriate optimism vaults
                 self.increment_account_balance(
                     block.number,
-                    optimism::l1_cost_recipient(),
+                    *optimism::L1_FEE_RECIPIENT,
                     l1_cost,
                     &mut post_state,
                 )?;
                 self.increment_account_balance(
                     block.number,
-                    optimism::base_fee_recipient(),
+                    *optimism::BASE_FEE_RECIPIENT,
                     U256::from(
                         block
                             .base_fee_per_gas

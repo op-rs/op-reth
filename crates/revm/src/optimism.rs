@@ -1,11 +1,20 @@
 use std::str::FromStr;
 
+use once_cell::sync::Lazy;
 use reth_interfaces::executor;
 use reth_primitives::{Address, Block, TransactionKind, TransactionSigned, U256};
 
-const L1_FEE_RECIPIENT: &str = "0x420000000000000000000000000000000000001A";
-const BASE_FEE_RECIPIENT: &str = "0x4200000000000000000000000000000000000019";
-const L1_BLOCK_CONTRACT: &str = "0x4200000000000000000000000000000000000015";
+/// L1 fee recipient vault contract address
+pub static L1_FEE_RECIPIENT: Lazy<Address> =
+    Lazy::new(|| Address::from_str("0x420000000000000000000000000000000000001A").unwrap());
+
+/// Base fee recipient vault contract address
+pub static BASE_FEE_RECIPIENT: Lazy<Address> =
+    Lazy::new(|| Address::from_str("0x4200000000000000000000000000000000000019").unwrap());
+
+/// L1 block info contract address
+pub static L1_BLOCK_CONTRACT: Lazy<Address> =
+    Lazy::new(|| Address::from_str("0x4200000000000000000000000000000000000015").unwrap());
 
 const ZERO_BYTE_COST: u64 = 4;
 const NON_ZERO_BYTE_COST: u64 = 16;
@@ -31,12 +40,10 @@ impl TryFrom<&Block> for L1BlockInfo {
     type Error = executor::BlockExecutionError;
 
     fn try_from(block: &Block) -> Result<Self, Self::Error> {
-        let l1_block_contract = Address::from_str(L1_BLOCK_CONTRACT).unwrap();
-
         let l1_info_tx_data = block
             .body
             .iter()
-            .find(|tx| matches!(tx.kind(), TransactionKind::Call(to) if to == &l1_block_contract))
+            .find(|tx| matches!(tx.kind(), TransactionKind::Call(to) if *to == *L1_BLOCK_CONTRACT))
             .ok_or(executor::BlockExecutionError::L1BlockInfoError {
                 message: "could not find l1 block info tx in the L2 block".to_string(),
             })
@@ -100,14 +107,4 @@ impl L1BlockInfo {
             .checked_div(U256::from(1_000_000))
             .unwrap_or_default()
     }
-}
-
-/// Get the base fee recipient address
-pub fn base_fee_recipient() -> Address {
-    Address::from_str(BASE_FEE_RECIPIENT).unwrap()
-}
-
-/// Get the L1 cost recipient address
-pub fn l1_cost_recipient() -> Address {
-    Address::from_str(L1_FEE_RECIPIENT).unwrap()
 }
