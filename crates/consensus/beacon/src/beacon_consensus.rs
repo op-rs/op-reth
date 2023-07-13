@@ -109,5 +109,5 @@ fn is_beacon_consensus_active(chain_spec: &ChainSpec,
         return true;
     }
 
-    return chain_spec.fork(Hardfork::London).active_at_ttd(total_difficulty, header.difficulty);
+    return chain_spec.fork(Hardfork::Paris).active_at_ttd(total_difficulty, header.difficulty);
 }
