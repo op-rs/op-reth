@@ -176,7 +176,7 @@ impl Decodable for ReceiptWithBloom {
                         Self::decode_receipt(buf, TxType::EIP1559)
                     }
                     #[cfg(feature = "optimism")]
-                    0x7E => {
+                    crate::DEPOSIT_TX_TYPE => {
                         buf.advance(1);
                         Self::decode_receipt(buf, TxType::DEPOSIT)
                     }
