@@ -43,8 +43,7 @@ impl Consensus for BeaconConsensus {
         header: &Header,
         total_difficulty: U256,
     ) -> Result<(), ConsensusError> {
-        if is_beacon_consensus_active(&self.chain_spec, header, total_difficulty)
-        {
+        if is_beacon_consensus_active(&self.chain_spec, header, total_difficulty) {
             // EIP-3675: Upgrade consensus to Proof-of-Stake:
             // https://eips.ethereum.org/EIPS/eip-3675#replacing-difficulty-with-0
             if header.difficulty != U256::ZERO {
@@ -97,17 +96,20 @@ fn validate_header_extradata(header: &Header) -> Result<(), ConsensusError> {
     }
 }
 
-/// Returns true if the beacon chain consensus is active for a block with the given header and total difficulty.
+/// Returns true if the beacon chain consensus is active for a block with the given header and total
+/// difficulty.
 ///
-/// This is the case if the block is after the Paris hardfork or the chain is configured to use optimism.
-fn is_beacon_consensus_active(chain_spec: &ChainSpec,
+/// This is the case if the block is after the Paris hardfork or the chain is configured to use
+/// optimism.
+fn is_beacon_consensus_active(
+    chain_spec: &ChainSpec,
     header: &Header,
     total_difficulty: U256,
 ) -> bool {
     #[cfg(feature = "optimism")]
     if chain_spec.optimism.is_some() {
-        return true;
+        return true
     }
 
-    return chain_spec.fork(Hardfork::Paris).active_at_ttd(total_difficulty, header.difficulty);
+    chain_spec.fork(Hardfork::Paris).active_at_ttd(total_difficulty, header.difficulty)
 }
