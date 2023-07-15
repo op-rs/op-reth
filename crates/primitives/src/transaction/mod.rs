@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::{
     compression::{TRANSACTION_COMPRESSOR, TRANSACTION_DECOMPRESSOR},
     keccak256, Address, Bytes, ChainId, TxHash, H256,
@@ -69,6 +71,20 @@ pub struct TxLegacy {
     pub input: Bytes,
 }
 
+impl TxLegacy {
+    /// Calculates a heuristic for the in-memory size of the [TxLegacy] transaction.
+    #[inline]
+    fn size(&self) -> usize {
+        mem::size_of::<Option<ChainId>>() + // chain_id
+        mem::size_of::<u64>() + // nonce
+        mem::size_of::<u128>() + // gas_price
+        mem::size_of::<u64>() + // gas_limit
+        self.to.size() + // to
+        mem::size_of::<u128>() + // value
+        self.input.len() // input
+    }
+}
+
 /// Transaction with an [`AccessList`] ([EIP-2930](https://eips.ethereum.org/EIPS/eip-2930)).
 #[main_codec]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -115,6 +131,21 @@ pub struct TxEip2930 {
     /// data: An unlimited size byte array specifying the
     /// input data of the message call, formally Td.
     pub input: Bytes,
+}
+
+impl TxEip2930 {
+    /// Calculates a heuristic for the in-memory size of the [TxEip2930] transaction.
+    #[inline]
+    pub fn size(&self) -> usize {
+        mem::size_of::<ChainId>() + // chain_id
+        mem::size_of::<u64>() + // nonce
+        mem::size_of::<u128>() + // gas_price
+        mem::size_of::<u64>() + // gas_limit
+        self.to.size() + // to
+        mem::size_of::<u128>() + // value
+        self.access_list.size() + // access_list
+        self.input.len() // input
+    }
 }
 
 /// A transaction with a priority fee ([EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)).
@@ -171,6 +202,22 @@ pub struct TxEip1559 {
     /// data: An unlimited size byte array specifying the
     /// input data of the message call, formally Td.
     pub input: Bytes,
+}
+
+impl TxEip1559 {
+    /// Calculates a heuristic for the in-memory size of the [TxEip1559] transaction.
+    #[inline]
+    pub fn size(&self) -> usize {
+        mem::size_of::<ChainId>() + // chain_id
+        mem::size_of::<u64>() + // nonce
+        mem::size_of::<u64>() + // gas_limit
+        mem::size_of::<u128>() + // max_fee_per_gas
+        mem::size_of::<u128>() + // max_priority_fee_per_gas
+        self.to.size() + // to
+        mem::size_of::<u128>() + // value
+        self.access_list.size() + // access_list
+        self.input.len() // input
+    }
 }
 
 /// A raw transaction.
@@ -263,6 +310,16 @@ impl Transaction {
             Transaction::Eip1559(tx) => tx.input = input,
             #[cfg(feature = "optimism")]
             Transaction::Deposit(tx) => tx.input = input,
+        }
+    }
+
+    /// Calculates a heuristic for the in-memory size of the [Transaction].
+    #[inline]
+    fn size(&self) -> usize {
+        match self {
+            Transaction::Legacy(tx) => tx.size(),
+            Transaction::Eip2930(tx) => tx.size(),
+            Transaction::Eip1559(tx) => tx.size(),
         }
     }
 }
@@ -819,6 +876,12 @@ impl TransactionKind {
             TransactionKind::Call(to) => Some(to),
         }
     }
+
+    /// Calculates a heuristic for the in-memory size of the [TransactionKind].
+    #[inline]
+    fn size(self) -> usize {
+        mem::size_of::<Self>()
+    }
 }
 
 impl Compact for TransactionKind {
@@ -1141,6 +1204,12 @@ impl TransactionSigned {
         let mut initial_tx = Self { transaction, hash: Default::default(), signature };
         initial_tx.hash = initial_tx.recalculate_hash();
         initial_tx
+    }
+
+    /// Calculate a heuristic for the in-memory size of the [TransactionSigned].
+    #[inline]
+    pub fn size(&self) -> usize {
+        mem::size_of::<TxHash>() + self.transaction.size() + self.signature.size()
     }
 
     /// Decodes legacy transaction from the data buffer.
