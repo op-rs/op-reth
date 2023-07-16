@@ -101,7 +101,7 @@ pub struct PayloadBuilderAttributes {
     pub transactions: Vec<TransactionSigned>,
     /// The gas limit for the generated payload
     #[cfg(feature = "optimism")]
-    pub gas_limit: u64,
+    pub gas_limit: Option<u64>,
 }
 
 // === impl PayloadBuilderAttributes ===
@@ -138,7 +138,7 @@ impl PayloadBuilderAttributes {
             #[cfg(feature = "optimism")]
             transactions,
             #[cfg(feature = "optimism")]
-            gas_limit: attributes.gas_limit.unwrap_or_default(),
+            gas_limit: attributes.gas_limit,
         })
     }
 
