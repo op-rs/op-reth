@@ -625,6 +625,8 @@ where
             return Ok(OnForkChoiceUpdated::syncing())
         }
 
+        // TODO(clabby): Allow proposers to reorg their own chain
+
         let status = match self.blockchain.make_canonical(&state.head_block_hash) {
             Ok(outcome) => {
                 if !outcome.is_already_canonical() {
@@ -643,6 +645,13 @@ where
                     if let Some(invalid_fcu_response) = self.ensure_consistent_state(state)? {
                         trace!(target: "consensus::engine", ?state, head=?state.head_block_hash, "Forkchoice state is inconsistent, returning invalid response");
                         return Ok(invalid_fcu_response)
+                    }
+
+                    // TODO(clabby): We should only do this if the chainspec has an optimism
+                    // config. Does this belong here?
+                    #[cfg(feature = "optimism")]
+                    if attrs.gas_limit.is_none() {
+                        return Ok(OnForkChoiceUpdated::invalid_payload_attributes())
                     }
 
                     // the CL requested to build a new payload on top of this new VALID head

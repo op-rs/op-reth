@@ -755,7 +755,20 @@ where
 
     let base_fee = initialized_block_env.basefee.to::<u64>();
     let block_number = initialized_block_env.number.to::<u64>();
+
+    #[cfg(feature(not = "optimism"))]
     let block_gas_limit: u64 = initialized_block_env.gas_limit.try_into().unwrap_or(u64::MAX);
+
+    #[cfg(feature = "optimism")]
+    let mut block_gas_limit: u64 = initialized_block_env.gas_limit.try_into().unwrap_or(u64::MAX);
+
+    #[cfg(feature = "optimism")]
+    {
+        if let Some(gas_limit) = attributes.gas_limit {
+            block_gas_limit = gas_limit;
+        }
+        // TODO(clabby): configure the gas limit of pending blocks with the miner gas limit config when using optimism
+    }
 
     let WithdrawalsOutcome { withdrawals_root, withdrawals } = commit_withdrawals(
         &mut db,
@@ -786,7 +799,10 @@ where
         gas_limit: block_gas_limit,
         difficulty: U256::ZERO,
         gas_used: 0,
+        #[cfg(feature(not = "optimism"))]
         extra_data: extra_data.into(),
+        #[cfg(feature = "optimism")]
+        extra_data: if chain_spec.optimism.is_none() { extra_data.into() } else { Default::default() },
     };
 
     let block = Block { header, body: vec![], ommers: vec![], withdrawals };
