@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    ops::{Add, Div, Mul},
+    str::FromStr,
+};
 
 use once_cell::sync::Lazy;
 use reth_interfaces::executor;
@@ -91,25 +94,20 @@ impl TryFrom<&Block> for L1BlockInfo {
 
 impl L1BlockInfo {
     /// Calculate the gas cost of a transaction based on L1 block data posted on L2
-    pub fn calculate_tx_l1_cost(
-        &mut self,
-        tx: &TransactionSigned,
-    ) -> Result<U256, executor::BlockExecutionError> {
+    pub fn calculate_tx_l1_cost(&mut self, tx: &TransactionSigned) -> U256 {
         let rollup_data_gas_cost = U256::from(tx.input().iter().fold(0, |acc, byte| {
             acc + if *byte == 0x00 { ZERO_BYTE_COST } else { NON_ZERO_BYTE_COST }
         }));
 
         if tx.is_deposit() || rollup_data_gas_cost == U256::ZERO {
-            return Ok(U256::ZERO)
+            return U256::ZERO
         }
 
+        // Note: 256-bit arithmetic is safe here
         rollup_data_gas_cost
-            .saturating_add(self.l1_fee_overhead)
-            .saturating_mul(self.l1_base_fee)
-            .saturating_mul(self.l1_fee_scalar)
-            .checked_div(U256::from(1_000_000))
-            .ok_or(executor::BlockExecutionError::L1BlockInfoError {
-                message: "could not calculate tx l1 cost".to_string(),
-            })
+            .add(self.l1_fee_overhead)
+            .mul(self.l1_base_fee)
+            .mul(self.l1_fee_scalar)
+            .div(U256::from(1_000_000))
     }
 }
