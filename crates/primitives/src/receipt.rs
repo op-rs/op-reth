@@ -128,28 +128,6 @@ impl ReceiptWithBloom {
             },
         };
 
-        let receipt = match tx_type {
-            #[cfg(feature = "optimism")]
-            TxType::DEPOSIT => {
-                let deposit_nonce = reth_rlp::Decodable::decode(b)?;
-                Receipt {
-                    tx_type,
-                    success,
-                    cumulative_gas_used,
-                    logs,
-                    deposit_nonce: Some(deposit_nonce),
-                }
-            }
-            _ => Receipt {
-                tx_type,
-                success,
-                cumulative_gas_used,
-                logs,
-                #[cfg(feature = "optimism")]
-                deposit_nonce: None,
-            },
-        };
-
         let this = Self { receipt, bloom };
         let consumed = started_len - b.len();
         if consumed != rlp_head.payload_length {

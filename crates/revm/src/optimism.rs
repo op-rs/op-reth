@@ -111,13 +111,3 @@ impl L1BlockInfo {
             .div(U256::from(1_000_000))
     }
 }
-
-/// Get the base fee recipient address
-pub fn base_fee_recipient() -> Address {
-    Address::from_str(BASE_FEE_RECIPIENT).unwrap()
-}
-
-/// Get the L1 cost recipient address
-pub fn l1_cost_recipient() -> Address {
-    Address::from_str(L1_FEE_RECIPIENT).unwrap()
-}

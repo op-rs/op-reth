@@ -17,7 +17,7 @@ use revm::{
     db::{AccountState, CacheDB, DatabaseRef},
     primitives::{
         hash_map::{self, Entry},
-        Account as RevmAccount, AccountInfo, ExecutionResult, ResultAndState,
+        Account as RevmAccount, AccountInfo, ResultAndState,
     },
     EVM,
 };
