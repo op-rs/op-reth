@@ -767,7 +767,8 @@ where
         if let Some(gas_limit) = attributes.gas_limit {
             block_gas_limit = gas_limit;
         }
-        // TODO(clabby): configure the gas limit of pending blocks with the miner gas limit config when using optimism
+        // TODO(clabby): configure the gas limit of pending blocks with the miner gas limit config
+        // when using optimism
     }
 
     let WithdrawalsOutcome { withdrawals_root, withdrawals } = commit_withdrawals(
@@ -802,7 +803,11 @@ where
         #[cfg(not(feature = "optimism"))]
         extra_data: extra_data.into(),
         #[cfg(feature = "optimism")]
-        extra_data: if chain_spec.optimism.is_none() { extra_data.into() } else { Default::default() },
+        extra_data: if chain_spec.optimism.is_none() {
+            extra_data.into()
+        } else {
+            Default::default()
+        },
     };
 
     let block = Block { header, body: vec![], ommers: vec![], withdrawals };
