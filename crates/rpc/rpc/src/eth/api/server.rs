@@ -16,13 +16,13 @@ use reth_primitives::{
     AccessListWithGasUsed, Address, BlockId, BlockNumberOrTag, Bytes, H256, H64, U256, U64,
 };
 use reth_provider::{
-    BlockIdReader, BlockReader, BlockReaderIdExt, EvmEnvProvider, HeaderProvider,
-    StateProviderFactory,
+    BlockIdReader, BlockReader, BlockReaderIdExt, ChainSpecProvider, EvmEnvProvider,
+    HeaderProvider, StateProviderFactory,
 };
 use reth_rpc_api::EthApiServer;
 use reth_rpc_types::{
-    state::StateOverride, BlockOverrides, CallRequest, EIP1186AccountProofResponse, FeeHistory,
-    Index, RichBlock, SyncStatus, TransactionReceipt, TransactionRequest, Work,
+    state::StateOverride, BlockOverrides, CallRequest, EIP1186AccountProofResponse, Index,
+    RichBlock, SyncStatus, TransactionReceipt, TransactionRequest, Work,
 };
 use reth_transaction_pool::TransactionPool;
 use serde_json::Value;
@@ -36,6 +36,7 @@ where
     Provider: BlockReader
         + BlockIdReader
         + BlockReaderIdExt
+        + ChainSpecProvider
         + HeaderProvider
         + StateProviderFactory
         + EvmEnvProvider
@@ -307,7 +308,7 @@ where
         block_count: U64HexOrNumber,
         newest_block: BlockNumberOrTag,
         reward_percentiles: Option<Vec<f64>>,
-    ) -> Result<FeeHistory> {
+    ) -> Result<reth_rpc_types::FeeHistory> {
         trace!(target: "rpc::eth", ?block_count, ?newest_block, ?reward_percentiles, "Serving eth_feeHistory");
         return Ok(EthApi::fee_history(self, block_count.as_u64(), newest_block, reward_percentiles)
             .await?)
@@ -398,20 +399,20 @@ mod tests {
     use reth_interfaces::test_utils::{generators, generators::Rng};
     use reth_network_api::noop::NoopNetwork;
     use reth_primitives::{
-        basefee::calculate_next_block_base_fee, constants::ETHEREUM_BLOCK_GAS_LIMIT, Block,
-        BlockNumberOrTag, Header, TransactionSigned, H256, U256,
+        constants::{self, ETHEREUM_BLOCK_GAS_LIMIT},
+        Block, BlockNumberOrTag, Header, TransactionSigned, H256, U256,
     };
     use reth_provider::{
-        test_utils::{MockEthProvider, NoopProvider},
-        BlockReader, BlockReaderIdExt, EvmEnvProvider, StateProviderFactory,
+        test_utils::NoopProvider, BlockReader, BlockReaderIdExt, ChainSpecProvider, EvmEnvProvider,
+        StateProviderFactory,
     };
     use reth_rpc_api::EthApiServer;
-    use reth_rpc_types::FeeHistory;
     use reth_transaction_pool::test_utils::{testing_pool, TestPool};
 
     fn build_test_eth_api<
         P: BlockReaderIdExt
             + BlockReader
+            + ChainSpecProvider
             + EvmEnvProvider
             + StateProviderFactory
             + Unpin
@@ -448,7 +449,11 @@ mod tests {
 
     /// Handler for: `eth_test_fee_history`
     // TODO: Split this into multiple tests, and add tests for percentiles.
+    // TODO(op-reth): fix this for optimism. currently the MockEthProvider uses
+    // a chain_spec for mainnet, but this test needs the Optimism config values
+    // to be specified.
     #[tokio::test]
+    #[cfg(not(feature = "optimism"))]
     async fn test_fee_history() {
         let mut rng = generators::rng();
 
@@ -460,7 +465,7 @@ mod tests {
         let mut gas_used_ratios = Vec::new();
         let mut base_fees_per_gas = Vec::new();
         let mut last_header = None;
-        let mock_provider = MockEthProvider::default();
+        let mock_provider = testutils::MockEthProvider::default();
 
         for i in (0..block_count).rev() {
             let hash = H256::random();
@@ -521,10 +526,12 @@ mod tests {
 
         // Add final base fee (for the next block outside of the request)
         let last_header = last_header.unwrap();
-        base_fees_per_gas.push(U256::from(calculate_next_block_base_fee(
+        base_fees_per_gas.push(U256::from(basefee::calculate_next_block_base_fee(
             last_header.gas_used,
             last_header.gas_limit,
             last_header.base_fee_per_gas.unwrap_or_default(),
+            constants::EIP1559_ELASTICITY_MULTIPLIER,
+            constants::EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
         )));
 
         let eth_api = build_test_eth_api(mock_provider);
@@ -564,7 +571,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             response,
-            FeeHistory::default(),
+            reth_rpc_types::FeeHistory::default(),
             "none: requesting no block should yield a default response"
         );
 

@@ -124,10 +124,13 @@ where
                     let mut storage = storage.write().await;
 
                     // check previous block for base fee
-                    let base_fee_per_gas = storage
-                        .headers
-                        .get(&storage.best_block)
-                        .and_then(|parent| parent.next_block_base_fee());
+                    let base_fee_per_gas =
+                        storage.headers.get(&storage.best_block).and_then(|parent| {
+                            parent.next_block_base_fee(
+                                chain_spec.elasticity_multiplier(),
+                                chain_spec.base_fee_change_denominator(),
+                            )
+                        });
 
                     let mut header = Header {
                         parent_hash: storage.best_hash,
