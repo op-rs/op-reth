@@ -268,7 +268,7 @@ impl Transaction {
                 if with_header {
                     Header {
                         list: false,
-                        payload_length: 1 + length_of_length(payload_length) + payload_length,
+                        payload_length: 1 + 1 + length_of_length(payload_length) + payload_length,
                     }
                     .encode(out);
                 }
