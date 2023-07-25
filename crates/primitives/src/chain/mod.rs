@@ -47,11 +47,6 @@ impl Chain {
         Chain::Named(ethers_core::types::Chain::Sepolia)
     }
 
-<<<<<<< HEAD
-    /// Returns the dev chain.
-    pub const fn dev() -> Self {
-        Chain::Named(ethers_core::types::Chain::Dev)
-=======
     /// Returns the optimism goerli chain.
     #[cfg(feature = "optimism")]
     pub const fn optimism_goerli() -> Self {
@@ -62,7 +57,6 @@ impl Chain {
     #[cfg(feature = "optimism")]
     pub const fn optimism_mainnet() -> Self {
         Chain::Named(ethers_core::types::Chain::Optimism)
->>>>>>> c218cec3f9337f94a969d45171afd3df66932889
     }
 
     /// The id of the chain
