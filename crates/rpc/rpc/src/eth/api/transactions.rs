@@ -12,8 +12,10 @@ use crate::{
     EthApi, EthApiSpec,
 };
 use async_trait::async_trait;
+use hyper::{Body, Client, Method, Request};
 use reth_network_api::NetworkInfo;
 use reth_primitives::{
+    hex_literal::hex,
     Address, BlockId, BlockNumberOrTag, Bytes, FromRecoveredTransaction, Header,
     IntoRecoveredTransaction, Receipt, SealedBlock,
     TransactionKind::{Call, Create},
@@ -36,6 +38,7 @@ use revm::{
     Inspector,
 };
 use revm_primitives::{utilities::create_address, Env, ResultAndState, SpecId};
+use serde_json::json;
 
 /// Helper alias type for the state's [CacheDB]
 pub(crate) type StateCacheDB<'r> = CacheDB<State<StateProviderBox<'r>>>;
@@ -389,6 +392,26 @@ where
         let recovered = recover_raw_transaction(tx)?;
 
         let pool_transaction = <Pool::Transaction>::from_recovered_transaction(recovered);
+
+        // forward the transaction to the optimism sequencer
+        if self.network().chain_id() == 10 {
+            let client = Client::new();
+
+            let body = json![{
+                "jsonrpc": "2.0",
+                "method": "eth_sendRawTransaction",
+                "params":[hex!(tx)],
+                "id": 10,
+            }];
+
+            let req = Request::builder()
+                .method(Method::POST)
+                .uri("https://mainnet-sequencer.optimism.io")
+                .header("Content-type", "application/json")
+                .body(Body::from(body));
+
+            let res = client.request(req).await?;
+        }
 
         // submit the transaction to the pool with a `Local` origin
         let hash = self.pool().add_transaction(TransactionOrigin::Local, pool_transaction).await?;
