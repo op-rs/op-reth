@@ -48,10 +48,20 @@ pub const MIN_PROTOCOL_BASE_FEE_U256: U256 = U256::from_limbs([7u64, 0, 0, 0]);
 pub const EIP1559_INITIAL_BASE_FEE: u64 = 1_000_000_000;
 
 /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+#[cfg(not(feature = "optimism"))]
 pub const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u64 = 8;
 
 /// Elasticity multiplier as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+#[cfg(not(feature = "optimism"))]
 pub const EIP1559_ELASTICITY_MULTIPLIER: u64 = 2;
+
+/// Base fee max change denominator for Optimism.
+#[cfg(feature = "optimism")]
+pub const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u64 = 50;
+
+/// Elasticity multiplier for Optimism.
+#[cfg(feature = "optimism")]
+pub const EIP1559_ELASTICITY_MULTIPLIER: u64 = 10;
 
 /// Multiplier for converting gwei to wei.
 pub const GWEI_TO_WEI: u64 = 1_000_000_000;
@@ -77,9 +87,16 @@ pub const GOERLI_GENESIS: H256 =
 pub const SEPOLIA_GENESIS: H256 =
     H256(hex!("25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"));
 
+<<<<<<< HEAD
 /// Testnet genesis hash.
 pub const DEV_GENESIS: H256 =
     H256(hex!("2f980576711e3617a5e4d83dd539548ec0f7792007d505a3d2e9674833af2d7c"));
+=======
+/// Optimism goerli genesis hash.
+#[cfg(feature = "optimism")]
+pub const GOERLI_OP_GENESIS: H256 =
+    H256(hex!("c1fc15cd51159b1f1e5cbc4b82e85c1447ddfa33c52cf1d98d14fba0d6354be1"));
+>>>>>>> c218cec3f9337f94a969d45171afd3df66932889
 
 /// Keccak256 over empty array.
 pub const KECCAK_EMPTY: H256 =

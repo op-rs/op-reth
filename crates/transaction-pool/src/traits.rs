@@ -585,6 +585,8 @@ impl PoolTransaction for PooledTransaction {
             Transaction::Legacy(tx) => tx.gas_price,
             Transaction::Eip2930(tx) => tx.gas_price,
             Transaction::Eip1559(tx) => tx.max_fee_per_gas,
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => 0,
         }
     }
 
@@ -596,6 +598,8 @@ impl PoolTransaction for PooledTransaction {
             Transaction::Legacy(_) => None,
             Transaction::Eip2930(_) => None,
             Transaction::Eip1559(tx) => Some(tx.max_priority_fee_per_gas),
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => None,
         }
     }
 
@@ -632,6 +636,12 @@ impl FromRecoveredTransaction for PooledTransaction {
             Transaction::Legacy(t) => U256::from(t.gas_price) * U256::from(t.gas_limit),
             Transaction::Eip2930(t) => U256::from(t.gas_price) * U256::from(t.gas_limit),
             Transaction::Eip1559(t) => U256::from(t.max_fee_per_gas) * U256::from(t.gas_limit),
+            #[cfg(feature = "optimism")]
+            Transaction::Deposit(_) => {
+                // Gas price is always set to 0 for deposits in order to zero out ETH refunds,
+                // because they already pay for their gas on L1.
+                U256::ZERO
+            }
         };
         let cost = gas_cost + U256::from(tx.value());
 

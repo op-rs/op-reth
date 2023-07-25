@@ -39,6 +39,12 @@ pub enum Hardfork {
     Paris,
     /// Shanghai.
     Shanghai,
+    /// Bedrock.
+    #[cfg(feature = "optimism")]
+    Bedrock,
+    /// Regolith
+    #[cfg(feature = "optimism")]
+    Regolith,
 }
 
 impl Hardfork {
@@ -82,6 +88,10 @@ impl FromStr for Hardfork {
             "grayglacier" => Hardfork::GrayGlacier,
             "paris" => Hardfork::Paris,
             "shanghai" => Hardfork::Shanghai,
+            #[cfg(feature = "optimism")]
+            "bedrock" => Hardfork::Bedrock,
+            #[cfg(feature = "optimism")]
+            "regolith" => Hardfork::Regolith,
             _ => return Err(format!("Unknown hardfork: {s}")),
         };
         Ok(hardfork)
@@ -147,6 +157,18 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "optimism")]
+    fn check_op_hardfork_from_str() {
+        let hardfork_str = ["beDrOck", "rEgOlITH"];
+        let expected_hardforks = [Hardfork::Bedrock, Hardfork::Regolith];
+
+        let hardforks: Vec<Hardfork> =
+            hardfork_str.iter().map(|h| Hardfork::from_str(h).unwrap()).collect();
+
+        assert_eq!(hardforks, expected_hardforks);
+    }
+
+    #[test]
     fn check_nonexistent_hardfork_from_str() {
         assert!(Hardfork::from_str("not a hardfork").is_err());
     }
@@ -160,6 +182,8 @@ mod tests {
             hardforks: BTreeMap::from([(Hardfork::Frontier, ForkCondition::Never)]),
             fork_timestamps: Default::default(),
             paris_block_and_final_difficulty: None,
+            #[cfg(feature = "optimism")]
+            optimism: None,
         };
 
         assert_eq!(Hardfork::Frontier.fork_id(&spec), None);
@@ -174,6 +198,8 @@ mod tests {
             hardforks: BTreeMap::from([(Hardfork::Shanghai, ForkCondition::Never)]),
             fork_timestamps: Default::default(),
             paris_block_and_final_difficulty: None,
+            #[cfg(feature = "optimism")]
+            optimism: None,
         };
 
         assert_eq!(Hardfork::Shanghai.fork_filter(&spec), None);

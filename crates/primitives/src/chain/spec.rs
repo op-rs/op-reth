@@ -54,6 +54,8 @@ pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             ),
             (Hardfork::Shanghai, ForkCondition::Timestamp(1681338455)),
         ]),
+        #[cfg(feature = "optimism")]
+        optimism: None,
     }
     .into()
 });
@@ -88,6 +90,8 @@ pub static GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             ),
             (Hardfork::Shanghai, ForkCondition::Timestamp(1678832736)),
         ]),
+        #[cfg(feature = "optimism")]
+        optimism: None,
     }
     .into()
 });
@@ -126,6 +130,39 @@ pub static SEPOLIA: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             ),
             (Hardfork::Shanghai, ForkCondition::Timestamp(1677557088)),
         ]),
+        #[cfg(feature = "optimism")]
+        optimism: None,
+    }
+    .into()
+});
+
+/// The Optimism Goerli spec
+#[cfg(feature = "optimism")]
+pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
+    ChainSpec {
+        chain: Chain::optimism_goerli(),
+        genesis: serde_json::from_str(include_str!("../../res/genesis/goerli_op.json"))
+            .expect("Can't deserialize Optimism Goerli genesis json"),
+        genesis_hash: Some(H256(hex!(
+            "c1fc15cd51159b1f1e5cbc4b82e85c1447ddfa33c52cf1d98d14fba0d6354be1"
+        ))),
+        fork_timestamps: ForkTimestamps::default(), // TODO(clabby): update this
+        paris_block_and_final_difficulty: Some((0, U256::from(0))),
+        hardforks: BTreeMap::from([
+            (Hardfork::Byzantium, ForkCondition::Block(0)),
+            (Hardfork::Constantinople, ForkCondition::Block(0)),
+            (Hardfork::Petersburg, ForkCondition::Block(0)),
+            (Hardfork::Istanbul, ForkCondition::Block(0)),
+            (Hardfork::MuirGlacier, ForkCondition::Block(0)),
+            (Hardfork::Berlin, ForkCondition::Block(0)),
+            (Hardfork::London, ForkCondition::Block(0)),
+            (
+                Hardfork::Paris,
+                ForkCondition::TTD { fork_block: Some(0), total_difficulty: U256::from(0) },
+            ),
+            (Hardfork::Regolith, ForkCondition::Timestamp(1679079600)),
+        ]),
+        optimism: Some(OptimismConfig { eip_1559_elasticity: 10, eip_1559_denominator: 50 }),
     }
     .into()
 });
@@ -201,6 +238,20 @@ pub struct ChainSpec {
 
     /// The active hard forks and their activation conditions
     pub hardforks: BTreeMap<Hardfork, ForkCondition>,
+
+    /// Optimism configuration
+    #[cfg(feature = "optimism")]
+    pub optimism: Option<OptimismConfig>,
+}
+
+/// Optimism configuration.
+#[cfg(feature = "optimism")]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OptimismConfig {
+    /// Elasticity multiplier as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+    pub eip_1559_elasticity: u64,
+    /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+    pub eip_1559_denominator: u64,
 }
 
 impl ChainSpec {
@@ -424,6 +475,8 @@ impl From<Genesis> for ChainSpec {
             fork_timestamps: ForkTimestamps::from_hardforks(&hardforks),
             hardforks,
             paris_block_and_final_difficulty: None,
+            #[cfg(feature = "optimism")]
+            optimism: None,
         }
     }
 }
@@ -495,6 +548,8 @@ pub struct ChainSpecBuilder {
     chain: Option<Chain>,
     genesis: Option<Genesis>,
     hardforks: BTreeMap<Hardfork, ForkCondition>,
+    #[cfg(feature = "optimism")]
+    optimism: Option<OptimismConfig>,
 }
 
 impl ChainSpecBuilder {
@@ -504,6 +559,8 @@ impl ChainSpecBuilder {
             chain: Some(MAINNET.chain),
             genesis: Some(MAINNET.genesis.clone()),
             hardforks: MAINNET.hardforks.clone(),
+            #[cfg(feature = "optimism")]
+            optimism: None,
         }
     }
 
@@ -614,6 +671,22 @@ impl ChainSpecBuilder {
         self
     }
 
+    /// Enable Bedrock at genesis
+    #[cfg(feature = "optimism")]
+    pub fn bedrock_activated(mut self) -> Self {
+        self = self.london_activated();
+        self.hardforks.insert(Hardfork::Bedrock, ForkCondition::Block(0));
+        self
+    }
+
+    /// Enable Regolith at genesis
+    #[cfg(feature = "optimism")]
+    pub fn regolith_activated(mut self) -> Self {
+        self = self.bedrock_activated();
+        self.hardforks.insert(Hardfork::Regolith, ForkCondition::Block(0));
+        self
+    }
+
     /// Build the resulting [`ChainSpec`].
     ///
     /// # Panics
@@ -628,6 +701,8 @@ impl ChainSpecBuilder {
             fork_timestamps: ForkTimestamps::from_hardforks(&self.hardforks),
             hardforks: self.hardforks,
             paris_block_and_final_difficulty: None,
+            #[cfg(feature = "optimism")]
+            optimism: self.optimism,
         }
     }
 }
@@ -638,6 +713,8 @@ impl From<&Arc<ChainSpec>> for ChainSpecBuilder {
             chain: Some(value.chain),
             genesis: Some(value.genesis.clone()),
             hardforks: value.hardforks.clone(),
+            #[cfg(feature = "optimism")]
+            optimism: value.optimism.clone(),
         }
     }
 }
@@ -930,6 +1007,10 @@ mod tests {
     use bytes::BytesMut;
     use ethers_core::types as EtherType;
     use reth_rlp::Encodable;
+
+    #[cfg(feature = "optimism")]
+    use crate::OP_GOERLI;
+
     fn test_fork_ids(spec: &ChainSpec, cases: &[(Head, ForkId)]) {
         for (block, expected_id) in cases {
             let computed_id = spec.fork_id(block);
@@ -1225,6 +1306,7 @@ Post-merge hard forks (timestamp based):
         );
     }
 
+<<<<<<< HEAD
     #[test]
     fn dev_forkids() {
         test_fork_ids(
@@ -1234,6 +1316,28 @@ Post-merge hard forks (timestamp based):
                 ForkId { hash: ForkHash([0x45, 0xb8, 0x36, 0x12]), next: 0 },
             )],
         )
+=======
+    #[cfg(feature = "optimism")]
+    #[test]
+    fn optimism_goerli_forkids() {
+        test_fork_ids(
+            &OP_GOERLI,
+            &[
+                (
+                    Head { number: 0, ..Default::default() },
+                    ForkId { hash: ForkHash([0x6d, 0x63, 0x76, 0xbe]), next: 1679079600 },
+                ),
+                (
+                    Head { number: 4061224, timestamp: 1679079599, ..Default::default() },
+                    ForkId { hash: ForkHash([0x6d, 0x63, 0x76, 0xbe]), next: 1679079600 },
+                ),
+                (
+                    Head { number: 4061224, timestamp: 1679079600, ..Default::default() },
+                    ForkId { hash: ForkHash([0x8e, 0x32, 0xcc, 0x21]), next: 0 },
+                ),
+            ],
+        );
+>>>>>>> c218cec3f9337f94a969d45171afd3df66932889
     }
 
     /// Checks that time-based forks work

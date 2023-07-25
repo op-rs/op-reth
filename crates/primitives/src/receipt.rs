@@ -28,6 +28,9 @@ pub struct Receipt {
         )
     )]
     pub logs: Vec<Log>,
+    /// Deposit nonce for Optimism deposited transactions
+    #[cfg(feature = "optimism")]
+    pub deposit_nonce: Option<u64>,
 }
 
 impl Receipt {
@@ -103,7 +106,29 @@ impl ReceiptWithBloom {
         let bloom = Decodable::decode(b)?;
         let logs = reth_rlp::Decodable::decode(b)?;
 
-        let this = Self { receipt: Receipt { tx_type, success, cumulative_gas_used, logs }, bloom };
+        let receipt = match tx_type {
+            #[cfg(feature = "optimism")]
+            TxType::DEPOSIT => {
+                let deposit_nonce = reth_rlp::Decodable::decode(b)?;
+                Receipt {
+                    tx_type,
+                    success,
+                    cumulative_gas_used,
+                    logs,
+                    deposit_nonce: Some(deposit_nonce),
+                }
+            }
+            _ => Receipt {
+                tx_type,
+                success,
+                cumulative_gas_used,
+                logs,
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None,
+            },
+        };
+
+        let this = Self { receipt, bloom };
         let consumed = started_len - b.len();
         if consumed != rlp_head.payload_length {
             return Err(reth_rlp::DecodeError::ListLengthMismatch {
@@ -141,14 +166,21 @@ impl Decodable for ReceiptWithBloom {
                 let receipt_type = *buf.first().ok_or(reth_rlp::DecodeError::Custom(
                     "typed receipt cannot be decoded from an empty slice",
                 ))?;
-                if receipt_type == 0x01 {
-                    buf.advance(1);
-                    Self::decode_receipt(buf, TxType::EIP2930)
-                } else if receipt_type == 0x02 {
-                    buf.advance(1);
-                    Self::decode_receipt(buf, TxType::EIP1559)
-                } else {
-                    Err(reth_rlp::DecodeError::Custom("invalid receipt type"))
+                match receipt_type {
+                    0x01 => {
+                        buf.advance(1);
+                        Self::decode_receipt(buf, TxType::EIP2930)
+                    }
+                    0x02 => {
+                        buf.advance(1);
+                        Self::decode_receipt(buf, TxType::EIP1559)
+                    }
+                    #[cfg(feature = "optimism")]
+                    0x7E => {
+                        buf.advance(1);
+                        Self::decode_receipt(buf, TxType::DEPOSIT)
+                    }
+                    _ => Err(reth_rlp::DecodeError::Custom("invalid receipt type")),
                 }
             }
             Ordering::Equal => {
@@ -313,6 +345,8 @@ mod tests {
                     data: Bytes::from_str("0100ff").unwrap().0.into(),
                 }],
                 success: false,
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None,
             },
             bloom: [0; 256].into(),
         };
@@ -349,6 +383,8 @@ mod tests {
                     data: Bytes::from_str("0100ff").unwrap().0.into(),
                 }],
                 success: false,
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None,
             },
             bloom: [0; 256].into(),
         };
@@ -383,6 +419,8 @@ mod tests {
                     data: crate::Bytes::from(vec![1; 0xffffff]),
                 },
             ],
+            #[cfg(feature = "optimism")]
+            deposit_nonce: None,
         };
 
         let mut data = vec![];

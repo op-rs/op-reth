@@ -171,6 +171,8 @@ mod tests {
                 success: true,
                 cumulative_gas_used: 102068,
                 logs,
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None,
             },
             bloom,
         };

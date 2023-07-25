@@ -5,6 +5,9 @@ use reth_primitives::{
 };
 use revm::primitives::{AnalysisKind, BlockEnv, CfgEnv, SpecId, TransactTo, TxEnv};
 
+#[cfg(feature = "optimism")]
+use reth_primitives::TxDeposit;
+
 /// Convenience function to call both [fill_cfg_env] and [fill_block_env]
 pub fn fill_cfg_and_block_env(
     cfg: &mut CfgEnv,
@@ -211,6 +214,20 @@ where
                     )
                 })
                 .collect();
+        }
+        #[cfg(feature = "optimism")]
+        Transaction::Deposit(TxDeposit { to, value, gas_limit, input, .. }) => {
+            tx_env.gas_limit = *gas_limit;
+            tx_env.gas_price = U256::ZERO;
+            tx_env.gas_priority_fee = None;
+            match to {
+                TransactionKind::Call(to) => tx_env.transact_to = TransactTo::Call(*to),
+                TransactionKind::Create => tx_env.transact_to = TransactTo::create(),
+            }
+            tx_env.value = U256::from(*value);
+            tx_env.data = input.0.clone();
+            tx_env.chain_id = None;
+            tx_env.nonce = None;
         }
     }
 }

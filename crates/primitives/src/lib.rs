@@ -58,6 +58,8 @@ pub use block::{
     BlockWithSenders, ForkBlock, SealedBlock, SealedBlockWithSenders,
 };
 pub use bloom::Bloom;
+#[cfg(feature = "optimism")]
+pub use chain::OP_GOERLI;
 pub use chain::{
     AllGenesisFormats, Chain, ChainInfo, ChainSpec, ChainSpecBuilder, DisplayHardforks,
     ForkCondition, ForkTimestamps, DEV, GOERLI, MAINNET, SEPOLIA,
@@ -91,6 +93,8 @@ pub use transaction::{
     TxEip1559, TxEip2930, TxEip4844, TxLegacy, TxType, EIP1559_TX_TYPE_ID, EIP2930_TX_TYPE_ID,
     LEGACY_TX_TYPE_ID,
 };
+#[cfg(feature = "optimism")]
+pub use transaction::{TxDeposit, DEPOSIT_TX_TYPE, DEPOSIT_VERSION};
 pub use withdrawal::Withdrawal;
 
 /// A block hash.

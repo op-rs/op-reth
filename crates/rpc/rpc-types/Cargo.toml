@@ -31,3 +31,6 @@ reth-interfaces = { workspace = true, features = ["test-utils"] }
 rand = { workspace = true }
 assert_matches = "1.5"
 similar-asserts = "1.4"
+
+[features]
+optimism = ["reth-primitives/optimism"]

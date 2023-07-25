@@ -42,7 +42,6 @@ pub enum BlockExecutionError {
     CanonicalRevert { inner: String },
     #[error("Transaction error on commit: {inner:?}")]
     CanonicalCommit { inner: String },
-
     // === tree errors ===
     // TODO(mattsse): move this to tree error
     #[error("Block hash {block_hash} not found in blockchain tree chain")]
@@ -57,6 +56,13 @@ pub enum BlockExecutionError {
     /// Note: this is not feature gated for convenience.
     #[error("Execution unavailable for tests")]
     UnavailableForTest,
+
+    #[cfg(feature = "optimism")]
+    #[error("Could not get L1 block info from L2 block: {message:?}")]
+    L1BlockInfoError { message: String },
+    #[cfg(feature = "optimism")]
+    #[error("Insufficient funds to cover transaction L1 cost: want {want}, have {have}")]
+    InsufficientFundsForL1Cost { want: u64, have: u64 },
 }
 
 impl BlockExecutionError {

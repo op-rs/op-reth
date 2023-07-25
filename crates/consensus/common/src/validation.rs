@@ -7,6 +7,9 @@ use reth_primitives::{
 use reth_provider::{AccountReader, HeaderProvider, WithdrawalsProvider};
 use std::collections::{hash_map::Entry, HashMap};
 
+#[cfg(feature = "optimism")]
+use reth_primitives::TxDeposit;
+
 /// Validate header standalone
 pub fn validate_header_standalone(
     header: &SealedHeader,
@@ -86,6 +89,8 @@ pub fn validate_transaction_regarding_header(
 
             Some(*chain_id)
         }
+        #[cfg(feature = "optimism")]
+        Transaction::Deposit(TxDeposit { .. }) => None,
     };
     if let Some(chain_id) = chain_id {
         if chain_id != chain_spec.chain().id() {
@@ -252,27 +257,32 @@ pub fn validate_header_regarding_parent(
     // TODO Check difficulty increment between parent and child
     // Ace age did increment it by some formula that we need to follow.
 
-    let mut parent_gas_limit = parent.gas_limit;
-
-    // By consensus, gas_limit is multiplied by elasticity (*2) on
-    // on exact block that hardfork happens.
-    if chain_spec.fork(Hardfork::London).transitions_at_block(child.number) {
-        parent_gas_limit = parent.gas_limit * constants::EIP1559_ELASTICITY_MULTIPLIER;
-    }
-
     // Check gas limit, max diff between child/parent gas_limit should be  max_diff=parent_gas/1024
-    if child.gas_limit > parent_gas_limit {
-        if child.gas_limit - parent_gas_limit >= parent_gas_limit / 1024 {
-            return Err(ConsensusError::GasLimitInvalidIncrease {
+    // On Optimism, the gas limit can adjust instantly, so we skip this check if the optimism
+    // feature flag is enabled.
+    #[cfg(not(feature = "optimism"))]
+    {
+        let mut parent_gas_limit = parent.gas_limit;
+
+        // By consensus, gas_limit is multiplied by elasticity (*2) on
+        // on exact block that hardfork happens.
+        if chain_spec.fork(Hardfork::London).transitions_at_block(child.number) {
+            parent_gas_limit = parent.gas_limit * constants::EIP1559_ELASTICITY_MULTIPLIER;
+        }
+
+        if child.gas_limit > parent_gas_limit {
+            if child.gas_limit - parent_gas_limit >= parent_gas_limit / 1024 {
+                return Err(ConsensusError::GasLimitInvalidIncrease {
+                    parent_gas_limit,
+                    child_gas_limit: child.gas_limit,
+                })
+            }
+        } else if parent_gas_limit - child.gas_limit >= parent_gas_limit / 1024 {
+            return Err(ConsensusError::GasLimitInvalidDecrease {
                 parent_gas_limit,
                 child_gas_limit: child.gas_limit,
             })
         }
-    } else if parent_gas_limit - child.gas_limit >= parent_gas_limit / 1024 {
-        return Err(ConsensusError::GasLimitInvalidDecrease {
-            parent_gas_limit,
-            child_gas_limit: child.gas_limit,
-        })
     }
 
     // EIP-1559 check base fee
