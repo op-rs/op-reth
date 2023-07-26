@@ -32,11 +32,6 @@ default = ["jsonrpsee-types"]
 reth-interfaces = { workspace = true, features = ["test-utils"] }
 
 # misc
-rand = { workspace = true }
-assert_matches = "1.5"
-similar-asserts = "1.4"
-
-# misc
 rand.workspace = true
 similar-asserts = "1.4"
 
