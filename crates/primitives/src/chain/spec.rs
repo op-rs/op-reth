@@ -188,6 +188,8 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             (Hardfork::Shanghai, ForkCondition::Timestamp(0)),
         ]),
         deposit_contract: None, // TODO: do we even have?
+        #[cfg(feature = "optimism")]
+        optimism: None,
     }
     .into()
 });
