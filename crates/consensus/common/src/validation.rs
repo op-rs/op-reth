@@ -10,9 +10,6 @@ use std::collections::{hash_map::Entry, HashMap};
 #[cfg(feature = "optimism")]
 use reth_primitives::TxDeposit;
 
-#[cfg(feature = "optimism")]
-use reth_primitives::TxDeposit;
-
 /// Validate header standalone
 pub fn validate_header_standalone(
     header: &SealedHeader,
