@@ -467,10 +467,6 @@ impl Compact for Transaction {
             Transaction::Deposit(tx) => {
                 tx.to_compact(buf);
             }
-            #[cfg(feature = "optimism")]
-            Transaction::Deposit(tx) => {
-                tx.to_compact(buf);
-            }
         }
         identifier
     }
