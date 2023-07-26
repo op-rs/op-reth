@@ -136,6 +136,43 @@ pub static SEPOLIA: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
     .into()
 });
 
+/// Dev testnet specification
+///
+/// Includes 20 prefunded accounts with 10_000 ETH each derived from mnemonic "test test test test
+/// test test test test test test test junk".
+pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
+    ChainSpec {
+        chain: Chain::dev(),
+        genesis: serde_json::from_str(include_str!("../../res/genesis/dev.json"))
+            .expect("Can't deserialize Dev testnet genesis json"),
+        genesis_hash: Some(H256(hex!(
+            "2f980576711e3617a5e4d83dd539548ec0f7792007d505a3d2e9674833af2d7c"
+        ))),
+        paris_block_and_final_difficulty: Some((0, U256::from(0))),
+        fork_timestamps: ForkTimestamps::default().shanghai(0),
+        hardforks: BTreeMap::from([
+            (Hardfork::Frontier, ForkCondition::Block(0)),
+            (Hardfork::Homestead, ForkCondition::Block(0)),
+            (Hardfork::Dao, ForkCondition::Block(0)),
+            (Hardfork::Tangerine, ForkCondition::Block(0)),
+            (Hardfork::SpuriousDragon, ForkCondition::Block(0)),
+            (Hardfork::Byzantium, ForkCondition::Block(0)),
+            (Hardfork::Constantinople, ForkCondition::Block(0)),
+            (Hardfork::Petersburg, ForkCondition::Block(0)),
+            (Hardfork::Istanbul, ForkCondition::Block(0)),
+            (Hardfork::MuirGlacier, ForkCondition::Block(0)),
+            (Hardfork::Berlin, ForkCondition::Block(0)),
+            (Hardfork::London, ForkCondition::Block(0)),
+            (
+                Hardfork::Paris,
+                ForkCondition::TTD { fork_block: Some(0), total_difficulty: U256::from(0) },
+            ),
+            (Hardfork::Shanghai, ForkCondition::Timestamp(0)),
+        ]),
+    }
+    .into()
+});
+
 /// The Optimism Goerli spec
 #[cfg(feature = "optimism")]
 pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
@@ -147,7 +184,7 @@ pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             "c1fc15cd51159b1f1e5cbc4b82e85c1447ddfa33c52cf1d98d14fba0d6354be1"
         ))),
         fork_timestamps: ForkTimestamps::default(), // TODO(clabby): update this
-        paris_block_and_final_difficulty: None,     // TODO(clabby): update this
+        paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks: BTreeMap::from([
             (Hardfork::Byzantium, ForkCondition::Block(0)),
             (Hardfork::Constantinople, ForkCondition::Block(0)),
@@ -156,7 +193,10 @@ pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             (Hardfork::MuirGlacier, ForkCondition::Block(0)),
             (Hardfork::Berlin, ForkCondition::Block(0)),
             (Hardfork::London, ForkCondition::Block(0)),
-            (Hardfork::Paris, ForkCondition::Block(0)),
+            (
+                Hardfork::Paris,
+                ForkCondition::TTD { fork_block: Some(0), total_difficulty: U256::from(0) },
+            ),
             (Hardfork::Regolith, ForkCondition::Timestamp(1679079600)),
         ]),
         optimism: Some(OptimismConfig { eip_1559_elasticity: 10, eip_1559_denominator: 50 }),
@@ -961,8 +1001,8 @@ where
 mod tests {
     use crate::{
         Address, AllGenesisFormats, Chain, ChainSpec, ChainSpecBuilder, DisplayHardforks,
-        ForkCondition, ForkHash, ForkId, Genesis, Hardfork, Head, GOERLI, H256, MAINNET, SEPOLIA,
-        U256,
+        ForkCondition, ForkHash, ForkId, Genesis, Hardfork, Head, DEV, GOERLI, H256, MAINNET,
+        SEPOLIA, U256,
     };
     use bytes::BytesMut;
     use ethers_core::types as EtherType;
@@ -1266,20 +1306,34 @@ Post-merge hard forks (timestamp based):
         );
     }
 
+    #[test]
+    fn dev_forkids() {
+        test_fork_ids(
+            &DEV,
+            &[(
+                Head { number: 0, ..Default::default() },
+                ForkId { hash: ForkHash([0x45, 0xb8, 0x36, 0x12]), next: 0 },
+            )],
+        )
+    }
+
     #[cfg(feature = "optimism")]
     #[test]
     fn optimism_goerli_forkids() {
-        // TODO
         test_fork_ids(
             &OP_GOERLI,
             &[
                 (
                     Head { number: 0, ..Default::default() },
-                    ForkId { hash: ForkHash([0x00, 0x00, 0x00, 0x00]), next: 4061224 },
+                    ForkId { hash: ForkHash([0x6d, 0x63, 0x76, 0xbe]), next: 1679079600 },
                 ),
                 (
-                    Head { number: 4061224, ..Default::default() },
-                    ForkId { hash: ForkHash([0x00, 0x00, 0x00, 0x00]), next: 0 },
+                    Head { number: 4061224, timestamp: 1679079599, ..Default::default() },
+                    ForkId { hash: ForkHash([0x6d, 0x63, 0x76, 0xbe]), next: 1679079600 },
+                ),
+                (
+                    Head { number: 4061224, timestamp: 1679079600, ..Default::default() },
+                    ForkId { hash: ForkHash([0x8e, 0x32, 0xcc, 0x21]), next: 0 },
                 ),
             ],
         );
