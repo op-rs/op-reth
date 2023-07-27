@@ -27,11 +27,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-<<<<<<< HEAD
-      "version": "9.5.3"
-=======
       "version": "10.0.2"
->>>>>>> 49420f5bb3dc9e2a92f841d0e9c93c1cc45ad4e3
     },
     {
       "type": "panel",
@@ -154,20 +150,14 @@
       "options": {
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-<<<<<<< HEAD
-      "pluginVersion": "9.5.3",
-=======
       "pluginVersion": "10.0.2",
->>>>>>> 49420f5bb3dc9e2a92f841d0e9c93c1cc45ad4e3
       "targets": [
         {
           "datasource": {
@@ -225,20 +215,14 @@
         "minVizWidth": 0,
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
+          "calcs": ["last"],
           "fields": "",
           "values": false
         },
         "showUnfilled": true,
         "valueMode": "color"
       },
-<<<<<<< HEAD
-      "pluginVersion": "9.5.3",
-=======
       "pluginVersion": "10.0.2",
->>>>>>> 49420f5bb3dc9e2a92f841d0e9c93c1cc45ad4e3
       "targets": [
         {
           "datasource": {
@@ -621,11 +605,7 @@
           "unit": "percentunit"
         }
       },
-<<<<<<< HEAD
-      "pluginVersion": "9.5.3",
-=======
       "pluginVersion": "10.0.2",
->>>>>>> 49420f5bb3dc9e2a92f841d0e9c93c1cc45ad4e3
       "targets": [
         {
           "datasource": {
@@ -676,22 +656,16 @@
       },
       "id": 48,
       "options": {
-        "displayLabels": [
-          "name"
-        ],
+        "displayLabels": ["name"],
         "legend": {
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
-          "values": [
-            "value"
-          ]
+          "values": ["value"]
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -847,15 +821,11 @@
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
-          "values": [
-            "value"
-          ]
+          "values": ["value"]
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1015,18 +985,12 @@
         "footer": {
           "countRows": false,
           "fields": "",
-          "reducer": [
-            "sum"
-          ],
+          "reducer": ["sum"],
           "show": false
         },
         "showHeader": true
       },
-<<<<<<< HEAD
-      "pluginVersion": "9.5.3",
-=======
       "pluginVersion": "10.0.2",
->>>>>>> 49420f5bb3dc9e2a92f841d0e9c93c1cc45ad4e3
       "targets": [
         {
           "datasource": {
@@ -1485,9 +1449,7 @@
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
-          "values": [
-            "value"
-          ]
+          "values": ["value"]
         },
         "tooltip": {
           "mode": "multi",
@@ -1566,9 +1528,7 @@
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -4923,10 +4883,6 @@
   "timezone": "",
   "title": "reth",
   "uid": "2k8BXz24x",
-<<<<<<< HEAD
-  "version": 2,
-=======
   "version": 3,
->>>>>>> 49420f5bb3dc9e2a92f841d0e9c93c1cc45ad4e3
   "weekStart": ""
 }

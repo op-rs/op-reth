@@ -63,8 +63,10 @@ impl Compact for TxType {
             TxType::Legacy => LEGACY_TX_TYPE_ID as usize,
             TxType::EIP2930 => EIP2930_TX_TYPE_ID as usize,
             TxType::EIP1559 => EIP1559_TX_TYPE_ID as usize,
-            #[cfg(feature = "optimism")]
-            TxType::DEPOSIT => DEPOSIT_TX_TYPE as usize,
+            _ => {
+                buf.put_u8(self as u8);
+                3
+            }
         }
     }
 

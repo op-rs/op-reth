@@ -1761,12 +1761,11 @@ mod tests {
                 .build(),
         );
 
-        let (consensus_engine, env) =
-            TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                .with_pipeline_exec_outputs(VecDeque::from([Err(StageError::ChannelClosed)]))
-                .disable_blockchain_tree_sync()
-                .with_max_block(1)
-                .build();
+        let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+            .with_pipeline_exec_outputs(VecDeque::from([Err(StageError::ChannelClosed)]))
+            .disable_blockchain_tree_sync()
+            .with_max_block(1)
+            .build();
 
         let res = spawn_consensus_engine(consensus_engine);
 
@@ -1793,12 +1792,11 @@ mod tests {
                 .build(),
         );
 
-        let (consensus_engine, env) =
-            TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                .with_pipeline_exec_outputs(VecDeque::from([Err(StageError::ChannelClosed)]))
-                .disable_blockchain_tree_sync()
-                .with_max_block(1)
-                .build();
+        let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+            .with_pipeline_exec_outputs(VecDeque::from([Err(StageError::ChannelClosed)]))
+            .disable_blockchain_tree_sync()
+            .with_max_block(1)
+            .build();
 
         let mut rx = spawn_consensus_engine(consensus_engine);
 
@@ -1856,15 +1854,14 @@ mod tests {
                 .build(),
         );
 
-        let (consensus_engine, env) =
-            TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                .with_pipeline_exec_outputs(VecDeque::from([
-                    Ok(ExecOutput { checkpoint: StageCheckpoint::new(1), done: true }),
-                    Err(StageError::ChannelClosed),
-                ]))
-                .disable_blockchain_tree_sync()
-                .with_max_block(2)
-                .build();
+        let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+            .with_pipeline_exec_outputs(VecDeque::from([
+                Ok(ExecOutput { checkpoint: StageCheckpoint::new(1), done: true }),
+                Err(StageError::ChannelClosed),
+            ]))
+            .disable_blockchain_tree_sync()
+            .with_max_block(2)
+            .build();
 
         let rx = spawn_consensus_engine(consensus_engine);
 
@@ -1892,15 +1889,14 @@ mod tests {
                 .build(),
         );
 
-        let (consensus_engine, env) =
-            TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                    checkpoint: StageCheckpoint::new(max_block),
-                    done: true,
-                })]))
-                .with_max_block(max_block)
-                .disable_blockchain_tree_sync()
-                .build();
+        let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+            .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                checkpoint: StageCheckpoint::new(max_block),
+                done: true,
+            })]))
+            .with_max_block(max_block)
+            .disable_blockchain_tree_sync()
+            .build();
 
         let rx = spawn_consensus_engine(consensus_engine);
 
@@ -1942,13 +1938,12 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                        checkpoint: StageCheckpoint::new(0),
-                        done: true,
-                    })]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                    checkpoint: StageCheckpoint::new(0),
+                    done: true,
+                })]))
+                .build();
 
             let mut engine_rx = spawn_consensus_engine(consensus_engine);
 
@@ -1974,13 +1969,12 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                        checkpoint: StageCheckpoint::new(0),
-                        done: true,
-                    })]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                    checkpoint: StageCheckpoint::new(0),
+                    done: true,
+                })]))
+                .build();
 
             let genesis = random_block(&mut rng, 0, None, None, Some(0));
             let block1 = random_block(&mut rng, 1, Some(genesis.hash), None, Some(0));
@@ -2024,14 +2018,13 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([
-                        Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
-                        Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
-                    ]))
-                    .disable_blockchain_tree_sync()
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([
+                    Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
+                    Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
+                ]))
+                .disable_blockchain_tree_sync()
+                .build();
 
             let genesis = random_block(&mut rng, 0, None, None, Some(0));
             let block1 = random_block(&mut rng, 1, Some(genesis.hash), None, Some(0));
@@ -2075,14 +2068,13 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                        checkpoint: StageCheckpoint::new(0),
-                        done: true,
-                    })]))
-                    .disable_blockchain_tree_sync()
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                    checkpoint: StageCheckpoint::new(0),
+                    done: true,
+                })]))
+                .disable_blockchain_tree_sync()
+                .build();
 
             let genesis = random_block(&mut rng, 0, None, None, Some(0));
             let block1 = random_block(&mut rng, 1, Some(genesis.hash), None, Some(0));
@@ -2114,13 +2106,12 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([
-                        Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
-                        Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
-                    ]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([
+                    Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
+                    Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
+                ]))
+                .build();
 
             let genesis = random_block(&mut rng, 0, None, None, Some(0));
             let mut block1 = random_block(&mut rng, 1, Some(genesis.hash), None, Some(0));
@@ -2168,13 +2159,12 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([
-                        Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
-                        Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
-                    ]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([
+                    Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
+                    Ok(ExecOutput { checkpoint: StageCheckpoint::new(0), done: true }),
+                ]))
+                .build();
 
             let genesis = random_block(&mut rng, 0, None, None, Some(0));
             let block1 = random_block(&mut rng, 1, Some(genesis.hash), None, Some(0));
@@ -2219,13 +2209,12 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                        checkpoint: StageCheckpoint::new(0),
-                        done: true,
-                    })]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                    checkpoint: StageCheckpoint::new(0),
+                    done: true,
+                })]))
+                .build();
 
             let mut engine_rx = spawn_consensus_engine(consensus_engine);
 
@@ -2255,13 +2244,12 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                        checkpoint: StageCheckpoint::new(0),
-                        done: true,
-                    })]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                    checkpoint: StageCheckpoint::new(0),
+                    done: true,
+                })]))
+                .build();
 
             let genesis = random_block(&mut rng, 0, None, None, Some(0));
             let block1 = random_block(&mut rng, 1, Some(genesis.hash), None, Some(0));
@@ -2359,13 +2347,12 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                        checkpoint: StageCheckpoint::new(0),
-                        done: true,
-                    })]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                    checkpoint: StageCheckpoint::new(0),
+                    done: true,
+                })]))
+                .build();
 
             let genesis = random_block(&mut rng, 0, None, None, Some(0));
 
@@ -2416,14 +2403,13 @@ mod tests {
                     .build(),
             );
 
-            let (consensus_engine, env) =
-                TestConsensusEngineBuilder::<NoopFullBlockClient>::new(chain_spec.clone())
-                    .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
-                        checkpoint: StageCheckpoint::new(0),
-                        done: true,
-                    })]))
-                    .with_executor_results(Vec::from([exec_result2]))
-                    .build();
+            let (consensus_engine, env) = TestConsensusEngineBuilder::new(chain_spec.clone())
+                .with_pipeline_exec_outputs(VecDeque::from([Ok(ExecOutput {
+                    checkpoint: StageCheckpoint::new(0),
+                    done: true,
+                })]))
+                .with_executor_results(Vec::from([exec_result2]))
+                .build();
 
             insert_blocks(
                 env.db.as_ref(),
