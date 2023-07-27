@@ -13,7 +13,7 @@ use std::{fmt, time::Instant};
 mod eth;
 mod task;
 
-/// A [TransactionValidator] implementation that validates ethereum transaction.
+/// A `TransactionValidator` implementation that validates ethereum transaction.
 pub use eth::{EthTransactionValidator, EthTransactionValidatorBuilder};
 
 /// A spawnable task that performs transaction validation.
@@ -164,7 +164,7 @@ impl<T: PoolTransaction> ValidPoolTransaction<T> {
         self.transaction.cost()
     }
 
-    /// Returns the gas cost for this transaction.
+    /// Returns the effective tip for this transaction.
     ///
     /// For EIP-1559 transactions: `max_fee_per_gas * gas_limit`.
     /// For legacy transactions: `gas_price * gas_limit`.

@@ -11,7 +11,7 @@ use std::{fmt, str::FromStr};
 mod spec;
 pub use spec::{
     AllGenesisFormats, ChainSpec, ChainSpecBuilder, DisplayHardforks, ForkCondition,
-    ForkTimestamps, GOERLI, MAINNET, SEPOLIA,
+    ForkTimestamps, DEV, GOERLI, MAINNET, SEPOLIA,
 };
 
 #[cfg(feature = "optimism")]
@@ -57,6 +57,11 @@ impl Chain {
     #[cfg(feature = "optimism")]
     pub const fn optimism_mainnet() -> Self {
         Chain::Named(ethers_core::types::Chain::Optimism)
+    }
+
+    /// Returns the dev chain.
+    pub const fn dev() -> Self {
+        Chain::Named(ethers_core::types::Chain::Dev)
     }
 
     /// The id of the chain

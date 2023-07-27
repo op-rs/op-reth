@@ -1003,6 +1003,7 @@ impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTree<DB, C, EF> 
                 };
                 // insert old canon chain
                 self.insert_chain(AppendableChain::new(old_canon_chain));
+                self.metrics.reorgs.increment(1);
             } else {
                 // error here to confirm that we are reverting nothing from db.
                 error!(target: "blockchain_tree", "Reverting nothing from db on block: #{:?}", block_hash);
@@ -1100,6 +1101,11 @@ impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTree<DB, C, EF> 
     /// [BlockBuffer] during the pipeline sync.
     pub(crate) fn update_chains_metrics(&mut self) {
         let height = self.canonical_chain().tip().number;
+
+        let longest_sidechain_height = self.chains.values().map(|chain| chain.tip().number).max();
+        if let Some(longest_sidechain_height) = longest_sidechain_height {
+            self.metrics.longest_sidechain_height.set(longest_sidechain_height as f64);
+        }
 
         self.metrics.sidechains.set(self.chains.len() as f64);
         self.metrics.canonical_chain_height.set(height as f64);
