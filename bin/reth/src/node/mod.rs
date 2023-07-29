@@ -143,6 +143,10 @@ pub struct Command<Ext: RethCliExt = ()> {
 
     #[clap(flatten)]
     dev: DevArgs,
+
+    #[cfg(feature = "optimism")]
+    #[clap(flatten)]
+    rollup: crate::args::RollupArgs,
 }
 
 impl Command {
