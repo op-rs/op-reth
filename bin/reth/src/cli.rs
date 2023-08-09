@@ -5,7 +5,7 @@ use crate::{
     cli::ext::RethCliExt,
     db, debug_cmd,
     dirs::{LogsDir, PlatformPath},
-    node, p2p,
+    node, p2p, recover,
     runner::CliRunner,
     stage, test_vectors,
     version::{LONG_VERSION, SHORT_VERSION},
@@ -75,6 +75,7 @@ impl<Ext: RethCliExt> Cli<Ext> {
             Commands::TestVectors(command) => runner.run_until_ctrl_c(command.execute()),
             Commands::Config(command) => runner.run_until_ctrl_c(command.execute()),
             Commands::Debug(command) => runner.run_command_until_exit(|ctx| command.execute(ctx)),
+            Commands::Recover(command) => runner.run_command_until_exit(|ctx| command.execute(ctx)),
         }
     }
 
@@ -130,6 +131,9 @@ pub enum Commands {
     /// Various debug routines
     #[command(name = "debug")]
     Debug(debug_cmd::Command),
+    /// Scripts for node recovery
+    #[command(name = "recover")]
+    Recover(recover::Command),
 }
 
 #[derive(Debug, Parser)]

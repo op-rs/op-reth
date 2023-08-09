@@ -1,5 +1,8 @@
 use crate::{
-    constants::{EIP1559_INITIAL_BASE_FEE, EMPTY_WITHDRAWALS},
+    constants::{
+        EIP1559_DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR, EIP1559_DEFAULT_ELASTICITY_MULTIPLIER,
+        EIP1559_INITIAL_BASE_FEE, EMPTY_WITHDRAWALS,
+    },
     forkid::ForkFilterKey,
     header::Head,
     proofs::genesis_state_root,
@@ -62,6 +65,7 @@ pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         )),
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default(),
     }
     .into()
 });
@@ -226,6 +230,25 @@ pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
     .into()
 });
 
+/// BaseFeeParams contains the config parameters that control block base fee computation
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+pub struct BaseFeeParams {
+    /// The base_fee_max_change_denominator from EIP-1559
+    pub max_change_denominator: u64,
+    /// The elasticity multiplier from EIP-1559
+    pub elasticity_multiplier: u64,
+}
+
+impl BaseFeeParams {
+    /// Get the base fee parameters for ethereum mainnet
+    pub const fn ethereum() -> BaseFeeParams {
+        BaseFeeParams {
+            max_change_denominator: EIP1559_DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+            elasticity_multiplier: EIP1559_DEFAULT_ELASTICITY_MULTIPLIER,
+        }
+    }
+}
+
 /// An Ethereum chain specification.
 ///
 /// A chain specification describes:
@@ -265,19 +288,23 @@ pub struct ChainSpec {
     #[serde(skip, default)]
     pub deposit_contract: Option<DepositContract>,
 
-    /// Optimism configuration
-    #[cfg(feature = "optimism")]
-    pub optimism: Option<OptimismConfig>,
+    /// The parameters that configure how a block's base fee is computed
+    pub base_fee_params: BaseFeeParams,
 }
 
-/// Optimism configuration.
-#[cfg(feature = "optimism")]
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct OptimismConfig {
-    /// Elasticity multiplier as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
-    pub eip_1559_elasticity: u64,
-    /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
-    pub eip_1559_denominator: u64,
+impl Default for ChainSpec {
+    fn default() -> ChainSpec {
+        ChainSpec {
+            chain: Default::default(),
+            genesis_hash: Default::default(),
+            genesis: Default::default(),
+            paris_block_and_final_difficulty: Default::default(),
+            fork_timestamps: Default::default(),
+            hardforks: Default::default(),
+            deposit_contract: Default::default(),
+            base_fee_params: BaseFeeParams::ethereum(),
+        }
+    }
 }
 
 impl ChainSpec {

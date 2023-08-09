@@ -498,6 +498,10 @@ impl Compact for Transaction {
                 tx.to_compact(buf);
                 126
             }
+            Transaction::Eip4844(tx) => {
+                tx.to_compact(buf);
+                3
+            }
         }
         identifier
     }
