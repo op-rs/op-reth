@@ -1,7 +1,6 @@
 use crate::{Address, Bytes, TransactionKind, H256};
 use reth_codecs::{main_codec, Compact};
 use reth_rlp::{Encodable, EMPTY_STRING_CODE};
-use std::mem;
 
 /// EIP-2718 transaction type selector.
 pub const DEPOSIT_TX_TYPE: u8 = 126;
@@ -37,19 +36,6 @@ pub struct TxDeposit {
 }
 
 impl TxDeposit {
-    /// Calculates a heuristic for the in-memory size of the [TxDeposit] transaction.
-    #[inline]
-    pub fn size(&self) -> usize {
-        mem::size_of::<H256>() + // source_hash
-        mem::size_of::<Address>() + // from
-        self.to.size() + // to
-        mem::size_of::<Option<u128>>() + // mint
-        mem::size_of::<u128>() + // value
-        mem::size_of::<u64>() + // gas_limit
-        mem::size_of::<bool>() + // is_system_transaction
-        self.input.len() // input
-    }
-
     /// Outputs the length of the transaction's fields, without a RLP header or length of the
     /// eip155 fields.
     pub(crate) fn fields_len(&self) -> usize {
@@ -57,7 +43,7 @@ impl TxDeposit {
         len += self.source_hash.length();
         len += self.from.length();
         len += self.to.length();
-        len += self.mint.map_or(1, |mint| mint.length());
+        len += self.mint.map(|mint| mint.length()).unwrap_or(1);
         len += self.value.length();
         len += self.input.0.length();
         len += self.gas_limit.length();
@@ -66,7 +52,7 @@ impl TxDeposit {
     }
 
     /// Encodes only the transaction's fields into the desired buffer, without a RLP header.
-    /// <https://github.com/ethereum-optimism/optimism/blob/develop/specs/deposits.md#the-deposited-transaction-type>
+    /// https://github.com/ethereum-optimism/optimism/blob/develop/specs/deposits.md#the-deposited-transaction-type
     pub(crate) fn encode_fields(&self, out: &mut dyn bytes::BufMut) {
         self.source_hash.encode(out);
         self.from.encode(out);
