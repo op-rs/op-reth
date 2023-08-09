@@ -184,6 +184,7 @@ mod tests {
             deposit_contract: None,
             #[cfg(feature = "optimism")]
             optimism: None,
+            ..Default::default()
         };
 
         assert_eq!(Hardfork::Frontier.fork_id(&spec), None);
@@ -200,6 +201,7 @@ mod tests {
             deposit_contract: None,
             #[cfg(feature = "optimism")]
             optimism: None,
+            ..Default::default()
         };
 
         assert_eq!(Hardfork::Shanghai.fork_filter(&spec), None);

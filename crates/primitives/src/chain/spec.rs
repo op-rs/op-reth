@@ -108,6 +108,7 @@ pub static GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         )),
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default()
     }
     .into()
 });
@@ -154,6 +155,7 @@ pub static SEPOLIA: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         )),
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default()
     }
     .into()
 });
@@ -194,6 +196,7 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
          deposit_contract: None, // TODO: do we even have?
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default()
     }
     .into()
 });
@@ -226,6 +229,7 @@ pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         ]),
         deposit_contract: None,
         optimism: Some(OptimismConfig { eip_1559_elasticity: 10, eip_1559_denominator: 50 }),
+        ..Default::default()
     }
     .into()
 });
@@ -288,6 +292,22 @@ pub struct ChainSpec {
     #[serde(skip, default)]
     pub deposit_contract: Option<DepositContract>,
 
+    /// The parameters that configure how a block's base fee is computed
+    pub base_fee_params: BaseFeeParams,
+
+    /// Optimism configuration
+    #[cfg(feature = "optimism")]
+    pub optimism: Option<OptimismConfig>,
+}
+
+/// Optimism configuration.
+#[cfg(feature = "optimism")]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OptimismConfig {
+    /// Elasticity multiplier as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+    pub eip_1559_elasticity: u64,
+    /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
+    pub eip_1559_denominator: u64,
     /// The parameters that configure how a block's base fee is computed
     pub base_fee_params: BaseFeeParams,
 }

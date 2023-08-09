@@ -46,13 +46,13 @@ pub fn init_genesis<DB: Database>(
     if let Some((_, db_hash)) = tx.cursor_read::<tables::CanonicalHeaders>()?.first()? {
         if db_hash == hash {
             debug!("Genesis already written, skipping.");
-            return Ok(hash)
+            return Ok(hash);
         }
 
         return Err(InitDatabaseError::GenesisHashMismatch {
             chainspec_hash: hash,
             database_hash: db_hash,
-        })
+        });
     }
 
     drop(tx);
@@ -275,6 +275,7 @@ mod tests {
             deposit_contract: None,
             #[cfg(feature = "optimism")]
             optimism: None,
+            ..Default::default(),
         });
 
         let db = create_test_rw_db();
