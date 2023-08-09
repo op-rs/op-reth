@@ -482,16 +482,15 @@ impl Compact for Transaction {
         match self {
             Transaction::Legacy(tx) => {
                 tx.to_compact(buf);
+                0
             }
             Transaction::Eip2930(tx) => {
                 tx.to_compact(buf);
+                1
             }
             Transaction::Eip1559(tx) => {
                 tx.to_compact(buf);
-            }
-            #[cfg(feature = "optimism")]
-            Transaction::Deposit(tx) => {
-                tx.to_compact(buf);
+                2
             }
             #[cfg(feature = "optimism")]
             Transaction::Deposit(tx) => {
@@ -524,15 +523,8 @@ impl Compact for Transaction {
                 (Transaction::Eip1559(tx), buf)
             }
             3 => {
-                let identifier = buf.get_u8() as usize;
-                match identifier {
-                    #[cfg(feature = "optimism")]
-                    126 => {
-                        let (tx, buf) = TxDeposit::from_compact(buf, buf.len());
-                        (Transaction::Deposit(tx), buf)
-                    }
-                    _ => unreachable!("Junk data in database: unknown Transaction variant"),
-                }
+                let (tx, buf) = TxEip4844::from_compact(buf, buf.len());
+                (Transaction::Eip4844(tx), buf)
             }
             #[cfg(feature = "optimism")]
             126 => {
@@ -1535,6 +1527,8 @@ impl TransactionSigned {
         let tx_type = *data.first().ok_or(DecodeError::InputTooShort)?;
         data.advance(1);
 
+        // If the transaction is a deposit, we need to first ensure that the version
+        // byte is correct.
         #[cfg(feature = "optimism")]
         if tx_type == DEPOSIT_TX_TYPE {
             let version = *data.first().ok_or(DecodeError::InputTooShort)?;
@@ -1552,6 +1546,8 @@ impl TransactionSigned {
 
         // length of tx encoding = tx type byte (size = 1) + length of header + payload length
         let tx_length = 1 + header.length() + header.payload_length;
+        // If the transaction is a deposit, we need to add one to the length to account for the
+        // version byte.
         #[cfg(feature = "optimism")]
         let tx_length = if tx_type == DEPOSIT_TX_TYPE { tx_length + 1 } else { tx_length };
 
@@ -1578,21 +1574,18 @@ impl TransactionSigned {
                 input: Bytes(Decodable::decode(data)?),
                 access_list: Decodable::decode(data)?,
             }),
-            #[cfg(feature = "optimism")]
-            DEPOSIT_TX_TYPE => Transaction::Deposit(TxDeposit {
-                source_hash: Decodable::decode(data)?,
-                from: Decodable::decode(data)?,
-                to: Decodable::decode(data)?,
-                mint: if *data.first().ok_or(DecodeError::InputTooShort)? == EMPTY_STRING_CODE {
-                    data.advance(1);
-                    None
-                } else {
-                    Some(Decodable::decode(data)?)
-                },
-                value: Decodable::decode(data)?,
-                input: Decodable::decode(data)?,
+            3 => Transaction::Eip4844(TxEip4844 {
+                chain_id: Decodable::decode(data)?,
+                nonce: Decodable::decode(data)?,
+                max_priority_fee_per_gas: Decodable::decode(data)?,
+                max_fee_per_gas: Decodable::decode(data)?,
                 gas_limit: Decodable::decode(data)?,
-                is_system_transaction: Decodable::decode(data)?,
+                to: Decodable::decode(data)?,
+                value: Decodable::decode(data)?,
+                input: Bytes(Decodable::decode(data)?),
+                access_list: Decodable::decode(data)?,
+                max_fee_per_blob_gas: Decodable::decode(data)?,
+                blob_versioned_hashes: Decodable::decode(data)?,
             }),
             #[cfg(feature = "optimism")]
             126 => Transaction::Deposit(TxDeposit {

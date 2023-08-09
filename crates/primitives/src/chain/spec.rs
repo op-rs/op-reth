@@ -308,8 +308,6 @@ pub struct OptimismConfig {
     pub eip_1559_elasticity: u64,
     /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
     pub eip_1559_denominator: u64,
-    /// The parameters that configure how a block's base fee is computed
-    pub base_fee_params: BaseFeeParams,
 }
 
 impl Default for ChainSpec {
