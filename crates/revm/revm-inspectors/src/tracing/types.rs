@@ -438,7 +438,7 @@ impl CallTraceNode {
             gas: U256::from(self.trace.gas_limit),
             gas_used: U256::from(self.trace.gas_used),
             input: self.trace.data.clone().into(),
-            output: Some(self.trace.output.clone().into()),
+            output: (!self.trace.output.is_empty()).then(|| self.trace.output.clone().into()),
             error: None,
             revert_reason: None,
             calls: Default::default(),
@@ -538,8 +538,8 @@ pub(crate) struct CallTraceStep {
     pub(crate) contract: Address,
     /// Stack before step execution
     pub(crate) stack: Stack,
-    /// The new stack item placed by this step if any
-    pub(crate) new_stack: Option<U256>,
+    /// The new stack items placed by this step if any
+    pub(crate) push_stack: Option<Vec<U256>>,
     /// All allocated memory in a step
     ///
     /// This will be empty if memory capture is disabled
@@ -595,6 +595,12 @@ impl CallTraceStep {
         }
 
         log
+    }
+
+    /// Returns true if the step is a STOP opcode
+    #[inline]
+    pub(crate) fn is_stop(&self) -> bool {
+        matches!(self.op.u8(), opcode::STOP)
     }
 
     /// Returns true if the step is a call operation, any of

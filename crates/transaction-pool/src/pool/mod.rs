@@ -377,6 +377,9 @@ where
             return added
         }
 
+        let mut listener = self.event_listener.write();
+        discarded.iter().for_each(|tx| listener.discarded(tx));
+
         // It may happen that a newly added transaction is immediately discarded, so we need to
         // adjust the result here
         added
@@ -510,7 +513,7 @@ where
     /// Removes and returns all matching transactions from the pool.
     pub(crate) fn remove_transactions(
         &self,
-        hashes: impl IntoIterator<Item = TxHash>,
+        hashes: Vec<TxHash>,
     ) -> Vec<Arc<ValidPoolTransaction<T::Transaction>>> {
         let removed = self.pool.write().remove_transactions(hashes);
 
@@ -549,7 +552,7 @@ where
     /// If no transaction exists, it is skipped.
     pub(crate) fn get_all(
         &self,
-        txs: impl IntoIterator<Item = TxHash>,
+        txs: Vec<TxHash>,
     ) -> Vec<Arc<ValidPoolTransaction<T::Transaction>>> {
         self.pool.read().get_all(txs).collect()
     }

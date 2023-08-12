@@ -1,5 +1,8 @@
 use crate::{
-    constants::{EIP1559_INITIAL_BASE_FEE, EMPTY_WITHDRAWALS},
+    constants::{
+        EIP1559_DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR, EIP1559_DEFAULT_ELASTICITY_MULTIPLIER,
+        EIP1559_INITIAL_BASE_FEE, EMPTY_WITHDRAWALS,
+    },
     forkid::ForkFilterKey,
     header::Head,
     proofs::genesis_state_root,
@@ -62,6 +65,7 @@ pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         )),
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default()
     }
     .into()
 });
@@ -104,6 +108,7 @@ pub static GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         )),
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default()
     }
     .into()
 });
@@ -150,6 +155,7 @@ pub static SEPOLIA: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         )),
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default()
     }
     .into()
 });
@@ -190,6 +196,7 @@ pub static DEV: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
          deposit_contract: None, // TODO: do we even have?
         #[cfg(feature = "optimism")]
         optimism: None,
+        ..Default::default()
     }
     .into()
 });
@@ -220,11 +227,31 @@ pub static OP_GOERLI: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
             ),
             (Hardfork::Regolith, ForkCondition::Timestamp(1679079600)),
         ]),
-        deposit_contract: None,
+        deposit_contract: None, // TODO: do we even have?
         optimism: Some(OptimismConfig { eip_1559_elasticity: 10, eip_1559_denominator: 50 }),
+        ..Default::default()
     }
     .into()
 });
+
+/// BaseFeeParams contains the config parameters that control block base fee computation
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+pub struct BaseFeeParams {
+    /// The base_fee_max_change_denominator from EIP-1559
+    pub max_change_denominator: u64,
+    /// The elasticity multiplier from EIP-1559
+    pub elasticity_multiplier: u64,
+}
+
+impl BaseFeeParams {
+    /// Get the base fee parameters for ethereum mainnet
+    pub const fn ethereum() -> BaseFeeParams {
+        BaseFeeParams {
+            max_change_denominator: EIP1559_DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+            elasticity_multiplier: EIP1559_DEFAULT_ELASTICITY_MULTIPLIER,
+        }
+    }
+}
 
 /// An Ethereum chain specification.
 ///
@@ -265,6 +292,7 @@ pub struct ChainSpec {
     #[serde(skip, default)]
     pub deposit_contract: Option<DepositContract>,
 
+<<<<<<< HEAD
     /// Optimism configuration
     #[cfg(feature = "optimism")]
     pub optimism: Option<OptimismConfig>,
@@ -278,6 +306,23 @@ pub struct OptimismConfig {
     pub eip_1559_elasticity: u64,
     /// Base fee max change denominator as defined in [EIP-1559](https://eips.ethereum.org/EIPS/eip-1559)
     pub eip_1559_denominator: u64,
+    /// The parameters that configure how a block's base fee is computed
+    pub base_fee_params: BaseFeeParams,
+}
+
+impl Default for ChainSpec {
+    fn default() -> ChainSpec {
+        ChainSpec {
+            chain: Default::default(),
+            genesis_hash: Default::default(),
+            genesis: Default::default(),
+            paris_block_and_final_difficulty: Default::default(),
+            fork_timestamps: Default::default(),
+            hardforks: Default::default(),
+            deposit_contract: Default::default(),
+            base_fee_params: BaseFeeParams::ethereum(),
+        }
+    }
 }
 
 impl ChainSpec {
@@ -504,6 +549,7 @@ impl From<Genesis> for ChainSpec {
             deposit_contract: None,
             #[cfg(feature = "optimism")]
             optimism: None,
+            ..Default::default()
         }
     }
 }
@@ -731,6 +777,7 @@ impl ChainSpecBuilder {
             deposit_contract: None,
             #[cfg(feature = "optimism")]
             optimism: self.optimism,
+            ..Default::default()
         }
     }
 }

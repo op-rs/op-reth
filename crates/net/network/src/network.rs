@@ -56,6 +56,7 @@ impl NetworkHandle {
             network_mode,
             bandwidth_meter,
             is_syncing: Arc::new(AtomicBool::new(false)),
+            initial_sync_done: Arc::new(AtomicBool::new(false)),
             chain_id,
             #[cfg(feature = "optimism")]
             sequencer_endpoint,
@@ -251,6 +252,10 @@ impl NetworkInfo for NetworkHandle {
         SyncStateProvider::is_syncing(self)
     }
 
+    fn is_initially_syncing(&self) -> bool {
+        SyncStateProvider::is_initially_syncing(self)
+    }
+
     #[cfg(feature = "optimism")]
     fn sequencer_endpoint(&self) -> &Option<String> {
         &self.inner.sequencer_endpoint
@@ -261,12 +266,23 @@ impl SyncStateProvider for NetworkHandle {
     fn is_syncing(&self) -> bool {
         self.inner.is_syncing.load(Ordering::Relaxed)
     }
+    // used to guard the txpool
+    fn is_initially_syncing(&self) -> bool {
+        if self.inner.initial_sync_done.load(Ordering::Relaxed) {
+            return false
+        }
+        self.inner.is_syncing.load(Ordering::Relaxed)
+    }
 }
 
 impl NetworkSyncUpdater for NetworkHandle {
     fn update_sync_state(&self, state: SyncState) {
-        let is_syncing = state.is_syncing();
-        self.inner.is_syncing.store(is_syncing, Ordering::Relaxed)
+        let future_state = state.is_syncing();
+        let prev_state = self.inner.is_syncing.swap(future_state, Ordering::Relaxed);
+        let syncing_to_idle_state_transition = prev_state && !future_state;
+        if syncing_to_idle_state_transition {
+            self.inner.initial_sync_done.store(true, Ordering::Relaxed);
+        }
     }
 
     /// Update the status of the node.
@@ -293,6 +309,8 @@ struct NetworkInner {
     bandwidth_meter: BandwidthMeter,
     /// Represents if the network is currently syncing.
     is_syncing: Arc<AtomicBool>,
+    /// Used to differentiate between an initial pipeline sync or a live sync
+    initial_sync_done: Arc<AtomicBool>,
     /// The chain id
     chain_id: Arc<AtomicU64>,
     #[cfg(feature = "optimism")]

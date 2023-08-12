@@ -14,7 +14,8 @@ use rand::{
 use reth_primitives::{
     constants::MIN_PROTOCOL_BASE_FEE, hex, Address, FromRecoveredTransaction,
     IntoRecoveredTransaction, Signature, Transaction, TransactionKind, TransactionSigned,
-    TransactionSignedEcRecovered, TxEip1559, TxHash, TxLegacy, TxType, H256, U128, U256,
+    TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxHash, TxLegacy, TxType, H256,
+    U128, U256,
 };
 use std::{ops::Range, sync::Arc, time::Instant};
 
@@ -51,6 +52,9 @@ macro_rules! set_value {
             MockTransaction::Eip1559 { ref mut $field, .. } => {
                 *$field = new_value;
             }
+            MockTransaction::Eip4844 { ref mut $field, .. } => {
+                *$field = new_value;
+            }
         }
     };
 }
@@ -63,6 +67,7 @@ macro_rules! get_value {
             MockTransaction::DepositTx { $field, .. } => $field,
             MockTransaction::Legacy { $field, .. } => $field,
             MockTransaction::Eip1559 { $field, .. } => $field,
+            MockTransaction::Eip4844 { $field, .. } => $field,
         }
     };
 }
@@ -114,6 +119,16 @@ pub enum MockTransaction {
         to: TransactionKind,
         value: U256,
     },
+    Eip4844 {
+        hash: H256,
+        sender: Address,
+        nonce: u64,
+        max_fee_per_gas: u128,
+        max_priority_fee_per_gas: u128,
+        gas_limit: u64,
+        to: TransactionKind,
+        value: U256,
+    },
     #[cfg(feature = "optimism")]
     DepositTx {
         hash: H256,
@@ -124,7 +139,6 @@ pub enum MockTransaction {
         gas_limit: u64,
         is_system_transaction: bool,
         input: Bytes,
-        value: U256,
     },
 }
 
@@ -167,21 +181,27 @@ impl MockTransaction {
     }
 
     pub fn set_priority_fee(&mut self, val: u128) -> &mut Self {
-        if let MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } = self {
+        if let (MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } |
+        MockTransaction::Eip4844 { max_priority_fee_per_gas, .. }) = self
+        {
             *max_priority_fee_per_gas = val;
         }
         self
     }
 
     pub fn with_priority_fee(mut self, val: u128) -> Self {
-        if let MockTransaction::Eip1559 { ref mut max_priority_fee_per_gas, .. } = self {
+        if let (MockTransaction::Eip1559 { ref mut max_priority_fee_per_gas, .. } |
+        MockTransaction::Eip4844 { ref mut max_priority_fee_per_gas, .. }) = self
+        {
             *max_priority_fee_per_gas = val;
         }
         self
     }
 
     pub fn get_priority_fee(&self) -> Option<u128> {
-        if let MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } = self {
+        if let (MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } |
+        MockTransaction::Eip4844 { max_priority_fee_per_gas, .. }) = self
+        {
             Some(*max_priority_fee_per_gas)
         } else {
             None
@@ -189,21 +209,27 @@ impl MockTransaction {
     }
 
     pub fn set_max_fee(&mut self, val: u128) -> &mut Self {
-        if let MockTransaction::Eip1559 { max_fee_per_gas, .. } = self {
+        if let (MockTransaction::Eip1559 { max_fee_per_gas, .. } |
+        MockTransaction::Eip4844 { max_fee_per_gas, .. }) = self
+        {
             *max_fee_per_gas = val;
         }
         self
     }
 
     pub fn with_max_fee(mut self, val: u128) -> Self {
-        if let MockTransaction::Eip1559 { ref mut max_fee_per_gas, .. } = self {
+        if let (MockTransaction::Eip1559 { ref mut max_fee_per_gas, .. } |
+        MockTransaction::Eip4844 { ref mut max_fee_per_gas, .. }) = self
+        {
             *max_fee_per_gas = val;
         }
         self
     }
 
     pub fn get_max_fee(&self) -> Option<u128> {
-        if let MockTransaction::Eip1559 { max_fee_per_gas, .. } = self {
+        if let (MockTransaction::Eip1559 { max_fee_per_gas, .. } |
+        MockTransaction::Eip4844 { max_fee_per_gas, .. }) = self
+        {
             Some(*max_fee_per_gas)
         } else {
             None
@@ -218,6 +244,10 @@ impl MockTransaction {
                 *gas_price = val;
             }
             MockTransaction::Eip1559 { max_fee_per_gas, max_priority_fee_per_gas, .. } => {
+                *max_fee_per_gas = val;
+                *max_priority_fee_per_gas = val;
+            }
+            MockTransaction::Eip4844 { max_fee_per_gas, max_priority_fee_per_gas, .. } => {
                 *max_fee_per_gas = val;
                 *max_priority_fee_per_gas = val;
             }
@@ -240,6 +270,14 @@ impl MockTransaction {
                 *max_fee_per_gas = val;
                 *max_priority_fee_per_gas = val;
             }
+            MockTransaction::Eip4844 {
+                ref mut max_fee_per_gas,
+                ref mut max_priority_fee_per_gas,
+                ..
+            } => {
+                *max_fee_per_gas = val;
+                *max_priority_fee_per_gas = val;
+            }
         }
         self
     }
@@ -250,6 +288,7 @@ impl MockTransaction {
             MockTransaction::DepositTx { .. } => 0,
             MockTransaction::Legacy { gas_price, .. } => *gas_price,
             MockTransaction::Eip1559 { max_fee_per_gas, .. } => *max_fee_per_gas,
+            MockTransaction::Eip4844 { max_fee_per_gas, .. } => *max_fee_per_gas,
         }
     }
 
@@ -336,6 +375,7 @@ impl PoolTransaction for MockTransaction {
             MockTransaction::DepositTx { hash, .. } => hash,
             MockTransaction::Legacy { hash, .. } => hash,
             MockTransaction::Eip1559 { hash, .. } => hash,
+            MockTransaction::Eip4844 { hash, .. } => hash,
         }
     }
 
@@ -345,6 +385,7 @@ impl PoolTransaction for MockTransaction {
             MockTransaction::DepositTx { sender, .. } => *sender,
             MockTransaction::Legacy { sender, .. } => *sender,
             MockTransaction::Eip1559 { sender, .. } => *sender,
+            MockTransaction::Eip4844 { sender, .. } => *sender,
         }
     }
 
@@ -354,6 +395,7 @@ impl PoolTransaction for MockTransaction {
             MockTransaction::DepositTx { nonce, .. } => *nonce,
             MockTransaction::Legacy { nonce, .. } => *nonce,
             MockTransaction::Eip1559 { nonce, .. } => *nonce,
+            MockTransaction::Eip4844 { nonce, .. } => *nonce,
         }
     }
 
@@ -365,6 +407,9 @@ impl PoolTransaction for MockTransaction {
                 U256::from(*gas_limit) * U256::from(*gas_price) + *value
             }
             MockTransaction::Eip1559 { max_fee_per_gas, value, gas_limit, .. } => {
+                U256::from(*gas_limit) * U256::from(*max_fee_per_gas) + *value
+            }
+            MockTransaction::Eip4844 { max_fee_per_gas, value, gas_limit, .. } => {
                 U256::from(*gas_limit) * U256::from(*max_fee_per_gas) + *value
             }
         }
@@ -391,6 +436,7 @@ impl PoolTransaction for MockTransaction {
         match self {
             MockTransaction::Legacy { gas_price, .. } => *gas_price,
             MockTransaction::Eip1559 { max_fee_per_gas, .. } => *max_fee_per_gas,
+            MockTransaction::Eip4844 { max_fee_per_gas, .. } => *max_fee_per_gas,
             #[cfg(feature = "optimism")]
             MockTransaction::DepositTx { .. } => 0,
         }
@@ -404,6 +450,34 @@ impl PoolTransaction for MockTransaction {
             MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } => {
                 Some(*max_priority_fee_per_gas)
             }
+            MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => {
+                Some(*max_priority_fee_per_gas)
+            }
+        }
+    }
+
+    fn effective_tip_per_gas(&self, base_fee: u64) -> Option<u128> {
+        let base_fee = base_fee as u128;
+        let max_fee_per_gas = self.max_fee_per_gas();
+        if max_fee_per_gas < base_fee {
+            return None
+        }
+
+        let fee = max_fee_per_gas - base_fee;
+        if let Some(priority_fee) = self.max_priority_fee_per_gas() {
+            return Some(fee.min(priority_fee))
+        }
+
+        Some(fee)
+    }
+
+    fn priority_fee_or_price(&self) -> u128 {
+        match self {
+            MockTransaction::Legacy { gas_price, .. } => *gas_price,
+            MockTransaction::Eip1559 { max_priority_fee_per_gas, .. } => *max_priority_fee_per_gas,
+            MockTransaction::Eip4844 { max_priority_fee_per_gas, .. } => *max_priority_fee_per_gas,
+            #[cfg(feature = "optimism")]
+            MockTransaction::DepositTx { max_priority_fee_per_gas, .. } => *max_priority_fee_per_gas,
         }
     }
 
@@ -413,6 +487,7 @@ impl PoolTransaction for MockTransaction {
             MockTransaction::DepositTx { to, .. } => to,
             MockTransaction::Legacy { to, .. } => to,
             MockTransaction::Eip1559 { to, .. } => to,
+            MockTransaction::Eip4844 { to, .. } => to,
         }
     }
 
@@ -426,6 +501,7 @@ impl PoolTransaction for MockTransaction {
             MockTransaction::DepositTx { .. } => TxType::DEPOSIT.into(),
             MockTransaction::Legacy { .. } => TxType::Legacy.into(),
             MockTransaction::Eip1559 { .. } => TxType::EIP1559.into(),
+            MockTransaction::Eip4844 { .. } => TxType::EIP4844.into(),
         }
     }
 
@@ -502,6 +578,28 @@ impl FromRecoveredTransaction for MockTransaction {
                 to,
                 value: U256::from(value),
             },
+            Transaction::Eip4844(TxEip4844 {
+                chain_id,
+                nonce,
+                gas_limit,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                to,
+                value,
+                input,
+                access_list,
+                blob_versioned_hashes: _,
+                max_fee_per_blob_gas: _,
+            }) => MockTransaction::Eip4844 {
+                hash,
+                sender,
+                nonce,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                gas_limit,
+                to,
+                value: U256::from(value),
+            },
             Transaction::Eip2930 { .. } => {
                 unimplemented!()
             }
@@ -530,6 +628,105 @@ impl IntoRecoveredTransaction for MockTransaction {
         };
 
         TransactionSignedEcRecovered::from_signed_transaction(signed_tx, self.sender())
+    }
+}
+
+#[cfg(any(test, feature = "arbitrary"))]
+impl proptest::arbitrary::Arbitrary for MockTransaction {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<MockTransaction>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::{any, Strategy};
+
+        any::<(Transaction, Address, H256)>()
+            .prop_map(|(tx, sender, tx_hash)| match &tx {
+                Transaction::Legacy(TxLegacy {
+                    nonce,
+                    gas_price,
+                    gas_limit,
+                    to,
+                    value,
+                    input,
+                    ..
+                }) |
+                Transaction::Eip2930(TxEip2930 {
+                    nonce,
+                    gas_price,
+                    gas_limit,
+                    to,
+                    value,
+                    input,
+                    ..
+                }) => MockTransaction::Legacy {
+                    sender,
+                    hash: tx_hash,
+                    nonce: *nonce,
+                    gas_price: *gas_price,
+                    gas_limit: *gas_limit,
+                    to: *to,
+                    value: U256::from(*value),
+                },
+                Transaction::Eip1559(TxEip1559 {
+                    nonce,
+                    gas_limit,
+                    max_fee_per_gas,
+                    max_priority_fee_per_gas,
+                    to,
+                    value,
+                    input,
+                    ..
+                }) => MockTransaction::Eip1559 {
+                    sender,
+                    hash: tx_hash,
+                    nonce: *nonce,
+                    max_fee_per_gas: *max_fee_per_gas,
+                    max_priority_fee_per_gas: *max_priority_fee_per_gas,
+                    gas_limit: *gas_limit,
+                    to: *to,
+                    value: U256::from(*value),
+                },
+                Transaction::Eip4844(TxEip4844 {
+                    nonce,
+                    gas_limit,
+                    max_fee_per_gas,
+                    max_priority_fee_per_gas,
+                    to,
+                    value,
+                    input,
+                    ..
+                }) => MockTransaction::Eip4844 {
+                    sender,
+                    hash: tx_hash,
+                    nonce: *nonce,
+                    max_fee_per_gas: *max_fee_per_gas,
+                    max_priority_fee_per_gas: *max_priority_fee_per_gas,
+                    gas_limit: *gas_limit,
+                    to: *to,
+                    value: U256::from(*value),
+                },
+                #[cfg(feature = "optimism")]
+                Transaction::Deposit(TxDeposit {
+                    nonce,
+                    gas_limit,
+                    max_fee_per_gas,
+                    max_priority_fee_per_gas,
+                    to,
+                    value,
+                    input,
+                    ..
+                }) => MockTransaction::DepositTx {
+                    sender,
+                    hash: tx_hash,
+                    nonce: *nonce,
+                    max_fee_per_gas: *max_fee_per_gas,
+                    max_priority_fee_per_gas: *max_priority_fee_per_gas,
+                    gas_limit: *gas_limit,
+                    to: *to,
+                    value: U256::from(*value),
+                },
+            })
+            .boxed()
     }
 }
 

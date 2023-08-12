@@ -275,6 +275,7 @@ mod tests {
             deposit_contract: None,
             #[cfg(feature = "optimism")]
             optimism: None,
+            ..Default::default()
         });
 
         let db = create_test_rw_db();

@@ -298,7 +298,6 @@ pub struct VmInstruction {
     /// The program counter.
     pub pc: usize,
     /// Subordinate trace of the CALL/CREATE if applicable.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub sub: Option<VmTrace>,
     /// Stringified opcode.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -314,7 +313,7 @@ pub struct VmExecutedOperation {
     /// The total gas used.
     pub used: u64,
     /// The stack item placed, if any.
-    pub push: Option<H256>,
+    pub push: Vec<U256>,
     /// If altered, the memory delta.
     pub mem: Option<MemoryDelta>,
     /// The altered storage value, if any.

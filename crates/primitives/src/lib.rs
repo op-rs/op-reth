@@ -29,6 +29,7 @@ mod chain;
 mod compression;
 pub mod constants;
 pub mod contract;
+pub mod eip4844;
 mod forkid;
 pub mod fs;
 mod genesis;
@@ -61,8 +62,8 @@ pub use bloom::Bloom;
 #[cfg(feature = "optimism")]
 pub use chain::OP_GOERLI;
 pub use chain::{
-    AllGenesisFormats, Chain, ChainInfo, ChainSpec, ChainSpecBuilder, DisplayHardforks,
-    ForkCondition, ForkTimestamps, DEV, GOERLI, MAINNET, SEPOLIA,
+    AllGenesisFormats, BaseFeeParams, Chain, ChainInfo, ChainSpec, ChainSpecBuilder,
+    DisplayHardforks, ForkCondition, ForkTimestamps, DEV, GOERLI, MAINNET, SEPOLIA,
 };
 pub use compression::*;
 pub use constants::{
@@ -91,7 +92,7 @@ pub use transaction::{
     IntoRecoveredTransaction, InvalidTransactionError, Signature, Transaction, TransactionKind,
     TransactionMeta, TransactionSigned, TransactionSignedEcRecovered, TransactionSignedNoHash,
     TxEip1559, TxEip2930, TxEip4844, TxLegacy, TxType, EIP1559_TX_TYPE_ID, EIP2930_TX_TYPE_ID,
-    LEGACY_TX_TYPE_ID,
+    EIP4844_TX_TYPE_ID, LEGACY_TX_TYPE_ID,
 };
 #[cfg(feature = "optimism")]
 pub use transaction::{TxDeposit, DEPOSIT_TX_TYPE, DEPOSIT_VERSION};
@@ -143,6 +144,11 @@ pub use __reexport::*;
 /// Various utilities
 pub mod utils {
     pub use ethers_core::types::serde_helpers;
+}
+
+/// EIP-4844 + KZG helpers
+pub mod kzg {
+    pub use c_kzg::*;
 }
 
 /// Helpers for working with serde

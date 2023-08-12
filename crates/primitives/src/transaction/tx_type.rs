@@ -13,9 +13,13 @@ pub const EIP2930_TX_TYPE_ID: u8 = 1;
 /// Identifier for [TxEip1559](crate::TxEip1559) transaction.
 pub const EIP1559_TX_TYPE_ID: u8 = 2;
 
+
+/// Identifier for [TxEip4844](crate::TxEip4844) transaction.
+pub const EIP4844_TX_TYPE_ID: u8 = 3;
+
 /// Identifier for [TxDeposit](crate::TxDeposit) transaction.
 #[cfg(feature = "optimism")]
-use crate::DEPOSIT_TX_TYPE;
+pub const DEPOSIT_TX_TYPE_ID: u8 = 126;
 
 /// Transaction Type
 #[derive_arbitrary(compact)]
@@ -40,7 +44,7 @@ impl From<TxType> for u8 {
             TxType::EIP2930 => EIP2930_TX_TYPE_ID,
             TxType::EIP1559 => EIP1559_TX_TYPE_ID,
             #[cfg(feature = "optimism")]
-            TxType::DEPOSIT => DEPOSIT_TX_TYPE,
+            TxType::DEPOSIT => DEPOSIT_TX_TYPE_ID,
         }
     }
 }
@@ -63,6 +67,8 @@ impl Compact for TxType {
             TxType::Legacy => LEGACY_TX_TYPE_ID as usize,
             TxType::EIP2930 => EIP2930_TX_TYPE_ID as usize,
             TxType::EIP1559 => EIP1559_TX_TYPE_ID as usize,
+            #[cfg(feature = "optimism")]
+            TxType::DESPOSIT => DEPOSIT_TX_TYPE_ID as usize,
             _ => {
                 buf.put_u8(self as u8);
                 3

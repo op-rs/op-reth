@@ -93,10 +93,10 @@
 //!
 //! ```
 //! use reth_primitives::MAINNET;
-//! use reth_provider::StateProviderFactory;
+//! use reth_provider::{ChainSpecProvider, StateProviderFactory};
 //! use reth_tasks::TokioTaskExecutor;
 //! use reth_transaction_pool::{EthTransactionValidator, Pool, TransactionPool};
-//!  async fn t<C>(client: C)  where C: StateProviderFactory + Clone + 'static{
+//!  async fn t<C>(client: C)  where C: StateProviderFactory + ChainSpecProvider + Clone + 'static{
 //!     let pool = Pool::eth_pool(
 //!         EthTransactionValidator::new(client, MAINNET.clone(), TokioTaskExecutor::default()),
 //!         Default::default(),
@@ -118,12 +118,12 @@
 //! ```
 //! use futures_util::Stream;
 //! use reth_primitives::MAINNET;
-//! use reth_provider::{BlockReaderIdExt, CanonStateNotification, StateProviderFactory};
+//! use reth_provider::{BlockReaderIdExt, CanonStateNotification, ChainSpecProvider, StateProviderFactory};
 //! use reth_tasks::TokioTaskExecutor;
 //! use reth_transaction_pool::{EthTransactionValidator, Pool};
 //! use reth_transaction_pool::maintain::maintain_transaction_pool_future;
 //!  async fn t<C, St>(client: C, stream: St)
-//!    where C: StateProviderFactory + BlockReaderIdExt + Clone + 'static,
+//!    where C: StateProviderFactory + BlockReaderIdExt + ChainSpecProvider + Clone + 'static,
 //!     St: Stream<Item = CanonStateNotification> + Send + Unpin + 'static,
 //!     {
 //!     let pool = Pool::eth_pool(
@@ -422,7 +422,7 @@ where
 
     fn remove_transactions(
         &self,
-        hashes: impl IntoIterator<Item = TxHash>,
+        hashes: Vec<TxHash>,
     ) -> Vec<Arc<ValidPoolTransaction<Self::Transaction>>> {
         self.pool.remove_transactions(hashes)
     }
@@ -435,10 +435,7 @@ where
         self.inner().get(tx_hash)
     }
 
-    fn get_all(
-        &self,
-        txs: impl IntoIterator<Item = TxHash>,
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Transaction>>> {
+    fn get_all(&self, txs: Vec<TxHash>) -> Vec<Arc<ValidPoolTransaction<Self::Transaction>>> {
         self.inner().get_all(txs)
     }
 
