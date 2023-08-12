@@ -1,8 +1,13 @@
 //! Collection of methods for block validation.
 use reth_interfaces::{consensus::ConsensusError, Result as RethResult};
 use reth_primitives::{
-    constants, BlockNumber, ChainSpec, Hardfork, Header, InvalidTransactionError, SealedBlock,
-    SealedHeader, Transaction, TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxLegacy,
+    constants::{
+        self,
+        eip4844::{DATA_GAS_PER_BLOB, MAX_DATA_GAS_PER_BLOCK},
+    },
+    eip4844::calculate_excess_blob_gas,
+    BlockNumber, ChainSpec, Hardfork, Header, InvalidTransactionError, SealedBlock, SealedHeader,
+    Transaction, TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxLegacy,
 };
 use reth_provider::{AccountReader, HeaderProvider, WithdrawalsProvider};
 use std::collections::{hash_map::Entry, HashMap};
@@ -91,6 +96,20 @@ pub fn validate_transaction_regarding_header(
         }
         #[cfg(feature = "optimism")]
         Transaction::Deposit(TxDeposit { .. }) => None,
+        Transaction::Eip4844(TxEip4844 {
+            chain_id,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            ..
+        }) => {
+            // EIP-1559: add more constraints to the tx validation
+            // https://github.com/ethereum/EIPs/pull/3594
+            if max_priority_fee_per_gas > max_fee_per_gas {
+                return Err(InvalidTransactionError::TipAboveFeeCap.into())
+            }
+
+            Some(*chain_id)
+        }
     };
     if let Some(chain_id) = chain_id {
         if chain_id != chain_spec.chain().id() {
@@ -257,6 +276,14 @@ pub fn validate_header_regarding_parent(
     // TODO Check difficulty increment between parent and child
     // Ace age did increment it by some formula that we need to follow.
 
+    let mut parent_gas_limit = parent.gas_limit;
+
+    // By consensus, gas_limit is multiplied by elasticity (*2) on
+    // on exact block that hardfork happens.
+    if chain_spec.fork(Hardfork::London).transitions_at_block(child.number) {
+        parent_gas_limit = parent.gas_limit * chain_spec.base_fee_params.elasticity_multiplier;
+    }
+
     // Check gas limit, max diff between child/parent gas_limit should be  max_diff=parent_gas/1024
     // On Optimism, the gas limit can adjust instantly, so we skip this check if the optimism
     // feature flag is enabled.
@@ -294,7 +321,9 @@ pub fn validate_header_regarding_parent(
                 constants::EIP1559_INITIAL_BASE_FEE
             } else {
                 // This BaseFeeMissing will not happen as previous blocks are checked to have them.
-                parent.next_block_base_fee().ok_or(ConsensusError::BaseFeeMissing)?
+                parent
+                    .next_block_base_fee(chain_spec.base_fee_params)
+                    .ok_or(ConsensusError::BaseFeeMissing)?
             };
         if expected_base_fee != base_fee {
             return Err(ConsensusError::BaseFeeDiff { expected: expected_base_fee, got: base_fee })

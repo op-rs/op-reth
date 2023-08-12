@@ -244,6 +244,18 @@ impl ParityTraceBuilder {
         self.into_transaction_traces_iter().collect()
     }
 
+    /// Returns the last recorded step
+    #[inline]
+    fn last_step(&self) -> Option<&CallTraceStep> {
+        self.nodes.last().and_then(|node| node.trace.steps.last())
+    }
+
+    /// Returns true if the last recorded step is a STOP
+    #[inline]
+    fn is_last_step_stop_op(&self) -> bool {
+        self.last_step().map(|step| step.is_stop()).unwrap_or(false)
+    }
+
     /// Creates a VM trace by walking over `CallTraceNode`s
     ///
     /// does not have the code fields filled in
@@ -254,18 +266,18 @@ impl ParityTraceBuilder {
         }
     }
 
-    /// returns a VM trace without the code filled in
+    /// Returns a VM trace without the code filled in
     ///
-    /// iteratively creaters a VM trace by traversing an arena
+    /// Iteratively creates a VM trace by traversing the recorded nodes in the arena
     fn make_vm_trace(&self, start: &CallTraceNode) -> VmTrace {
-        let mut child_idx_stack: Vec<usize> = Vec::with_capacity(self.nodes.len());
-        let mut sub_stack: VecDeque<Option<VmTrace>> = VecDeque::with_capacity(self.nodes.len());
+        let mut child_idx_stack = Vec::with_capacity(self.nodes.len());
+        let mut sub_stack = VecDeque::with_capacity(self.nodes.len());
 
         let mut current = start;
         let mut child_idx: usize = 0;
 
         // finds the deepest nested calls of each call frame and fills them up bottom to top
-        let instructions = loop {
+        let instructions = 'outer: loop {
             match current.children.get(child_idx) {
                 Some(child) => {
                     child_idx_stack.push(child_idx + 1);
@@ -274,23 +286,23 @@ impl ParityTraceBuilder {
                     current = self.nodes.get(*child).expect("there should be a child");
                 }
                 None => {
-                    let mut instructions: Vec<VmInstruction> =
-                        Vec::with_capacity(current.trace.steps.len());
+                    let mut instructions = Vec::with_capacity(current.trace.steps.len());
 
                     for step in &current.trace.steps {
-                        let maybe_sub = match step.op.u8() {
-                            opcode::CALL |
-                            opcode::CALLCODE |
-                            opcode::DELEGATECALL |
-                            opcode::STATICCALL |
-                            opcode::CREATE |
-                            opcode::CREATE2 => {
-                                sub_stack.pop_front().expect("there should be a sub trace")
-                            }
-                            _ => None,
+                        let maybe_sub_call = if step.is_calllike_op() {
+                            sub_stack.pop_front().flatten()
+                        } else {
+                            None
                         };
 
-                        instructions.push(Self::make_instruction(step, maybe_sub));
+                        if step.is_stop() && instructions.is_empty() && self.is_last_step_stop_op()
+                        {
+                            // This is a special case where there's a single STOP which is
+                            // "optimised away", transfers for example
+                            break 'outer instructions
+                        }
+
+                        instructions.push(self.make_instruction(step, maybe_sub_call));
                     }
 
                     match current.parent {
@@ -315,7 +327,11 @@ impl ParityTraceBuilder {
 
     /// Creates a VM instruction from a [CallTraceStep] and a [VmTrace] for the subcall if there is
     /// one
-    fn make_instruction(step: &CallTraceStep, maybe_sub: Option<VmTrace>) -> VmInstruction {
+    fn make_instruction(
+        &self,
+        step: &CallTraceStep,
+        maybe_sub_call: Option<VmTrace>,
+    ) -> VmInstruction {
         let maybe_storage = step.storage_change.map(|storage_change| StorageDelta {
             key: storage_change.key,
             val: storage_change.value,
@@ -329,8 +345,9 @@ impl ParityTraceBuilder {
         };
 
         let maybe_execution = Some(VmExecutedOperation {
-            used: step.gas_cost,
-            push: step.new_stack.map(|new_stack| new_stack.into()),
+
+            used: step.gas_remaining,
+            push: step.push_stack.clone().unwrap_or_default(),
             mem: maybe_memory,
             store: maybe_storage,
         });
@@ -339,7 +356,9 @@ impl ParityTraceBuilder {
             pc: step.pc,
             cost: 0, // TODO: use op gas cost
             ex: maybe_execution,
-            sub: maybe_sub,
+            sub: maybe_sub_call,
+            op: Some(step.op.to_string()),
+            idx: None,
         }
     }
 }
@@ -375,7 +394,7 @@ where
 
         let code_hash = if db_acc.code_hash != KECCAK_EMPTY { db_acc.code_hash } else { continue };
 
-        curr_ref.code = db.code_by_hash(code_hash)?.bytecode.into();
+        curr_ref.code = db.code_by_hash(code_hash)?.original_bytes().into();
     }
 
     Ok(())

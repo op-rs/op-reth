@@ -2,19 +2,29 @@ use auto_impl::auto_impl;
 use reth_db::models::BlockNumberAddress;
 use reth_interfaces::Result;
 use reth_primitives::{Account, Address, BlockNumber, StorageEntry, H256};
-use std::ops::{Range, RangeInclusive};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    ops::{Range, RangeInclusive},
+};
 
 /// Hashing Writer
 #[auto_impl(&, Arc, Box)]
 pub trait HashingWriter: Send + Sync {
-    /// Unwind and clear account hashing
-    fn unwind_account_hashing(&self, range: RangeInclusive<BlockNumber>) -> Result<()>;
+    /// Unwind and clear account hashing.
+    ///
+    /// # Returns
+    ///
+    /// Set of hashed keys of updated accounts.
+    fn unwind_account_hashing(
+        &self,
+        range: RangeInclusive<BlockNumber>,
+    ) -> Result<BTreeMap<H256, Option<Account>>>;
 
     /// Inserts all accounts into [reth_db::tables::AccountHistory] table.
     fn insert_account_for_hashing(
         &self,
         accounts: impl IntoIterator<Item = (Address, Option<Account>)>,
-    ) -> Result<()>;
+    ) -> Result<BTreeMap<H256, Option<Account>>>;
 
     /// Unwind and clear storage hashing
     fn unwind_storage_hashing(&self, range: Range<BlockNumberAddress>) -> Result<()>;

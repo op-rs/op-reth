@@ -309,6 +309,8 @@ impl Command {
             None
         };
 
+        let prune_config = self.pruning.prune_config(Arc::clone(&self.chain))?.or(config.prune);
+
         // Configure the pipeline
         let (mut pipeline, client) = if self.dev.dev {
             info!(target: "reth::cli", "Starting Reth in dev mode");

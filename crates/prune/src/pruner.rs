@@ -86,6 +86,16 @@ impl<DB: Database> Pruner<DB> {
         provider.commit()?;
 
         self.last_pruned_block_number = Some(tip_block_number);
+
+        let elapsed = start.elapsed();
+        self.metrics.duration_seconds.record(elapsed);
+
+        trace!(
+            target: "pruner",
+            %tip_block_number,
+            ?elapsed,
+            "Pruner finished"
+        );
         Ok(())
     }
 
@@ -242,6 +252,253 @@ impl<DB: Database> Pruner<DB> {
             PrunePart::TransactionLookup,
             PruneCheckpoint { block_number: to_block, prune_mode },
         )?;
+
+        Ok(())
+    }
+
+    /// Prune transaction senders up to the provided block, inclusive.
+    #[instrument(level = "trace", skip(self, provider), target = "pruner")]
+    fn prune_transaction_senders(
+        &self,
+        provider: &DatabaseProviderRW<'_, DB>,
+        to_block: BlockNumber,
+        prune_mode: PruneMode,
+    ) -> PrunerResult {
+        let range = match self.get_next_tx_num_range_from_checkpoint(
+            provider,
+            PrunePart::SenderRecovery,
+            to_block,
+        )? {
+            Some(range) => range,
+            None => {
+                trace!(target: "pruner", "No transaction senders to prune");
+                return Ok(())
+            }
+        };
+        let total = range.clone().count();
+
+        let mut processed = 0;
+        provider.prune_table_with_range_in_batches::<tables::TxSenders>(
+            range,
+            self.batch_sizes.transaction_senders,
+            |rows, _| {
+                processed += rows;
+                trace!(
+                    target: "pruner",
+                    %rows,
+                    progress = format!("{:.1}%", 100.0 * processed as f64 / total as f64),
+                    "Pruned transaction senders"
+                );
+            },
+        )?;
+
+        provider.save_prune_checkpoint(
+            PrunePart::SenderRecovery,
+            PruneCheckpoint { block_number: to_block, prune_mode },
+        )?;
+
+        Ok(())
+    }
+
+    /// Prune account history up to the provided block, inclusive.
+    #[instrument(level = "trace", skip(self, provider), target = "pruner")]
+    fn prune_account_history(
+        &self,
+        provider: &DatabaseProviderRW<'_, DB>,
+        to_block: BlockNumber,
+        prune_mode: PruneMode,
+    ) -> PrunerResult {
+        let from_block = provider
+            .get_prune_checkpoint(PrunePart::AccountHistory)?
+            .map(|checkpoint| checkpoint.block_number + 1)
+            .unwrap_or_default();
+        let range = from_block..=to_block;
+        let total = range.clone().count();
+
+        provider.prune_table_with_range_in_batches::<tables::AccountChangeSet>(
+            range,
+            self.batch_sizes.account_history,
+            |keys, rows| {
+                trace!(
+                    target: "pruner",
+                    %keys,
+                    %rows,
+                    progress = format!("{:.1}%", 100.0 * keys as f64 / total as f64),
+                    "Pruned account history (changesets)"
+                );
+            },
+        )?;
+
+        self.prune_history_indices::<tables::AccountHistory, _>(
+            provider,
+            to_block,
+            |a, b| a.key == b.key,
+            |key| ShardedKey::last(key.key),
+            self.batch_sizes.account_history,
+            |rows| {
+                trace!(
+                    target: "pruner",
+                    rows,
+                    "Pruned account history (indices)"
+                );
+            },
+        )?;
+
+        provider.save_prune_checkpoint(
+            PrunePart::AccountHistory,
+            PruneCheckpoint { block_number: to_block, prune_mode },
+        )?;
+
+        Ok(())
+    }
+
+    /// Prune storage history up to the provided block, inclusive.
+    #[instrument(level = "trace", skip(self, provider), target = "pruner")]
+    fn prune_storage_history(
+        &self,
+        provider: &DatabaseProviderRW<'_, DB>,
+        to_block: BlockNumber,
+        prune_mode: PruneMode,
+    ) -> PrunerResult {
+        let from_block = provider
+            .get_prune_checkpoint(PrunePart::StorageHistory)?
+            .map(|checkpoint| checkpoint.block_number + 1)
+            .unwrap_or_default();
+        let block_range = from_block..=to_block;
+        let range = BlockNumberAddress::range(block_range);
+
+        provider.prune_table_with_range_in_batches::<tables::StorageChangeSet>(
+            range,
+            self.batch_sizes.storage_history,
+            |keys, rows| {
+                trace!(
+                    target: "pruner",
+                    %keys,
+                    %rows,
+                    "Pruned storage history (changesets)"
+                );
+            },
+        )?;
+
+        self.prune_history_indices::<tables::StorageHistory, _>(
+            provider,
+            to_block,
+            |a, b| a.address == b.address && a.sharded_key.key == b.sharded_key.key,
+            |key| StorageShardedKey::last(key.address, key.sharded_key.key),
+            self.batch_sizes.storage_history,
+            |rows| {
+                trace!(
+                    target: "pruner",
+                    rows,
+                    "Pruned storage history (indices)"
+                );
+            },
+        )?;
+
+        provider.save_prune_checkpoint(
+            PrunePart::StorageHistory,
+            PruneCheckpoint { block_number: to_block, prune_mode },
+        )?;
+
+        Ok(())
+    }
+
+    /// Prune history indices up to the provided block, inclusive.
+    fn prune_history_indices<T, SK>(
+        &self,
+        provider: &DatabaseProviderRW<'_, DB>,
+        to_block: BlockNumber,
+        key_matches: impl Fn(&T::Key, &T::Key) -> bool,
+        last_key: impl Fn(&T::Key) -> T::Key,
+        batch_size: usize,
+        batch_callback: impl Fn(usize),
+    ) -> PrunerResult
+    where
+        T: Table<Value = BlockNumberList>,
+        T::Key: AsRef<ShardedKey<SK>>,
+    {
+        let mut processed = 0;
+        let mut cursor = provider.tx_ref().cursor_write::<T>()?;
+
+        // Prune history table:
+        // 1. If the shard has `highest_block_number` less than or equal to the target block number
+        // for pruning, delete the shard completely.
+        // 2. If the shard has `highest_block_number` greater than the target block number for
+        // pruning, filter block numbers inside the shard which are less than the target
+        // block number for pruning.
+        while let Some(result) = cursor.next()? {
+            let (key, blocks): (T::Key, BlockNumberList) = result;
+
+            if key.as_ref().highest_block_number <= to_block {
+                // If shard consists only of block numbers less than the target one, delete shard
+                // completely.
+                cursor.delete_current()?;
+                if key.as_ref().highest_block_number == to_block {
+                    // Shard contains only block numbers up to the target one, so we can skip to the
+                    // next sharded key. It is guaranteed that further shards for this sharded key
+                    // will not contain the target block number, as it's in this shard.
+                    cursor.seek_exact(last_key(&key))?;
+                }
+            } else {
+                // Shard contains block numbers that are higher than the target one, so we need to
+                // filter it. It is guaranteed that further shards for this sharded key will not
+                // contain the target block number, as it's in this shard.
+                let new_blocks = blocks
+                    .iter(0)
+                    .skip_while(|block| *block <= to_block as usize)
+                    .collect::<Vec<_>>();
+
+                if blocks.len() != new_blocks.len() {
+                    // If there were blocks less than or equal to the target one
+                    // (so the shard has changed), update the shard.
+                    if new_blocks.is_empty() {
+                        // If there are no more blocks in this shard, we need to remove it, as empty
+                        // shards are not allowed.
+                        if key.as_ref().highest_block_number == u64::MAX {
+                            if let Some(prev_value) = cursor
+                                .prev()?
+                                .filter(|(prev_key, _)| key_matches(prev_key, &key))
+                                .map(|(_, prev_value)| prev_value)
+                            {
+                                // If current shard is the last shard for the sharded key that has
+                                // previous shards, replace it with the previous shard.
+                                cursor.delete_current()?;
+                                // Upsert will replace the last shard for this sharded key with the
+                                // previous value.
+                                cursor.upsert(key.clone(), prev_value)?;
+                            } else {
+                                // If there's no previous shard for this sharded key,
+                                // just delete last shard completely.
+
+                                // Jump back to the original last shard.
+                                cursor.next()?;
+                                // Delete shard.
+                                cursor.delete_current()?;
+                            }
+                        } else {
+                            // If current shard is not the last shard for this sharded key,
+                            // just delete it.
+                            cursor.delete_current()?;
+                        }
+                    } else {
+                        cursor.upsert(key.clone(), BlockNumberList::new_pre_sorted(new_blocks))?;
+                    }
+                }
+
+                // Jump to the next address.
+                cursor.seek_exact(last_key(&key))?;
+            }
+
+            processed += 1;
+
+            if processed % batch_size == 0 {
+                batch_callback(batch_size);
+            }
+        }
+
+        if processed % batch_size != 0 {
+            batch_callback(processed % batch_size);
+        }
 
         Ok(())
     }

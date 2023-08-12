@@ -345,7 +345,11 @@ where
         self,
         module_config: TransportRpcModuleConfig,
         engine: EngineApi,
-    ) -> (TransportRpcModules<()>, AuthRpcModule)
+    ) -> (
+        TransportRpcModules,
+        AuthRpcModule,
+        RethModuleRegistry<Provider, Pool, Network, Tasks, Events>,
+    )
     where
         EngineApi: EngineApiServer,
     {
@@ -727,6 +731,26 @@ impl<Provider, Pool, Network, Tasks, Events>
             config,
             events,
         }
+    }
+
+    /// Returns a reference to the pool
+    pub fn pool(&self) -> &Pool {
+        &self.pool
+    }
+
+    /// Returns a reference to the events type
+    pub fn events(&self) -> &Events {
+        &self.events
+    }
+
+    /// Returns a reference to the tasks type
+    pub fn tasks(&self) -> &Tasks {
+        &self.executor
+    }
+
+    /// Returns a reference to the provider
+    pub fn provider(&self) -> &Provider {
+        &self.provider
     }
 
     /// Returns all installed methods
@@ -1216,10 +1240,7 @@ impl RpcServerConfig {
     }
 
     /// Convenience function to do [RpcServerConfig::build] and [RpcServer::start] in one step
-    pub async fn start(
-        self,
-        modules: TransportRpcModules<()>,
-    ) -> Result<RpcServerHandle, RpcError> {
+    pub async fn start(self, modules: TransportRpcModules) -> Result<RpcServerHandle, RpcError> {
         self.build().await?.start(modules).await
     }
 
@@ -1440,7 +1461,7 @@ impl TransportRpcModuleConfig {
 
 /// Holds installed modules per transport type.
 #[derive(Debug, Default)]
-pub struct TransportRpcModules<Context> {
+pub struct TransportRpcModules<Context = ()> {
     /// The original config
     config: TransportRpcModuleConfig,
     /// rpcs module for http
@@ -1453,7 +1474,7 @@ pub struct TransportRpcModules<Context> {
 
 // === impl TransportRpcModules ===
 
-impl TransportRpcModules<()> {
+impl TransportRpcModules {
     /// Returns the [TransportRpcModuleConfig] used to configure this instance.
     pub fn module_config(&self) -> &TransportRpcModuleConfig {
         &self.config
@@ -1619,10 +1640,7 @@ impl RpcServer {
     /// This returns an [RpcServerHandle] that's connected to the server task(s) until the server is
     /// stopped or the [RpcServerHandle] is dropped.
     #[instrument(name = "start", skip_all, fields(http = ?self.http_local_addr(), ws = ?self.ws_local_addr(), ipc = ?self.ipc_endpoint().map(|ipc|ipc.path())), target = "rpc", level = "TRACE")]
-    pub async fn start(
-        self,
-        modules: TransportRpcModules<()>,
-    ) -> Result<RpcServerHandle, RpcError> {
+    pub async fn start(self, modules: TransportRpcModules) -> Result<RpcServerHandle, RpcError> {
         trace!(target: "rpc", "staring RPC server");
         let Self { ws_http, ipc: ipc_server } = self;
         let TransportRpcModules { config, http, ws, ipc } = modules;

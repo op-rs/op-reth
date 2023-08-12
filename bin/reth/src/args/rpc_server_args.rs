@@ -346,9 +346,10 @@ impl RpcServerArgs {
     ) -> Result<AuthServerHandle, RpcError>
     where
         Provider: BlockReaderIdExt
+            + ChainSpecProvider
+            + EvmEnvProvider
             + HeaderProvider
             + StateProviderFactory
-            + EvmEnvProvider
             + Clone
             + Unpin
             + 'static,

@@ -131,7 +131,7 @@ impl TransactionPool for NoopTransactionPool {
 
     fn remove_transactions(
         &self,
-        _hashes: impl IntoIterator<Item = TxHash>,
+        _hashes: Vec<TxHash>,
     ) -> Vec<Arc<ValidPoolTransaction<Self::Transaction>>> {
         vec![]
     }
@@ -142,10 +142,7 @@ impl TransactionPool for NoopTransactionPool {
         None
     }
 
-    fn get_all(
-        &self,
-        _txs: impl IntoIterator<Item = TxHash>,
-    ) -> Vec<Arc<ValidPoolTransaction<Self::Transaction>>> {
+    fn get_all(&self, _txs: Vec<TxHash>) -> Vec<Arc<ValidPoolTransaction<Self::Transaction>>> {
         vec![]
     }
 

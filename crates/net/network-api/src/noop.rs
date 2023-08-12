@@ -46,6 +46,10 @@ impl NetworkInfo for NoopNetwork {
         false
     }
 
+    fn is_initially_syncing(&self) -> bool {
+        false
+    }
+
     #[cfg(feature = "optimism")]
     fn sequencer_endpoint(&self) -> &Option<String> {
         &None

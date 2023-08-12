@@ -39,7 +39,7 @@ use reth_revm_primitives::{
 };
 use reth_trie::StateRoot;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet},
     fmt::Debug,
     ops::{Deref, DerefMut, Range, RangeBounds, RangeInclusive},
     sync::Arc,
@@ -1377,6 +1377,11 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
         end_block_hash: H256,
         expected_state_root: H256,
     ) -> Result<()> {
+        // Initialize prefix sets.
+        let mut account_prefix_set = PrefixSetMut::default();
+        let mut storage_prefix_set: HashMap<H256, PrefixSetMut> = HashMap::default();
+        let mut destroyed_accounts = HashSet::default();
+
         // storage hashing stage
         {
             let lists = self.changed_storages_with_range(range.clone())?;
@@ -1388,14 +1393,27 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
         {
             let lists = self.changed_accounts_with_range(range.clone())?;
             let accounts = self.basic_accounts(lists)?;
-            self.insert_account_for_hashing(accounts)?;
+            let hashed_addresses = self.insert_account_for_hashing(accounts)?;
+            for (hashed_address, account) in hashed_addresses {
+                account_prefix_set.insert(Nibbles::unpack(hashed_address));
+                if account.is_none() {
+                    destroyed_accounts.insert(hashed_address);
+                }
+            }
         }
 
         // merkle tree
         {
-            let (state_root, trie_updates) =
-                StateRoot::incremental_root_with_updates(&self.tx, range.clone())
-                    .map_err(Into::<reth_db::DatabaseError>::into)?;
+            // This is the same as `StateRoot::incremental_root_with_updates`, only the prefix sets
+            // are pre-loaded.
+            let (state_root, trie_updates) = StateRoot::new(&self.tx)
+                .with_changed_account_prefixes(account_prefix_set.freeze())
+                .with_changed_storage_prefixes(
+                    storage_prefix_set.into_iter().map(|(k, v)| (k, v.freeze())).collect(),
+                )
+                .with_destroyed_accounts(destroyed_accounts)
+                .root_with_updates()
+                .map_err(Into::<reth_db::DatabaseError>::into)?;
             if state_root != expected_state_root {
                 return Err(ProviderError::StateRootMismatch {
                     got: state_root,
@@ -1490,8 +1508,11 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
         Ok(())
     }
 
-    fn unwind_account_hashing(&self, range: RangeInclusive<BlockNumber>) -> Result<()> {
-        let mut hashed_accounts = self.tx.cursor_write::<tables::HashedAccount>()?;
+    fn unwind_account_hashing(
+        &self,
+        range: RangeInclusive<BlockNumber>,
+    ) -> Result<BTreeMap<H256, Option<Account>>> {
+        let mut hashed_accounts_cursor = self.tx.cursor_write::<tables::HashedAccount>()?;
 
         // Aggregate all block changesets and make a list of accounts that have been changed.
         self.tx
@@ -1512,26 +1533,28 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
             // hash addresses and collect it inside sorted BTreeMap.
             // We are doing keccak only once per address.
             .map(|(address, account)| (keccak256(address), account))
-            .collect::<BTreeMap<_, _>>()
-            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+
+        hashed_accounts
+            .iter()
             // Apply values to HashedState (if Account is None remove it);
             .try_for_each(|(hashed_address, account)| -> Result<()> {
                 if let Some(account) = account {
-                    hashed_accounts.upsert(hashed_address, account)?;
-                } else if hashed_accounts.seek_exact(hashed_address)?.is_some() {
-                    hashed_accounts.delete_current()?;
+                    hashed_accounts_cursor.upsert(*hashed_address, *account)?;
+                } else if hashed_accounts_cursor.seek_exact(*hashed_address)?.is_some() {
+                    hashed_accounts_cursor.delete_current()?;
                 }
                 Ok(())
             })?;
 
-        Ok(())
+        Ok(hashed_accounts)
     }
 
     fn insert_account_for_hashing(
         &self,
         accounts: impl IntoIterator<Item = (Address, Option<Account>)>,
-    ) -> Result<()> {
-        let mut hashed_accounts = self.tx.cursor_write::<tables::HashedAccount>()?;
+    ) -> Result<BTreeMap<H256, Option<Account>>> {
+        let mut hashed_accounts_cursor = self.tx.cursor_write::<tables::HashedAccount>()?;
 
         let hashes_accounts = accounts.into_iter().fold(
             BTreeMap::new(),
@@ -1541,15 +1564,16 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> HashingWriter for DatabaseProvider
             },
         );
 
-        hashes_accounts.into_iter().try_for_each(|(hashed_address, account)| -> Result<()> {
+        hashed_accounts.iter().try_for_each(|(hashed_address, account)| -> Result<()> {
             if let Some(account) = account {
-                hashed_accounts.upsert(hashed_address, account)?
-            } else if hashed_accounts.seek_exact(hashed_address)?.is_some() {
-                hashed_accounts.delete_current()?;
+                hashed_accounts_cursor.upsert(*hashed_address, *account)?
+            } else if hashed_accounts_cursor.seek_exact(*hashed_address)?.is_some() {
+                hashed_accounts_cursor.delete_current()?;
             }
             Ok(())
         })?;
-        Ok(())
+
+        Ok(hashed_accounts)
     }
 }
 
@@ -1688,15 +1712,36 @@ impl<'this, TX: DbTxMut<'this> + DbTx<'this>> BlockExecutionWriter for DatabaseP
         if TAKE {
             let storage_range = BlockNumberAddress::range(range.clone());
 
-            self.unwind_account_hashing(range.clone())?;
+            // Initialize prefix sets.
+            let mut account_prefix_set = PrefixSetMut::default();
+            let mut storage_prefix_set: HashMap<H256, PrefixSetMut> = HashMap::default();
+            let mut destroyed_accounts = HashSet::default();
+
+            // Unwind account hashes. Add changed accounts to account prefix set.
+            let hashed_addresses = self.unwind_account_hashing(range.clone())?;
+            for (hashed_address, account) in hashed_addresses {
+                account_prefix_set.insert(Nibbles::unpack(hashed_address));
+                if account.is_none() {
+                    destroyed_accounts.insert(hashed_address);
+                }
+            }
+
+            // Unwind account history indices.
             self.unwind_account_history_indices(range.clone())?;
             self.unwind_storage_hashing(storage_range.clone())?;
             self.unwind_storage_history_indices(storage_range)?;
 
-            // merkle tree
-            let (new_state_root, trie_updates) =
-                StateRoot::incremental_root_with_updates(&self.tx, range.clone())
-                    .map_err(Into::<reth_db::DatabaseError>::into)?;
+            // Calculate the reverted merkle root.
+            // This is the same as `StateRoot::incremental_root_with_updates`, only the prefix sets
+            // are pre-loaded.
+            let (new_state_root, trie_updates) = StateRoot::new(&self.tx)
+                .with_changed_account_prefixes(account_prefix_set.freeze())
+                .with_changed_storage_prefixes(
+                    storage_prefix_set.into_iter().map(|(k, v)| (k, v.freeze())).collect(),
+                )
+                .with_destroyed_accounts(destroyed_accounts)
+                .root_with_updates()
+                .map_err(Into::<reth_db::DatabaseError>::into)?;
 
             let parent_number = range.start().saturating_sub(1);
             let parent_state_root = self
