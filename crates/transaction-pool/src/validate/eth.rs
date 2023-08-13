@@ -92,6 +92,14 @@ where
         origin: TransactionOrigin,
         transaction: Self::Transaction,
     ) -> TransactionValidationOutcome<Self::Transaction> {
+        #[cfg(feature = "optimism")]
+        if transaction.is_deposit() {
+            return TransactionValidationOutcome::Invalid(
+                transaction,
+                InvalidTransactionError::PooledDepositTx.into(),
+            )
+        }
+
         let hash = *transaction.hash();
         let (tx, rx) = oneshot::channel();
         {
@@ -326,6 +334,14 @@ where
         origin: TransactionOrigin,
         transaction: Self::Transaction,
     ) -> TransactionValidationOutcome<Self::Transaction> {
+        #[cfg(feature = "optimism")]
+        if transaction.is_deposit() {
+            return TransactionValidationOutcome::Invalid(
+                transaction,
+                InvalidTransactionError::PooledDepositTx.into(),
+            )
+        }
+
         // Checks for tx_type
         match transaction.tx_type() {
             LEGACY_TX_TYPE_ID => {

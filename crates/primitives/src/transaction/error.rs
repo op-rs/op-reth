@@ -48,4 +48,8 @@ pub enum InvalidTransactionError {
     /// Thrown if the sender of a transaction is a contract.
     #[error("Transaction signer has bytecode set.")]
     SignerAccountHasBytecode,
+    #[cfg(feature = "optimism")]
+    /// Thrown if the transaction is a deposit transaction.
+    #[error("Deposit transactions cannot appear in the tx pool")]
+    PooledDepositTx,
 }

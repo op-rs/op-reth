@@ -562,6 +562,10 @@ pub trait PoolTransaction:
 
     /// Returns chain_id
     fn chain_id(&self) -> Option<u64>;
+
+    /// Returns whether or not the transaction is an Optimism Deposited transaction.
+    #[cfg(feature = "optimism")]
+    fn is_deposit(&self) -> bool;
 }
 
 /// The default [PoolTransaction] for the [Pool](crate::Pool).
@@ -697,6 +701,12 @@ impl PoolTransaction for PooledTransaction {
     /// Returns chain_id
     fn chain_id(&self) -> Option<u64> {
         self.transaction.chain_id()
+    }
+
+    /// Returns whether or not the transaction is an Optimism Deposited transaction.
+    #[cfg(feature = "optimism")]
+    fn is_deposit(&self) -> bool {
+        matches!(self.transaction.transaction, Transaction::Deposit(_))
     }
 }
 

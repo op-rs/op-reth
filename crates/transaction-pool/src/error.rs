@@ -126,6 +126,10 @@ pub enum InvalidPoolTransactionError {
     /// Thrown if the transaction's fee is below the minimum fee
     #[error("transaction underpriced")]
     Underpriced,
+    #[cfg(feature = "optimism")]
+    /// Thrown if the transaction is a deposit transaction.
+    #[error("Deposit transactions cannot appear in the tx pool")]
+    PooledDepositTx,
 }
 
 // === impl InvalidPoolTransactionError ===
@@ -169,6 +173,8 @@ impl InvalidPoolTransactionError {
                     InvalidTransactionError::GasUintOverflow => true,
                     InvalidTransactionError::TxTypeNotSupported => true,
                     InvalidTransactionError::SignerAccountHasBytecode => true,
+                    #[cfg(feature = "optimism")]
+                    InvalidTransactionError::PooledDepositTx => true,
                 }
             }
             InvalidPoolTransactionError::ExceedsGasLimit(_, _) => true,
@@ -178,6 +184,8 @@ impl InvalidPoolTransactionError {
                 // local setting
                 false
             }
+            #[cfg(feature = "optimism")]
+            InvalidPoolTransactionError::PooledDepositTx => true,
         }
     }
 }

@@ -14,6 +14,9 @@ use reth_primitives::{Address, TxHash};
 use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 use tokio::sync::{mpsc, mpsc::Receiver};
 
+#[cfg(feature = "optimism")]
+use crate::error::InvalidPoolTransactionError;
+
 /// A [`TransactionPool`] implementation that does nothing.
 ///
 /// All transactions are rejected and no events are emitted.
@@ -181,6 +184,14 @@ impl<T: PoolTransaction> TransactionValidator for MockTransactionValidator<T> {
         origin: TransactionOrigin,
         transaction: Self::Transaction,
     ) -> TransactionValidationOutcome<Self::Transaction> {
+        #[cfg(feature = "optimism")]
+        if transaction.is_deposit() {
+            return TransactionValidationOutcome::Invalid(
+                transaction,
+                InvalidPoolTransactionError::PooledDepositTx,
+            )
+        }
+
         TransactionValidationOutcome::Valid {
             balance: Default::default(),
             state_nonce: 0,

@@ -408,6 +408,10 @@ impl From<reth_primitives::InvalidTransactionError> for RpcInvalidTransactionErr
             InvalidTransactionError::SignerAccountHasBytecode => {
                 RpcInvalidTransactionError::SenderNoEOA
             }
+            #[cfg(feature = "optimism")]
+            InvalidTransactionError::PooledDepositTx => {
+                RpcInvalidTransactionError::TxTypeNotSupported
+            }
         }
     }
 }
@@ -515,6 +519,10 @@ impl From<InvalidPoolTransactionError> for RpcPoolError {
             }
             InvalidPoolTransactionError::OversizedData(_, _) => RpcPoolError::OversizedData,
             InvalidPoolTransactionError::Underpriced => RpcPoolError::Underpriced,
+            #[cfg(feature = "optimism")]
+            InvalidPoolTransactionError::PooledDepositTx => {
+                RpcPoolError::Invalid(RpcInvalidTransactionError::TxTypeNotSupported)
+            }
         }
     }
 }
