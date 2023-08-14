@@ -13,10 +13,16 @@ use reth_primitives::{
     constants::ETHEREUM_BLOCK_GAS_LIMIT, ChainSpec, InvalidTransactionError, EIP1559_TX_TYPE_ID,
     EIP2930_TX_TYPE_ID, LEGACY_TX_TYPE_ID,
 };
-use reth_provider::{AccountReader, StateProviderFactory};
+use reth_provider::{AccountReader, BlockReaderIdExt, StateProviderFactory};
 use reth_tasks::TaskSpawner;
 use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::{oneshot, Mutex};
+
+#[cfg(feature = "optimism")]
+use reth_revm::optimism::L1BlockInfo;
+
+#[cfg(feature = "optimism")]
+use reth_primitives::BlockNumberOrTag;
 
 /// A [TransactionValidator] implementation that validates ethereum transaction.
 ///
@@ -82,7 +88,7 @@ impl<Client, Tx> EthTransactionValidator<Client, Tx> {
 #[async_trait::async_trait]
 impl<Client, Tx> TransactionValidator for EthTransactionValidator<Client, Tx>
 where
-    Client: StateProviderFactory + Clone + 'static,
+    Client: StateProviderFactory + reth_provider::BlockReaderIdExt + Clone + 'static,
     Tx: PoolTransaction + 'static,
 {
     type Transaction = Tx;
@@ -324,7 +330,7 @@ impl<Client, Tx> EthTransactionValidatorInner<Client, Tx> {
 #[async_trait::async_trait]
 impl<Client, Tx> TransactionValidator for EthTransactionValidatorInner<Client, Tx>
 where
-    Client: StateProviderFactory,
+    Client: StateProviderFactory + BlockReaderIdExt,
     Tx: PoolTransaction,
 {
     type Transaction = Tx;
@@ -458,8 +464,35 @@ where
             )
         }
 
-        // Checks for max cost
+        #[cfg(not(feature = "optimism"))]
         let cost = transaction.cost();
+
+        // TODO(refcell): should we stash l1 fee info in the `BlockInfo` object
+        //                since we can just query the state provider here and
+        //                transform the block into an `L1BlockInfo` object
+        //                containing the fee info?
+        #[cfg(feature = "optimism")]
+        let cost = {
+            let block = match self.client.block_by_number_or_tag(BlockNumberOrTag::Latest) {
+                Ok(block) => block.unwrap_or_default(),
+                Err(err) => {
+                    return TransactionValidationOutcome::Error(*transaction.hash(), Box::new(err))
+                }
+            };
+
+            let cost_addition = match L1BlockInfo::try_from(&block) {
+                Ok(info) => {
+                    info.calculate_tx_l1_cost(transaction.input(), transaction.is_deposit())
+                }
+                Err(err) => {
+                    return TransactionValidationOutcome::Error(*transaction.hash(), Box::new(err))
+                }
+            };
+
+            transaction.cost().saturating_add(cost_addition)
+        };
+
+        // Checks for max cost
         if cost > account.balance {
             return TransactionValidationOutcome::Invalid(
                 transaction,

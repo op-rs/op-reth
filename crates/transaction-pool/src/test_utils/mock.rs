@@ -12,7 +12,7 @@ use rand::{
     prelude::Distribution,
 };
 use reth_primitives::{
-    constants::MIN_PROTOCOL_BASE_FEE, hex, Address, FromRecoveredTransaction,
+    constants::MIN_PROTOCOL_BASE_FEE, hex, Address, Bytes, FromRecoveredTransaction,
     IntoRecoveredTransaction, Signature, Transaction, TransactionKind, TransactionSigned,
     TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxHash, TxLegacy, TxType, H256,
     U128, U256,
@@ -28,9 +28,6 @@ use reth_primitives::DEPOSIT_TX_TYPE_ID;
 
 #[cfg(feature = "optimism")]
 use reth_primitives::TxDeposit;
-
-#[cfg(feature = "optimism")]
-use reth_primitives::Bytes;
 
 /// Create an empty `TxPool`
 pub(crate) fn mock_tx_pool() -> MockTxPool {
@@ -391,6 +388,10 @@ impl PoolTransaction for MockTransaction {
             #[cfg(feature = "optimism")]
             MockTransaction::Deposit(_) => 0u64,
         }
+    }
+
+    fn input(&self) -> &Bytes {
+        panic!("not implemented")
     }
 
     fn cost(&self) -> U256 {

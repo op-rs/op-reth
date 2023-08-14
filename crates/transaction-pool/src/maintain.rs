@@ -83,12 +83,23 @@ pub async fn maintain_transaction_pool<Client, P, St, Tasks>(
     if let Ok(Some(latest)) = client.block_by_number_or_tag(BlockNumberOrTag::Latest) {
         let latest = latest.seal_slow();
         let chain_spec = client.chain_spec();
+        // TODO(refcell): do we need this here since in the tx validator, we can
+        //                get the fee info from the state provider?
+        // #[cfg(feature = "optimism")]
+        // let L1BlockInfo { l1_base_fee, l1_fee_overhead, l1_fee_scalar } =
+        //     L1BlockInfo::try_from(latest).unwrap_or_default();
         let info = BlockInfo {
             last_seen_block_hash: latest.hash,
             last_seen_block_number: latest.number,
             pending_basefee: latest
                 .next_block_base_fee(chain_spec.base_fee_params)
                 .unwrap_or_default(),
+            // #[cfg(feature = "optimism")]
+            // l1_base_fee,
+            // #[cfg(feature = "optimism")]
+            // l1_fee_overhead,
+            // #[cfg(feature = "optimism")]
+            // l1_fee_scalar,
         };
         pool.set_block_info(info);
     }

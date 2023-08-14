@@ -263,7 +263,7 @@ where
 impl<Client>
     Pool<EthTransactionValidator<Client, PooledTransaction>, CoinbaseTipOrdering<PooledTransaction>>
 where
-    Client: StateProviderFactory + Clone + 'static,
+    Client: StateProviderFactory + reth_provider::BlockReaderIdExt + Clone + 'static,
 {
     /// Returns a new [Pool] that uses the default [EthTransactionValidator] when validating
     /// [PooledTransaction]s and ords via [CoinbaseTipOrdering]
