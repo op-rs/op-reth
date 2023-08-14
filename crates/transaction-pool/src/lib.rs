@@ -92,10 +92,10 @@
 //!
 //! ```
 //! use reth_primitives::MAINNET;
-//! use reth_provider::{ChainSpecProvider, StateProviderFactory};
+//! use reth_provider::{BlockReaderIdExt, ChainSpecProvider, StateProviderFactory};
 //! use reth_tasks::TokioTaskExecutor;
 //! use reth_transaction_pool::{EthTransactionValidator, Pool, TransactionPool};
-//!  async fn t<C>(client: C)  where C: StateProviderFactory + ChainSpecProvider + Clone + 'static{
+//!  async fn t<C>(client: C)  where C: StateProviderFactory + BlockReaderIdExt + ChainSpecProvider + Clone + 'static{
 //!     let pool = Pool::eth_pool(
 //!         EthTransactionValidator::new(client, MAINNET.clone(), TokioTaskExecutor::default()),
 //!         Default::default(),
@@ -271,11 +271,11 @@ where
     /// # Example
     ///
     /// ```
-    /// use reth_provider::StateProviderFactory;
+    /// use reth_provider::{BlockReaderIdExt, StateProviderFactory};
     /// use reth_primitives::MAINNET;
     /// use reth_tasks::TokioTaskExecutor;
     /// use reth_transaction_pool::{EthTransactionValidator, Pool};
-    /// # fn t<C>(client: C)  where C: StateProviderFactory + Clone + 'static{
+    /// # fn t<C>(client: C)  where C: StateProviderFactory + BlockReaderIdExt + Clone + 'static {
     ///     let pool = Pool::eth_pool(
     ///         EthTransactionValidator::new(client, MAINNET.clone(), TokioTaskExecutor::default()),
     ///         Default::default(),
