@@ -42,7 +42,6 @@ use reth_interfaces::{
     },
 };
 use reth_network::{error::NetworkError, NetworkConfig, NetworkHandle, NetworkManager};
-use reth_network_api::NetworkInfo;
 use reth_primitives::{
     stage::StageId, BlockHashOrNumber, BlockNumber, ChainSpec, DisplayHardforks, Head,
     SealedHeader, H256,
@@ -282,16 +281,39 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
         let factory = ProviderFactory::new(Arc::clone(&db), Arc::clone(&self.chain));
         let blockchain_db = BlockchainProvider::new(factory, blockchain_tree.clone())?;
 
-        let transaction_pool = reth_transaction_pool::Pool::eth_pool(
-            EthTransactionValidator::with_additional_tasks(
-                blockchain_db.clone(),
-                Arc::clone(&self.chain),
-                ctx.task_executor.clone(),
-                1,
-            ),
-            self.txpool.pool_config(),
-        );
-        info!(target: "reth::cli", "Transaction pool initialized");
+        #[cfg(not(feature = "optimism"))]
+        let transaction_pool = {
+            let eth_pool = reth_transaction_pool::Pool::eth_pool(
+                EthTransactionValidator::with_additional_tasks(
+                    blockchain_db.clone(),
+                    Arc::clone(&self.chain),
+                    ctx.task_executor.clone(),
+                    1,
+                ),
+                self.txpool.pool_config(),
+            );
+            info!(target: "reth::cli", "Transaction pool initialized");
+            eth_pool
+        };
+
+        #[cfg(feature = "optimism")]
+        let transaction_pool = if self.rollup.disable_txpool_gossip {
+            let noop_pool = reth_transaction_pool::noop::NoopTransactionPool {};
+            info!(target: "reth::cli", "[Optimism] Started noop tx pool.");
+            noop_pool
+        } else {
+            let eth_pool = reth_transaction_pool::Pool::eth_pool(
+                EthTransactionValidator::with_additional_tasks(
+                    blockchain_db.clone(),
+                    Arc::clone(&self.chain),
+                    ctx.task_executor.clone(),
+                    1,
+                ),
+                self.txpool.pool_config(),
+            );
+            info!(target: "reth::cli", "Transaction pool initialized");
+            eth_pool
+        };
 
         // spawn txpool maintenance task
         {
