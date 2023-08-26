@@ -36,6 +36,10 @@ pub enum PayloadBuilderError {
     #[error("failed to load account {0:?}")]
     #[cfg(feature = "optimism")]
     AccountLoadFailed(B160),
+    /// Thrown when a system transaction is sent post-Regolith.
+    #[cfg(feature = "optimism")]
+    #[error("system transaction sent post-Regolith")]
+    SystemTransactionPostRegolith,
 }
 
 impl From<oneshot::error::RecvError> for PayloadBuilderError {

@@ -33,11 +33,22 @@ metrics = "0.21.1" # Needed for `metrics-macro` to resolve the crate using `::me
 ## misc
 tracing.workspace = true
 
+[dev-dependencies]
+reth-db = { workspace = true, features = ["test-utils"] }
+reth-auto-seal-consensus = { path = "../../consensus/auto-seal" }
+reth-blockchain-tree = { workspace = true }
+reth-rpc-types = { workspace = true }
+
 [features]
 optimism = [
   "reth-primitives/optimism",
   "reth-revm/optimism",
   "reth-transaction-pool/optimism",
   "reth-provider/optimism",
-  "reth-payload-builder/optimism"
+  "reth-payload-builder/optimism",
+  "revm/optional_block_gas_limit",
+  "revm/optional_eip3607",
+  "revm/optional_no_base_fee",
+  "revm/optional_balance_check",
+  "revm/optional_gas_refund"
 ]

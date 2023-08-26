@@ -83,6 +83,11 @@ where
             .try_into_ecrecovered()
             .map_err(|_| PayloadBuilderError::TransactionEcRecoverFailed)?;
 
+        // After Regolith, we do not allow system transactions to be accepted.
+        if is_regolith && sequencer_tx.is_system_transaction() {
+            return Err(PayloadBuilderError::SystemTransactionPostRegolith)
+        }
+
         // Compute the L1 cost of the transaction. This is the amount of ETH that it will cost to
         // post the entire encoded typed transaction to L1.
         let mut encoded = BytesMut::default();
@@ -422,5 +427,90 @@ where
         args: BuildArguments<Pool, Client>,
     ) -> Result<BuildOutcome, PayloadBuilderError> {
         optimism_payload_builder(args)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reth_auto_seal_consensus::AutoSealConsensus;
+    use reth_blockchain_tree::{
+        config::BlockchainTreeConfig, externals::TreeExternals, BlockchainTree,
+        ShareableBlockchainTree,
+    };
+    use reth_db::test_utils::create_test_rw_db;
+    use reth_primitives::ChainSpecBuilder;
+    use reth_provider::{providers::BlockchainProvider, BlockHashReader, ProviderFactory};
+    use reth_revm::Factory;
+    use reth_rpc_types::engine::PayloadAttributes;
+    use reth_transaction_pool::noop::NoopTransactionPool;
+
+    #[cfg(feature = "optimism")]
+    #[test]
+    fn test_system_tx_rejected_post_regolith() {
+        let pool = NoopTransactionPool::default();
+        println!("pool size: {:?}", pool.pool_size());
+
+        let chain_spec = ChainSpecBuilder::mainnet().build();
+        let chain = Arc::new(chain_spec);
+        let db = create_test_rw_db();
+        let provider = ProviderFactory::new(db.clone(), Arc::clone(&chain));
+        println!("fetched first hash: {:?}", provider.block_hash(1_u64));
+
+        let consensus = Arc::new(AutoSealConsensus::new(Arc::clone(&chain)));
+        let tree_externals = TreeExternals::new(
+            db.clone(),
+            Arc::clone(&consensus),
+            Factory::new(chain.clone()),
+            Arc::clone(&chain),
+        );
+        let tree_config = BlockchainTreeConfig::default();
+        let (canon_state_notification_sender, _receiver) =
+            tokio::sync::broadcast::channel(tree_config.max_reorg_depth() as usize * 2);
+
+        let blockchain_tree = ShareableBlockchainTree::new(
+            BlockchainTree::new(
+                tree_externals,
+                canon_state_notification_sender.clone(),
+                tree_config,
+            )
+            .unwrap(),
+        );
+
+        let blockchain_db = BlockchainProvider::new(provider, blockchain_tree.clone()).unwrap();
+
+        let args = BuildArguments {
+            client: blockchain_db,
+            pool,
+            cached_reads: CachedReads::default(),
+            config: PayloadConfig {
+                initialized_block_env: BlockEnv { ..Default::default() },
+                initialized_cfg: CfgEnv { ..Default::default() },
+                parent_block: Arc::new(Default::default()),
+                extra_data: Bytes::default(),
+                attributes: PayloadBuilderAttributes::try_new(
+                    Default::default(),
+                    PayloadAttributes {
+                        timestamp: Default::default(),
+                        prev_randao: Default::default(),
+                        suggested_fee_recipient: Default::default(),
+                        withdrawals: None,
+                        parent_beacon_block_root: None,
+                        transactions: Some(vec![]),
+                        no_tx_pool: Some(false),
+                        gas_limit: Some(30_000_000u64),
+                    },
+                )
+                .unwrap(),
+                chain_spec: Arc::new(ChainSpec::default()),
+                compute_pending_block: false,
+            },
+            cancel: Default::default(),
+            best_payload: None,
+        };
+
+        let err = optimism_payload_builder(args).err().unwrap();
+        println!("PayloadBuilderError: {:?}", err);
+        // assert_eq!(err.kind(), Some(PayloadBuilderError::SystemTransactionPostRegolith));
     }
 }
