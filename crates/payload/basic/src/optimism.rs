@@ -430,34 +430,51 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
+/// Collection of payload test utilities
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils {
     use super::*;
-    use reth_auto_seal_consensus::AutoSealConsensus;
+    use reth_beacon_consensus::BeaconConsensus;
     use reth_blockchain_tree::{
         config::BlockchainTreeConfig, externals::TreeExternals, BlockchainTree,
         ShareableBlockchainTree,
     };
-    use reth_db::test_utils::create_test_rw_db;
+    use reth_db::{
+        database::Database,
+        tables,
+        test_utils::create_test_rw_db,
+        transaction::{DbTx, DbTxMut},
+    };
     use reth_primitives::ChainSpecBuilder;
     use reth_provider::{providers::BlockchainProvider, BlockHashReader, ProviderFactory};
     use reth_revm::Factory;
     use reth_rpc_types::engine::PayloadAttributes;
     use reth_transaction_pool::noop::NoopTransactionPool;
 
-    #[cfg(feature = "optimism")]
-    #[test]
-    fn test_system_tx_rejected_post_regolith() {
+    pub fn get_tx_pool() -> NoopTransactionPool {
+        NoopTransactionPool::default()
+    }
+
+    /// Construct test build args for the payload builder.
+    pub fn get_build_args() -> Result<BuildArguments> {
         let pool = NoopTransactionPool::default();
-        println!("pool size: {:?}", pool.pool_size());
 
         let chain_spec = ChainSpecBuilder::mainnet().build();
         let chain = Arc::new(chain_spec);
         let db = create_test_rw_db();
-        let provider = ProviderFactory::new(db.clone(), Arc::clone(&chain));
-        println!("fetched first hash: {:?}", provider.block_hash(1_u64));
 
-        let consensus = Arc::new(AutoSealConsensus::new(Arc::clone(&chain)));
+        // Insert the genesis header information
+        let tx = db.tx_mut().unwrap();
+        let header = chain.sealed_genesis_header();
+        tx.put::<tables::CanonicalHeaders>(0, header.hash).unwrap();
+        tx.put::<tables::HeaderNumbers>(header.hash, 0).unwrap();
+        tx.put::<tables::BlockBodyIndices>(0, Default::default()).unwrap();
+        tx.put::<tables::HeaderTD>(0, header.difficulty.into()).unwrap();
+        tx.put::<tables::Headers>(0, header.header).unwrap();
+        tx.commit().unwrap();
+
+        let provider = ProviderFactory::new(db.clone(), Arc::clone(&chain));
+        let consensus = Arc::new(BeaconConsensus::new(Arc::clone(&chain)));
         let tree_externals = TreeExternals::new(
             db.clone(),
             Arc::clone(&consensus),
@@ -478,8 +495,7 @@ mod tests {
         );
 
         let blockchain_db = BlockchainProvider::new(provider, blockchain_tree.clone()).unwrap();
-
-        let args = BuildArguments {
+        BuildArguments {
             client: blockchain_db,
             pool,
             cached_reads: CachedReads::default(),
@@ -507,8 +523,33 @@ mod tests {
             },
             cancel: Default::default(),
             best_payload: None,
-        };
+        }
+    }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reth_beacon_consensus::BeaconConsensus;
+    use reth_blockchain_tree::{
+        config::BlockchainTreeConfig, externals::TreeExternals, BlockchainTree,
+        ShareableBlockchainTree,
+    };
+    use reth_db::{
+        database::Database,
+        tables,
+        test_utils::create_test_rw_db,
+        transaction::{DbTx, DbTxMut},
+    };
+    use reth_primitives::ChainSpecBuilder;
+    use reth_provider::{providers::BlockchainProvider, BlockHashReader, ProviderFactory};
+    use reth_revm::Factory;
+    use reth_rpc_types::engine::PayloadAttributes;
+    use reth_transaction_pool::noop::NoopTransactionPool;
+
+    #[cfg(feature = "optimism")]
+    #[test]
+    fn test_system_tx_rejected_post_regolith() {
         let err = optimism_payload_builder(args).err().unwrap();
         println!("PayloadBuilderError: {:?}", err);
         // assert_eq!(err.kind(), Some(PayloadBuilderError::SystemTransactionPostRegolith));

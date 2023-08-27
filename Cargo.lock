@@ -5286,7 +5286,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "metrics",
- "reth-auto-seal-consensus",
+ "reth-beacon-consensus",
  "reth-blockchain-tree",
  "reth-db",
  "reth-metrics",

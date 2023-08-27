@@ -35,7 +35,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 reth-db = { workspace = true, features = ["test-utils"] }
-reth-auto-seal-consensus = { path = "../../consensus/auto-seal" }
+reth-beacon-consensus = { path = "../../consensus/beacon" }
 reth-blockchain-tree = { workspace = true }
 reth-rpc-types = { workspace = true }
 
