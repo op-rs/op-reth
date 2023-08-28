@@ -178,13 +178,13 @@ impl Transaction {
 
     /// Gets the transaction's value field.
     pub fn value(&self) -> u128 {
-        *match self {
-            Transaction::Legacy(TxLegacy { value, .. }) => value,
-            Transaction::Eip2930(TxEip2930 { value, .. }) => value,
-            Transaction::Eip1559(TxEip1559 { value, .. }) => value,
-            Transaction::Eip4844(TxEip4844 { value, .. }) => value,
+        match self {
+            Transaction::Legacy(TxLegacy { value, .. }) => *value,
+            Transaction::Eip2930(TxEip2930 { value, .. }) => *value,
+            Transaction::Eip1559(TxEip1559 { value, .. }) => *value,
+            Transaction::Eip4844(TxEip4844 { value, .. }) => *value,
             #[cfg(feature = "optimism")]
-            Transaction::Deposit(TxDeposit { value, .. }) => value,
+            Transaction::Deposit(TxDeposit { value, .. }) => value.saturating_to(),
         }
     }
 
@@ -451,7 +451,7 @@ impl Transaction {
             Transaction::Eip1559(tx) => tx.value = value,
             Transaction::Eip4844(tx) => tx.value = value,
             #[cfg(feature = "optimism")]
-            Transaction::Deposit(tx) => tx.value = value,
+            Transaction::Deposit(tx) => tx.value = U256::from(value),
         }
     }
 

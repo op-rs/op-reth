@@ -1,4 +1,4 @@
-use crate::{Address, Bytes, TransactionKind, TxType, H256};
+use crate::{Address, Bytes, TransactionKind, TxType, U256, H256};
 use bytes::Buf;
 use reth_codecs::{main_codec, Compact};
 use reth_rlp::{length_of_length, Decodable, DecodeError, Encodable, Header, EMPTY_STRING_CODE};
@@ -17,8 +17,9 @@ pub struct TxDeposit {
     pub to: TransactionKind,
     /// The ETH value to mint on L2.
     pub mint: Option<u128>,
-    ///  The ETH value to send to the recipient account.
-    pub value: u128,
+    ///  The ETH value to send to the recipient account. This value must have full u256 precision
+    ///  since a forced tx can set arbitrary values.
+    pub value: U256,
     /// The gas limit for the L2 transaction.
     pub gas_limit: u64,
     /// Field indicating if this transaction is exempt from the L2 gas limit.
@@ -36,7 +37,7 @@ impl TxDeposit {
         mem::size_of::<Address>() + // from
         self.to.size() + // to
         mem::size_of::<Option<u128>>() + // mint
-        mem::size_of::<u128>() + // value
+        mem::size_of::<U256>() + // value
         mem::size_of::<u64>() + // gas_limit
         mem::size_of::<bool>() + // is_system_transaction
         self.input.len() // input
