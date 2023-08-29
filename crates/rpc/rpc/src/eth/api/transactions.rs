@@ -958,7 +958,14 @@ pub(crate) fn build_transaction_receipt_with_block_receipts(
         status_code: if receipt.success { Some(U64::from(1)) } else { Some(U64::from(0)) },
         #[cfg(feature = "optimism")]
         deposit_nonce: receipt.deposit_nonce.map(U64::from),
-        ..Default::default()
+        #[cfg(feature = "optimism")]
+        l1_fee: None,
+        #[cfg(feature = "optimism")]
+        l1_gas_used: None,
+        #[cfg(feature = "optimism")]
+        l1_fee_scalar: None,
+        #[cfg(feature = "optimism")]
+        l1_gas_price: None,
     };
 
     #[cfg(feature = "optimism")]
