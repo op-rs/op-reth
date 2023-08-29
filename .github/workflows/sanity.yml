@@ -20,6 +20,7 @@ jobs:
     strategy:
       matrix:
         partition: [1, 2, 3]
+        network: ["ethereum", "optimism"]
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -51,7 +52,7 @@ jobs:
       - name: Run tests
         run: |
           cargo nextest run --locked --workspace \
-            --features "jemalloc-prof,ethereum,min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" \
+            --features "jemalloc-prof,${{ matrix.network }},min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" \
             --partition hash:${{ matrix.partition }}/${{ strategy.job-total }} \
             -E 'kind(lib)' -E 'kind(bin)' -E 'kind(proc-macro)'
 
@@ -67,6 +68,9 @@ jobs:
   unused-deps:
     runs-on: ubuntu-20.04
     name: unused dependencies
+    strategy:
+      matrix:
+        network: ["ethereum", "optimism"]
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
@@ -77,7 +81,7 @@ jobs:
         run: cargo install cargo-udeps --locked
 
       - name: Check for unused dependencies
-        run: cargo +nightly udeps --features "jemalloc-prof,ethereum,min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" --all-targets
+        run: cargo +nightly udeps --features "jemalloc-prof,${{ matrix.network }},min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" --all-targets
 
       - uses: JasonEtco/create-an-issue@v2
         if: ${{ failure() }}
