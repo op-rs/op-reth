@@ -50,7 +50,8 @@ jobs:
 
       - name: Run tests
         run: |
-          cargo nextest run --locked --workspace --all-features \
+          cargo nextest run --locked --workspace \
+            --features "jemalloc-prof,ethereum,min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" \
             --partition hash:${{ matrix.partition }}/${{ strategy.job-total }} \
             -E 'kind(lib)' -E 'kind(bin)' -E 'kind(proc-macro)'
 
@@ -76,7 +77,7 @@ jobs:
         run: cargo install cargo-udeps --locked
 
       - name: Check for unused dependencies
-        run: cargo +nightly udeps --all-features --all-targets
+        run: cargo +nightly udeps --features "jemalloc-prof,ethereum,min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" --all-targets
 
       - uses: JasonEtco/create-an-issue@v2
         if: ${{ failure() }}

@@ -70,7 +70,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check if benchmarks build
-        run: cargo check --workspace --benches --all-features
+        run: cargo check --workspace --benches --features "jemalloc-prof,ethereum,min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs"
 
   bench-success:
     if: always()

@@ -37,7 +37,7 @@ jobs:
       - name: cargo clippy
         uses: actions-rs/clippy-check@v1
         with:
-          args: --all --all-features -- -A clippy::incorrect_clone_impl_on_copy_type -A clippy::arc_with_non_send_sync
+          args: --all --features "jemalloc-prof,ethereum,min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" -- -A clippy::incorrect_clone_impl_on_copy_type -A clippy::arc_with_non_send_sync
           token: ${{ secrets.GITHUB_TOKEN }}
 
   doc-lint:
@@ -49,7 +49,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check if documentation builds
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps --all-features --document-private-items
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --all --no-deps --features "jemalloc-prof,ethereum,min-error-logs,min-warn-logs,min-info-logs,min-debug-logs,min-trace-logs" --document-private-items
 
   grafana-lint:
     name: grafana lint

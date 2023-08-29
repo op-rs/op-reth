@@ -60,9 +60,9 @@ pub struct Cli<Ext: RethCliExt = ()> {
 impl<Ext: RethCliExt> Cli<Ext> {
     /// Execute the configured cli command.
     pub fn run(mut self) -> eyre::Result<()> {
-        #[cfg(not(any(feature = "ethereum", feature = "optimism")))]
+        #[cfg(all(feature = "ethereum", feature = "optimism"))]
         compile_error!(
-            "Either feature \"optimism\" or \"ethereum\" must be enabled for this crate."
+            "Only one of the \"ethereum\" or \"optimism\" features can be enabled for this crate."
         );
 
         // add network name to logs dir
