@@ -110,6 +110,8 @@ pub(crate) fn get_precompiles(spec_id: &SpecId) -> Vec<reth_primitives::H160> {
         SpecId::SHANGHAI |
         SpecId::CANCUN => PrecompilesSpecId::BERLIN,
         SpecId::LATEST => PrecompilesSpecId::LATEST,
+        #[cfg(feature = "optimism")]
+        SpecId::BEDROCK | SpecId::REGOLITH => PrecompilesSpecId::LATEST,
     };
     Precompiles::new(spec).addresses().into_iter().map(Address::from).collect()
 }
@@ -311,6 +313,9 @@ pub(crate) fn create_txn_env(block_env: &BlockEnv, request: CallRequest) -> EthR
         data: input.try_into_unique_input()?.map(|data| data.0).unwrap_or_default(),
         chain_id: chain_id.map(|c| c.as_u64()),
         access_list: access_list.map(AccessList::flattened).unwrap_or_default(),
+        #[cfg(feature = "optimism")]
+        optimism: Default::default(), /* request.transaction_type == Some(127) ||
+                                       * request.transaction_type == Some(128), */
     };
 
     Ok(env)

@@ -288,6 +288,10 @@ pub enum RpcInvalidTransactionError {
     /// The transaction is before Spurious Dragon and has a chain ID
     #[error("Transactions before Spurious Dragon should not have a chain ID.")]
     OldLegacyChainId,
+    /// DepositSystemTxPostRegolith
+    #[cfg(feature = "optimism")]
+    #[error("DepositSystemTxPostRegolith")]
+    DepositSystemTxPostRegolith,
 }
 
 impl RpcInvalidTransactionError {
@@ -360,7 +364,7 @@ impl From<revm::primitives::InvalidTransaction> for RpcInvalidTransactionError {
                 RpcInvalidTransactionError::GasTooHigh
             }
             InvalidTransaction::RejectCallerWithCode => RpcInvalidTransactionError::SenderNoEOA,
-            InvalidTransaction::LackOfFundForGasLimit { .. } => {
+            InvalidTransaction::LackOfFundForMaxFee { .. } => {
                 RpcInvalidTransactionError::InsufficientFunds
             }
             InvalidTransaction::OverflowPaymentInTransaction => {
@@ -374,6 +378,13 @@ impl From<revm::primitives::InvalidTransaction> for RpcInvalidTransactionError {
             }
             InvalidTransaction::NonceTooHigh { .. } => RpcInvalidTransactionError::NonceTooHigh,
             InvalidTransaction::NonceTooLow { .. } => RpcInvalidTransactionError::NonceTooLow,
+            InvalidTransaction::AccessListNotSupported => {
+                RpcInvalidTransactionError::TxTypeNotSupported
+            }
+            #[cfg(feature = "optimism")]
+            InvalidTransaction::DepositSystemTxPostRegolith => {
+                RpcInvalidTransactionError::DepositSystemTxPostRegolith
+            }
         }
     }
 }
