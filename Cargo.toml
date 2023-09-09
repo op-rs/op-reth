@@ -84,8 +84,10 @@ revm-primitives = { git = "https://github.com/anton-rs/op-revm/", branch = "clab
 
 [workspace.dependencies]
 ## reth
-revm = { version = "3" }
-revm-primitives = "1.1"
+revm = { git = "https://github.com/anton-rs/op-revm/", branch = "clabby/op-revm", features = ["optimism"] }
+revm-primitives = { git = "https://github.com/anton-rs/op-revm/", branch = "clabby/op-revm", features = ["optimism"] }
+# revm = { version = "3" }
+# revm-primitives = "1.1"
 reth = { path = "./bin/reth" }
 reth-primitives = { path = "./crates/primitives" }
 reth-interfaces = { path = "./crates/interfaces" }

@@ -50,7 +50,7 @@ impl<DB: StateProvider> DatabaseRef for State<DB> {
     fn code_by_hash(&self, code_hash: H256) -> Result<Bytecode, Self::Error> {
         let bytecode = self.0.bytecode_by_hash(code_hash)?;
 
-        Ok(bytecode.unwrap_or_default())
+        Ok(bytecode.map(|inner| inner.0).unwrap_or_default())
 
         // if let Some(bytecode) = bytecode {
         //     Ok(bytecode.with_code_hash(code_hash).0)
