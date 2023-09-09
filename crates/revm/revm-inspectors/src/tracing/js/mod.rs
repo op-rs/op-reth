@@ -291,7 +291,7 @@ where
         &mut self,
         interp: &mut Interpreter,
         data: &mut EVMData<'_, DB>,
-        _is_static: bool,
+        // _is_static: bool,
     ) -> InstructionResult {
         if self.step_fn.is_none() {
             return InstructionResult::Continue
@@ -331,7 +331,7 @@ where
         &mut self,
         interp: &mut Interpreter,
         data: &mut EVMData<'_, DB>,
-        _is_static: bool,
+        // _is_static: bool,
         eval: InstructionResult,
     ) -> InstructionResult {
         if self.step_fn.is_none() {
@@ -364,7 +364,7 @@ where
         &mut self,
         data: &mut EVMData<'_, DB>,
         inputs: &mut CallInputs,
-        _is_static: bool,
+        // _is_static: bool,
     ) -> (InstructionResult, Gas, Bytes) {
         self.register_precompiles(&data.precompiles);
 
@@ -408,7 +408,7 @@ where
         remaining_gas: Gas,
         ret: InstructionResult,
         out: Bytes,
-        _is_static: bool,
+        // _is_static: bool,
     ) -> (InstructionResult, Gas, Bytes) {
         if self.exit_fn.is_some() {
             let frame_result =
@@ -476,7 +476,7 @@ where
         (ret, address, remaining_gas, out)
     }
 
-    fn selfdestruct(&mut self, _contract: B160, _target: B160) {
+    fn selfdestruct(&mut self, _contract: B160, _target: B160, _value: U256) {
         if self.enter_fn.is_some() {
             let call = self.active_call();
             let frame =

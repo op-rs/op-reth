@@ -13,7 +13,7 @@ use reth_primitives::{
 };
 use reth_provider::{PostState, StateProvider};
 use revm::{
-    db::{AccountState, CacheDB, DatabaseRef, DbAccount},
+    db::{AccountState, AccountStatus, CacheDB, DatabaseRef, DbAccount},
     primitives::{
         hash_map::{self, Entry},
         Account as RevmAccount, AccountInfo, ResultAndState,
@@ -438,7 +438,7 @@ pub fn commit_state_changes<DB>(
 {
     // iterate over all changed accounts
     for (address, account) in changes {
-        if account.is_destroyed {
+        if account.is_selfdestructed() {
             // get old account that we are destroying.
             let db_account = match db.accounts.entry(address) {
                 Entry::Occupied(entry) => entry.into_mut(),
@@ -527,7 +527,7 @@ pub fn commit_state_changes<DB>(
                 }
             };
 
-            cached_account.account_state = if account.storage_cleared {
+            cached_account.account_state = if account.is_empty() {
                 cached_account.storage.clear();
                 AccountState::StorageCleared
             } else if cached_account.account_state.is_storage_cleared() {
@@ -733,10 +733,7 @@ mod tests {
     static DEFAULT_REVM_ACCOUNT: Lazy<RevmAccount> = Lazy::new(|| RevmAccount {
         info: AccountInfo::default(),
         storage: hash_map::HashMap::default(),
-        is_destroyed: false,
-        is_touched: false,
-        storage_cleared: false,
-        is_not_existing: false,
+        status: AccountStatus::default(),
     });
 
     #[derive(Debug, Default, Clone, Eq, PartialEq)]

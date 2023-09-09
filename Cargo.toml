@@ -79,8 +79,8 @@ codegen-units = 1
 incremental = false
 
 [patch.crates-io]
-revm = { git = "https://github.com/bluealloy/revm/", branch = "release/v25" }
-revm-primitives = { git = "https://github.com/bluealloy/revm/", branch = "release/v25" }
+revm = { git = "https://github.com/anton-rs/op-revm/", branch = "clabby/op-revm", features = ["optimism"] }
+revm-primitives = { git = "https://github.com/anton-rs/op-revm/", branch = "clabby/op-revm", features = ["optimism"] }
 
 [workspace.dependencies]
 ## reth

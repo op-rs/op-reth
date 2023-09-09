@@ -397,7 +397,7 @@ impl ParityTraceBuilder {
                     opcode::ADD |
                     opcode::EXP |
                     opcode::CALLER |
-                    opcode::SHA3 |
+                    // opcode::SHA3 |
                     opcode::SUB |
                     opcode::ADDRESS |
                     opcode::GAS |
