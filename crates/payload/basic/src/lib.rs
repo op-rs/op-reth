@@ -341,6 +341,13 @@ where
             return Poll::Ready(Ok(()))
         }
 
+        // If compute pending block is disabled, only build the best payload
+        // when the interval is reached or the future is resolved.
+        #[cfg(feature = "optimism")]
+        if !self.config.compute_pending_block {
+            return Poll::Pending
+        }
+
         // check if the interval is reached
         while this.interval.poll_tick(cx).is_ready() {
             // start a new job if there is no pending block and we haven't reached the deadline
@@ -602,7 +609,6 @@ struct PayloadConfig {
     chain_spec: Arc<ChainSpec>,
     /// The rollup's compute pending block configuration option.
     #[cfg(feature = "optimism")]
-    #[allow(dead_code)]
     compute_pending_block: bool,
 }
 
