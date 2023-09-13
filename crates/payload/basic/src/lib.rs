@@ -349,7 +349,7 @@ where
         // from showing up in the pending block, which leaks the tx pool.
         #[cfg(feature = "optimism")]
         if !this.config.compute_pending_block {
-            return Poll::Ready(Ok(()));
+            return Poll::Ready(Ok(()))
         }
 
         // check if the interval is reached
@@ -467,18 +467,13 @@ where
                 cancel: Cancelled::default(),
                 best_payload: None,
             };
-            if let Ok(BuildOutcome::Better { payload, cached_reads }) =
-                self.builder.try_build(args)
+            if let Ok(BuildOutcome::Better { payload, cached_reads }) = self.builder.try_build(args)
             {
                 self.cached_reads = Some(cached_reads);
                 trace!("[OPTIMISM] Forced best payload");
                 let payload = Arc::new(payload);
                 return (
-                    ResolveBestPayload {
-                        best_payload: Some(payload),
-                        maybe_better,
-                        empty_payload,
-                    },
+                    ResolveBestPayload { best_payload: Some(payload), maybe_better, empty_payload },
                     KeepPayloadJobAlive::Yes,
                 )
             }
