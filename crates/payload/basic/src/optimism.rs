@@ -34,6 +34,7 @@ where
         parent_block,
         attributes,
         chain_spec,
+        compute_pending_block,
         ..
     } = config;
 

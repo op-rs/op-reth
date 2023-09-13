@@ -444,6 +444,9 @@ where
         let maybe_better = self.pending_block.take();
         let mut empty_payload = None;
 
+        #[cfg(feature = "optimism")]
+        let maybe_better = self.config.compute_pending_block.then(|| maybe_better).flatten();
+
         if best_payload.is_none() {
             // if no payload has been built yet
             self.metrics.inc_requested_empty_payload();
@@ -598,7 +601,6 @@ struct PayloadConfig {
     /// The chain spec.
     chain_spec: Arc<ChainSpec>,
     /// The rollup's compute pending block configuration option.
-    /// TODO(clabby): Implement this feature.
     #[cfg(feature = "optimism")]
     #[allow(dead_code)]
     compute_pending_block: bool,
