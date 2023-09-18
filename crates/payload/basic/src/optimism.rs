@@ -1,13 +1,13 @@
 //! Optimism's [PayloadBuilder] implementation.
 
 use super::*;
-use reth_primitives::Hardfork;
-use reth_revm::{
-    executor,
-    optimism::{executor::fail_deposit_tx, L1BlockInfo},
-    to_reth_acc,
+use reth_primitives::{Block, Hardfork, Header, Receipt, U256};
+use reth_revm::optimism;
+use revm::{
+    primitives::{ExecutionResult, ResultAndState},
+    State,
 };
-use revm::primitives::ExecutionResult;
+// use revm_interpreter::primitives::{Database, DatabaseRef, WrapDatabaseRef};
 
 /// Constructs an Ethereum transaction payload from the transactions sent through the
 /// Payload attributes by the sequencer. If the `no_tx_pool` argument is passed in
@@ -28,6 +28,11 @@ where
     let BuildArguments { client, pool, mut cached_reads, config, cancel, best_payload } = args;
 
     let extra_data = config.extra_data();
+    let state_provider = client.state_by_block_hash(config.parent_block.hash)?;
+    let state = StateProviderDatabase::new(&state_provider);
+    let mut db =
+        State::builder().with_database_ref(cached_reads.as_db(&state)).with_bundle_update().build();
+
     let PayloadConfig {
         initialized_block_env,
         initialized_cfg,
@@ -38,12 +43,8 @@ where
     } = config;
 
     debug!(parent_hash=?parent_block.hash, parent_number=parent_block.number, "building new payload");
-
-    let state = State::new(client.state_by_block_hash(parent_block.hash)?);
-    let mut db = CacheDB::new(cached_reads.as_db(&state));
-    let mut post_state = PostState::default();
-
     let mut cumulative_gas_used = 0;
+    let mut sum_blob_gas_used = 0;
     let block_gas_limit: u64 = attributes
         .gas_limit
         .unwrap_or(initialized_block_env.gas_limit.try_into().unwrap_or(u64::MAX));
@@ -55,6 +56,8 @@ where
     let mut total_fees = U256::ZERO;
 
     let block_number = initialized_block_env.number.to::<u64>();
+
+    let mut receipts = Vec::new();
 
     let is_regolith =
         chain_spec.is_fork_active_at_timestamp(Hardfork::Regolith, attributes.timestamp);
@@ -100,7 +103,9 @@ where
         let mut cfg = initialized_cfg.clone();
         let mut tx_env = tx_env_with_recovered(&sequencer_tx);
 
-        let sender = db.load_account(sequencer_tx.signer())?.clone();
+        let sender = db
+            .basic(sequencer_tx.signer())?
+            .ok_or(PayloadBuilderError::AccountLoadFailed(sequencer_tx.signer()))?;
         let mut sender_new = sender.clone();
 
         // Before regolith, deposit transaction gas accounting was as follows:
@@ -120,36 +125,27 @@ where
             cfg.disable_block_gas_limit = true;
 
             if is_regolith {
-                tx_env.nonce = Some(sender.info.nonce);
+                tx_env.nonce = Some(sender.nonce);
             } else {
                 cfg.disable_gas_refund = true;
             }
 
             // Increase the sender's balance in the database if the deposit transaction mints eth.
             if let Some(m) = sequencer_tx.mint() {
-                let m = U256::from(m);
-                sender_new.info.balance += m;
-
-                executor::increment_account_balance(
-                    &mut db,
-                    &mut post_state,
-                    parent_block.number + 1,
-                    sequencer_tx.signer(),
-                    m,
-                )?;
-                db.insert_account_info(sequencer_tx.signer(), sender_new.info);
+                sender_new.balance += U256::from(m);
+                db.increment_balances(vec![(sequencer_tx.signer(), m)])?;
             }
         } else if let Some(l1_cost) = l1_cost {
             // Decrement the sender's balance by the L1 cost of the transaction prior to execution.
-            sender_new.info.balance -= l1_cost;
-            executor::decrement_account_balance(
-                &mut db,
-                &mut post_state,
-                parent_block.number + 1,
-                sequencer_tx.signer(),
-                l1_cost,
-            )?;
-            db.insert_account_info(sequencer_tx.signer(), sender_new.info);
+            sender_new.balance -= l1_cost;
+            db.insert_account(sequencer_tx.signer(), sender_new);
+
+            // Send the l1 cost to the sequencer signer.
+            let mut sequencer_signer = db
+                .basic(sequencer_tx.signer())?
+                .ok_or(PayloadBuilderError::AccountLoadFailed(sequencer_tx.signer()))?;
+            sequencer_signer.balance += l1_cost;
+            db.insert_account(sequencer_tx.signer(), sequencer_signer);
         }
 
         // Configure the environment for the block.
@@ -163,17 +159,17 @@ where
             Err(err) => {
                 if sequencer_tx.is_deposit() {
                     // Manually bump the nonce and include a receipt for the deposit transaction.
-                    let sender = sequencer_tx.signer();
-                    fail_deposit_tx!(
-                        db,
-                        sender,
-                        block_number,
-                        sequencer_tx,
-                        &mut post_state,
-                        &mut cumulative_gas_used,
-                        is_regolith,
-                        PayloadBuilderError::AccountLoadFailed(sender)
-                    );
+                    // let sender = sequencer_tx.signer();
+                    // fail_deposit_tx!(
+                    //     db,
+                    //     sender,
+                    //     block_number,
+                    //     sequencer_tx,
+                    //     &mut post_state,
+                    //     &mut cumulative_gas_used,
+                    //     is_regolith,
+                    //     PayloadBuilderError::AccountLoadFailed(sender)
+                    // );
                     executed_txs.push(sequencer_tx.into_signed());
                     continue
                 }
@@ -201,8 +197,9 @@ where
                 }
             }
         };
+
         // commit changes
-        commit_state_changes(&mut db, &mut post_state, block_number, state, true);
+        db.commit(state);
 
         if chain_spec.optimism {
             // Before Regolith, system transactions were a special type of deposit transaction
@@ -216,16 +213,11 @@ where
             {
                 // Manually bump the nonce if the transaction was a contract creation.
                 if sequencer_tx.to().is_none() {
-                    let sender_account = db.load_account(sequencer_tx.signer())?.clone();
-                    let mut new_sender_account = sender_account.clone();
-                    new_sender_account.info.nonce += 1;
-                    post_state.change_account(
-                        parent_block.number + 1,
-                        sequencer_tx.signer(),
-                        to_reth_acc(&sender_account.info),
-                        to_reth_acc(&new_sender_account.info),
-                    );
-                    db.insert_account_info(sequencer_tx.signer(), sender_account.info);
+                    let mut sender_account = db
+                        .basic(sequencer_tx.signer())?
+                        .ok_or(PayloadBuilderError::AccountLoadFailed(sequencer_tx.signer()))?;
+                    sender_account.nonce += 1;
+                    db.insert_account(sequencer_tx.signer(), sender_account);
                 }
 
                 cumulative_gas_used += sequencer_tx.gas_limit();
@@ -242,38 +234,24 @@ where
             if !sequencer_tx.is_deposit() {
                 // Route the l1 cost and base fee to the appropriate optimism vaults
                 if let Some(l1_cost) = l1_cost {
-                    executor::increment_account_balance(
-                        &mut db,
-                        &mut post_state,
-                        parent_block.number + 1,
-                        *executor::optimism::L1_FEE_RECIPIENT,
-                        l1_cost,
-                    )?
+                    let ucost: u128 = l1_cost.try_into().unwrap_or(u128::MAX);
+                    db.increment_balances(vec![(*optimism::L1_FEE_RECIPIENT, ucost)])?;
                 }
-                executor::increment_account_balance(
-                    &mut db,
-                    &mut post_state,
-                    parent_block.number + 1,
-                    *executor::optimism::BASE_FEE_RECIPIENT,
-                    U256::from(base_fee.saturating_mul(result.gas_used())),
-                )?;
+                let base_cost = base_fee.saturating_mul(result.gas_used()) as u128;
+                db.increment_balances(vec![(*optimism::BASE_FEE_RECIPIENT, base_cost)])?;
             }
         } else {
             cumulative_gas_used += result.gas_used();
         }
 
         // Push transaction changeset and calculate header bloom filter for receipt.
-        post_state.add_receipt(
-            block_number,
-            Receipt {
-                tx_type: sequencer_tx.tx_type(),
-                success: result.is_success(),
-                cumulative_gas_used,
-                logs: result.logs().into_iter().map(into_reth_log).collect(),
-                deposit_nonce: (is_regolith && sequencer_tx.is_deposit())
-                    .then_some(sender.info.nonce),
-            },
-        );
+        receipts.push(Some(Receipt {
+            tx_type: sequencer_tx.tx_type(),
+            success: result.is_success(),
+            cumulative_gas_used,
+            logs: result.logs().into_iter().map(into_reth_log).collect(),
+            deposit_nonce: (is_regolith && sequencer_tx.is_deposit()).then_some(sender.nonce),
+        }));
 
         // append transaction to the list of executed transactions
         executed_txs.push(sequencer_tx.into_signed());
@@ -297,6 +275,28 @@ where
 
             // convert tx to a signed transaction
             let tx = pool_tx.to_recovered_transaction();
+
+            // There's only limited amount of blob space available per block, so we need to check if
+            // the EIP-4844 can still fit in the block
+            if let Some(blob_tx) = tx.transaction.as_eip4844() {
+                let tx_blob_gas = blob_tx.blob_gas();
+                if sum_blob_gas_used + tx_blob_gas > MAX_DATA_GAS_PER_BLOCK {
+                    // we can't fit this _blob_ transaction into the block, so we mark it as
+                    // invalid, which removes its dependent transactions from
+                    // the iterator. This is similar to the gas limit condition
+                    // for regular transactions above.
+                    best_txs.mark_invalid(&pool_tx);
+                    continue
+                } else {
+                    // add to the data gas if we're going to execute the transaction
+                    sum_blob_gas_used += tx_blob_gas;
+
+                    // if we've reached the max data gas per block, we can skip blob txs entirely
+                    if sum_blob_gas_used == MAX_DATA_GAS_PER_BLOCK {
+                        best_txs.skip_blobs();
+                    }
+                }
+            }
 
             // Configure the environment for the block.
             let env = Env {
@@ -339,23 +339,20 @@ where
             let gas_used = result.gas_used();
 
             // commit changes
-            commit_state_changes(&mut db, &mut post_state, block_number, state, true);
+            db.commit(state);
 
             // add gas used by the transaction to cumulative gas used, before creating the receipt
             cumulative_gas_used += gas_used;
 
             // Push transaction changeset and calculate header bloom filter for receipt.
-            post_state.add_receipt(
-                block_number,
-                Receipt {
-                    tx_type: tx.tx_type(),
-                    success: result.is_success(),
-                    cumulative_gas_used,
-                    logs: result.logs().into_iter().map(into_reth_log).collect(),
-                    #[cfg(feature = "optimism")]
-                    deposit_nonce: None,
-                },
-            );
+            receipts.push(Some(Receipt {
+                tx_type: tx.tx_type(),
+                success: result.is_success(),
+                cumulative_gas_used,
+                logs: result.logs().into_iter().map(into_reth_log).collect(),
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None,
+            }));
 
             // update add to total fees
             let miner_fee = tx
@@ -374,23 +371,46 @@ where
         return Ok(BuildOutcome::Aborted { fees: total_fees, cached_reads })
     }
 
-    let WithdrawalsOutcome { withdrawals_root, withdrawals } = commit_withdrawals(
-        &mut db,
-        &mut post_state,
-        &chain_spec,
-        block_number,
-        attributes.timestamp,
-        attributes.withdrawals,
-    )?;
+    let WithdrawalsOutcome { withdrawals_root, withdrawals } =
+        commit_withdrawals(&mut db, &chain_spec, attributes.timestamp, attributes.withdrawals)?;
 
-    let receipts_root = post_state.receipts_root(block_number);
-    let logs_bloom = post_state.logs_bloom(block_number);
+    // merge all transitions into bundle state.
+    db.merge_transitions(BundleRetention::PlainState);
+
+    let bundle = BundleStateWithReceipts::new(db.take_bundle(), vec![receipts], block_number);
+    let receipts_root = bundle.receipts_root_slow(block_number).expect("Number is in range");
+    let logs_bloom = bundle.block_logs_bloom(block_number).expect("Number is in range");
 
     // calculate the state root
-    let state_root = state.state().state_root(post_state)?;
+    let state_root = state_provider.state_root(bundle)?;
 
     // create the block header
     let transactions_root = proofs::calculate_transaction_root(&executed_txs);
+
+    // initialize empty blob sidecars at first. If cancun is active then this will
+    let mut blob_sidecars = Vec::new();
+    let mut excess_blob_gas = None;
+    let mut blob_gas_used = None;
+
+    // only determine cancun fields when active
+    if chain_spec.is_cancun_activated_at_timestamp(attributes.timestamp) {
+        // grab the blob sidecars from the executed txs
+        blob_sidecars = pool.get_all_blobs_exact(
+            executed_txs.iter().filter(|tx| tx.is_eip4844()).map(|tx| tx.hash).collect(),
+        )?;
+
+        excess_blob_gas = if chain_spec.is_cancun_activated_at_timestamp(parent_block.timestamp) {
+            let parent_excess_blob_gas = parent_block.excess_blob_gas.unwrap_or_default();
+            let parent_blob_gas_used = parent_block.blob_gas_used.unwrap_or_default();
+            Some(calculate_excess_blob_gas(parent_excess_blob_gas, parent_blob_gas_used))
+        } else {
+            // for the first post-fork block, both parent.blob_gas_used and parent.excess_blob_gas
+            // are evaluated as 0
+            Some(calculate_excess_blob_gas(0, 0))
+        };
+
+        blob_gas_used = Some(sum_blob_gas_used);
+    }
 
     let header = Header {
         parent_hash: parent_block.hash,
@@ -410,19 +430,24 @@ where
         difficulty: U256::ZERO,
         gas_used: cumulative_gas_used,
         extra_data,
-        blob_gas_used: None,
-        excess_blob_gas: None,
-        parent_beacon_block_root: None,
+        parent_beacon_block_root: attributes.parent_beacon_block_root,
+        blob_gas_used,
+        excess_blob_gas,
     };
 
     // seal the block
     let block = Block { header, body: executed_txs, ommers: vec![], withdrawals };
 
     let sealed_block = block.seal_slow();
-    Ok(BuildOutcome::Better {
-        payload: BuiltPayload::new(attributes.id, sealed_block, total_fees),
-        cached_reads,
-    })
+
+    let mut payload = BuiltPayload::new(attributes.id, sealed_block, total_fees);
+
+    if !blob_sidecars.is_empty() {
+        // extend the payload with the blob sidecars from the executed txs
+        payload.extend_sidecars(blob_sidecars);
+    }
+
+    Ok(BuildOutcome::Better { payload, cached_reads })
 }
 
 /// Optimism's payload builder

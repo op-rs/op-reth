@@ -47,7 +47,7 @@ use bytes::BytesMut;
 #[cfg(feature = "optimism")]
 use http::header::CONTENT_TYPE;
 #[cfg(feature = "optimism")]
-use reth_revm::{executor, optimism::L1BlockInfo};
+use reth_revm::{optimism::L1BlockInfo, processor};
 #[cfg(feature = "optimism")]
 use std::ops::Div;
 
@@ -739,7 +739,7 @@ where
 
             let block_timestamp = block.timestamp;
 
-            let l1_block_info: Option<executor::optimism::L1BlockInfo> =
+            let l1_block_info: Option<processor::optimism::L1BlockInfo> =
                 block.body.get(0).ok_or(EthApiError::InternalEthError)?.input()[4..]
                     .try_into()
                     .map_err(|_| EthApiError::InternalEthError)

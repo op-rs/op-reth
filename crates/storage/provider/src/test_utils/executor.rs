@@ -17,7 +17,7 @@ impl BlockExecutor for TestExecutor {
         _senders: Option<Vec<Address>>,
     ) -> Result<(), BlockExecutionError> {
         if self.0.is_none() {
-            return Err(BlockExecutionError::UnavailableForTest);
+            return Err(BlockExecutionError::UnavailableForTest)
         }
         Ok(())
     }
@@ -29,18 +29,9 @@ impl BlockExecutor for TestExecutor {
         _senders: Option<Vec<Address>>,
     ) -> Result<(), BlockExecutionError> {
         if self.0.is_none() {
-            return Err(BlockExecutionError::UnavailableForTest);
+            return Err(BlockExecutionError::UnavailableForTest)
         }
         Ok(())
-    }
-
-    fn execute_transactions(
-        &mut self,
-        _block: &Block,
-        _total_difficulty: U256,
-        _senders: Option<Vec<Address>>,
-    ) -> Result<(Vec<Receipt>, u64), BlockExecutionError> {
-        self.0.as_ref().map(|_| (Vec::default(), 0)).ok_or(BlockExecutionError::UnavailableForTest)
     }
 
     fn take_output_state(&mut self) -> BundleStateWithReceipts {

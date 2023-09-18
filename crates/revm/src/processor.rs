@@ -2,7 +2,6 @@ use crate::{
     database::StateProviderDatabase,
     env::{fill_cfg_and_block_env, fill_tx_env},
     eth_dao_fork::{DAO_HARDFORK_BENEFICIARY, DAO_HARDKFORK_ACCOUNTS},
-    into_reth_log,
     stack::{InspectorStack, InspectorStackConfig},
     state_change::post_block_balance_increments,
 };
@@ -22,10 +21,23 @@ use reth_provider::{
 use revm::{
     db::{states::bundle_state::BundleRetention, StateDBBox},
     primitives::ResultAndState,
-    DatabaseCommit, State, EVM,
+    State, EVM,
 };
 use std::{sync::Arc, time::Instant};
-use tracing::{debug, trace};
+use tracing::debug;
+
+#[cfg(not(feature = "optimism"))]
+use crate::into_reth_log;
+#[cfg(not(feature = "optimism"))]
+use revm::DatabaseCommit;
+#[cfg(not(feature = "optimism"))]
+use tracing::trace;
+
+#[cfg(feature = "optimism")]
+pub use crate::optimism;
+#[cfg(feature = "optimism")]
+#[allow(unused_imports)]
+use crate::optimism::processor::*;
 
 /// EVMProcessor is a block executor that uses revm to execute blocks or multiple blocks.
 ///
@@ -44,30 +56,30 @@ use tracing::{debug, trace};
 /// various duration of parts of execution.
 pub struct EVMProcessor<'a> {
     /// The configured chain-spec
-    chain_spec: Arc<ChainSpec>,
+    pub(crate) chain_spec: Arc<ChainSpec>,
     /// revm instance that contains database and env environment.
-    evm: EVM<StateDBBox<'a, Error>>,
+    pub(crate) evm: EVM<StateDBBox<'a, Error>>,
     /// Hook and inspector stack that we want to invoke on that hook.
-    stack: InspectorStack,
+    pub(crate) stack: InspectorStack,
     /// The collection of receipts.
     /// Outer vector stores receipts for each block sequentially.
     /// The inner vector stores receipts ordered by transaction number.
     ///
     /// If receipt is None it means it is pruned.   
-    receipts: Vec<Vec<Option<Receipt>>>,
+    pub(crate) receipts: Vec<Vec<Option<Receipt>>>,
     /// First block will be initialized to `None`
     /// and be set to the block number of first block executed.
-    first_block: Option<BlockNumber>,
+    pub(crate) first_block: Option<BlockNumber>,
     /// The maximum known block.
-    tip: Option<BlockNumber>,
+    pub(crate) tip: Option<BlockNumber>,
     /// Pruning configuration.
-    prune_modes: PruneModes,
+    pub(crate) prune_modes: PruneModes,
     /// Memoized address pruning filter.
     /// Empty implies that there is going to be addresses to include in the filter in a future
     /// block. None means there isn't any kind of configuration.
-    pruning_address_filter: Option<(u64, Vec<Address>)>,
+    pub(crate) pruning_address_filter: Option<(u64, Vec<Address>)>,
     /// Execution stats
-    stats: BlockExecutorStats,
+    pub(crate) stats: BlockExecutorStats,
 }
 
 impl<'a> EVMProcessor<'a> {
@@ -135,7 +147,7 @@ impl<'a> EVMProcessor<'a> {
         self.evm.db().expect("Database inside EVM is always set")
     }
 
-    fn recover_senders(
+    pub(crate) fn recover_senders(
         &mut self,
         body: &[TransactionSigned],
         senders: Option<Vec<Address>>,
@@ -156,7 +168,7 @@ impl<'a> EVMProcessor<'a> {
     }
 
     /// Initializes the config and block env.
-    fn init_env(&mut self, header: &Header, total_difficulty: U256) {
+    pub(crate) fn init_env(&mut self, header: &Header, total_difficulty: U256) {
         // Set state clear flag.
         let state_clear_flag =
             self.chain_spec.fork(Hardfork::SpuriousDragon).active_at_block(header.number);
@@ -250,7 +262,8 @@ impl<'a> EVMProcessor<'a> {
     /// 0, and so on).
     ///
     /// The second returned value represents the total gas used by this block of transactions.
-    pub fn execute_transactions(
+    #[cfg(not(feature = "optimism"))]
+    fn execute_transactions(
         &mut self,
         block: &Block,
         total_difficulty: U256,
