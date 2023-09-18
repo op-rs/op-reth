@@ -305,6 +305,8 @@ impl<'a> EVMProcessor<'a> {
                 cumulative_gas_used,
                 // convert to reth log
                 logs: result.into_logs().into_iter().map(into_reth_log).collect(),
+                #[cfg(feature = "optimism")]
+                deposit_nonce: None,
             });
         }
 

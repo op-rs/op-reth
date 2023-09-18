@@ -23,11 +23,10 @@ revm.workspace = true
 # common
 tracing.workspace = true
 
-# [features]
-# optimism = [
-#   "reth-primitives/optimism",
-#   "reth-revm-primitives/optimism",
-#   "reth-consensus-common/optimism",
-#   "reth-interfaces/optimism",
-#   "once_cell"
-# ]
+[features]
+optimism = [
+  "reth-primitives/optimism",
+  "reth-revm-primitives/optimism",
+  "reth-consensus-common/optimism",
+  "reth-interfaces/optimism"
+]

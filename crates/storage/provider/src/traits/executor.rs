@@ -2,7 +2,7 @@
 
 use crate::{bundle_state::BundleStateWithReceipts, StateProvider};
 use reth_interfaces::executor::BlockExecutionError;
-use reth_primitives::{Address, Block, BlockNumber, ChainSpec, PruneModes, U256};
+use reth_primitives::{Address, Block, BlockNumber, ChainSpec, PruneModes, Receipt, U256};
 use std::time::Duration;
 use tracing::info;
 
@@ -47,12 +47,12 @@ pub trait BlockExecutor {
 
     /// Runs the provided transactions and commits their state to the run-time database.
     ///
-    /// The returned [PostState] can be used to persist the changes to disk, and contains the
-    /// changes made by each transaction.
+    /// The returned [BundleStateWithReceipts] can be used to persist the changes to disk, and
+    /// contains the changes made by each transaction.
     ///
-    /// The changes in [PostState] have a transition ID associated with them: there is one
-    /// transition ID for each transaction (with the first executed tx having transition ID 0, and
-    /// so on).
+    /// The changes in [BundleStateWithReceipts] have a transition ID associated with them: there is
+    /// one transition ID for each transaction (with the first executed tx having transition ID
+    /// 0, and so on).
     ///
     /// The second returned value represents the total gas used by this block of transactions.
     fn execute_transactions(

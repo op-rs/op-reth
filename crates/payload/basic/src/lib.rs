@@ -815,13 +815,13 @@ where
 
         // Push transaction changeset and calculate header bloom filter for receipt.
         receipts.push(Some(Receipt {
-                tx_type: tx.tx_type(),
-                success: result.is_success(),
-                cumulative_gas_used,
-                logs: result.logs().into_iter().map(into_reth_log).collect(),
-                #[cfg(feature = "optimism")]
-                deposit_nonce: None,
-            }));
+            tx_type: tx.tx_type(),
+            success: result.is_success(),
+            cumulative_gas_used,
+            logs: result.logs().into_iter().map(into_reth_log).collect(),
+            #[cfg(feature = "optimism")]
+            deposit_nonce: None,
+        }));
 
         // update add to total fees
         let miner_fee =

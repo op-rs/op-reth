@@ -1,4 +1,3 @@
-use once_cell::sync::Lazy;
 use reth_interfaces::executor as reth_executor;
 use reth_primitives::{Address, Block, Bytes, ChainSpec, Hardfork, TransactionKind, U256};
 use std::{ops::Mul, str::FromStr, sync::Arc};
@@ -9,21 +8,17 @@ const ZERO_BYTE_COST: u64 = 4;
 const NON_ZERO_BYTE_COST: u64 = 16;
 
 /// The address of L1 fee recipient.
-pub static L1_FEE_RECIPIENT: Lazy<Address> = Lazy::new(|| {
+pub static L1_FEE_RECIPIENT: Address =
     Address::from_str("0x420000000000000000000000000000000000001A")
-        .expect("failed to parse l1 fee recipient address")
-});
+        .expect("failed to parse l1 fee recipient address");
 
 /// The address of the base fee recipient.
-pub static BASE_FEE_RECIPIENT: Lazy<Address> = Lazy::new(|| {
+pub static BASE_FEE_RECIPIENT: Address =
     Address::from_str("0x4200000000000000000000000000000000000019")
-        .expect("failed to parse base fee recipient address")
-});
+        .expect("failed to parse base fee recipient address");
 
-static L1_BLOCK_CONTRACT: Lazy<Address> = Lazy::new(|| {
-    Address::from_str("0x4200000000000000000000000000000000000015")
-        .expect("failed to parse l1 block contract address")
-});
+static L1_BLOCK_CONTRACT: Address = Address::from_str("0x4200000000000000000000000000000000000015")
+    .expect("failed to parse l1 block contract address");
 
 /// L1 block info
 ///
@@ -84,7 +79,7 @@ impl TryFrom<&[u8]> for L1BlockInfo {
         if l1_info_tx_data.len() != 256 {
             return Err(reth_executor::BlockExecutionError::L1BlockInfoError {
                 message: "unexpected l1 block info tx calldata length found".to_string(),
-            })
+            });
         }
 
         let l1_base_fee = U256::try_from_be_slice(&l1_info_tx_data[64..96]).ok_or(
@@ -137,7 +132,7 @@ impl L1BlockInfo {
         let rollup_data_gas_cost = self.data_gas(input, chain_spec, timestamp);
 
         if is_deposit || rollup_data_gas_cost == U256::ZERO {
-            return U256::ZERO
+            return U256::ZERO;
         }
 
         rollup_data_gas_cost
