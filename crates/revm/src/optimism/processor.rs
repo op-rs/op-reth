@@ -147,6 +147,16 @@ impl<'a> EVMProcessor<'a> {
                     // disregard the state changes. The transaction is also recorded
                     // as using all gas unless it is a system transaction.
                     if transaction.is_deposit() {
+                        fail_deposit_tx!(
+                            self.db_mut(),
+                            sender,
+                            block.number,
+                            transaction,
+                            &mut receipts,
+                            &mut cumulative_gas_used,
+                            is_regolith,
+                            BlockExecutionError::ProviderError
+                        );
                         let mut sender_account = self
                             .db_mut()
                             .database
@@ -157,7 +167,7 @@ impl<'a> EVMProcessor<'a> {
                             ))?;
                         let deposit_nonce = sender_account.nonce;
                         sender_account.nonce += 1;
-                        // db.insert_account(sender, sender_account);
+                        self.db_mut().insert_account(sender, sender_account);
 
                         if is_regolith || transaction.is_system_transaction() {
                             cumulative_gas_used += transaction.gas_limit();
@@ -208,22 +218,15 @@ impl<'a> EVMProcessor<'a> {
                 {
                     // Manually bump the nonce if the transaction was a contract creation.
                     if transaction.to().is_none() {
-                        let sender_account = self
+                        let mut sender_account = self
                             .db_mut()
                             .basic(sender)
                             .map_err(|_| BlockExecutionError::ProviderError)?
                             .ok_or(BlockExecutionError::Validation(
                                 BlockValidationError::SenderRecoveryError,
                             ))?;
-                        let mut new_sender_account = sender_account.clone();
-                        new_sender_account.nonce += 1;
-                        // post_state.change_account(
-                        //     block.number,
-                        //     sender,
-                        //     to_reth_acc(&sender_account.info),
-                        //     to_reth_acc(&new_sender_account.info),
-                        // );
-                        // self.db().insert_account_info(sender, sender_account.info);
+                        sender_account.nonce += 1;
+                        self.db_mut().insert_account(sender, sender_account);
                     }
 
                     cumulative_gas_used += transaction.gas_limit();
@@ -296,3 +299,41 @@ impl<'a> EVMProcessor<'a> {
         Ok((receipts, cumulative_gas_used))
     }
 }
+
+/// If the Deposited transaction failed, the deposit must still be included. In this case, we need
+/// to increment the sender nonce and disregard the state changes. The transaction is also recorded
+/// as using all gas unless it is a system transaction.
+#[macro_export]
+macro_rules! fail_deposit_tx {
+    (
+        $db:expr,
+        $sender:ident,
+        $block_number:expr,
+        $transaction:ident,
+        $receipts:expr,
+        $cumulative_gas_used:expr,
+        $is_regolith:ident,
+        $error:expr
+    ) => {
+        let mut sender_account = $db.basic($sender).ok().flatten().ok_or($error)?;
+        let old_nonce = sender_account.nonce;
+        sender_account.nonce += 1;
+
+        $db.insert_account($sender, sender_account);
+
+        if $is_regolith || !$transaction.is_system_transaction() {
+            *$cumulative_gas_used += $transaction.gas_limit();
+        }
+
+        $receipts.push(Receipt {
+            tx_type: $transaction.tx_type(),
+            success: false,
+            cumulative_gas_used: *$cumulative_gas_used,
+            logs: vec![],
+            // Deposit nonces are only recorded after Regolith
+            deposit_nonce: $is_regolith.then_some(old_nonce),
+        });
+    };
+}
+
+pub use fail_deposit_tx;

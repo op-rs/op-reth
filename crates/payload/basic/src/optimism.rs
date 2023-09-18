@@ -159,17 +159,17 @@ where
             Err(err) => {
                 if sequencer_tx.is_deposit() {
                     // Manually bump the nonce and include a receipt for the deposit transaction.
-                    // let sender = sequencer_tx.signer();
-                    // fail_deposit_tx!(
-                    //     db,
-                    //     sender,
-                    //     block_number,
-                    //     sequencer_tx,
-                    //     &mut post_state,
-                    //     &mut cumulative_gas_used,
-                    //     is_regolith,
-                    //     PayloadBuilderError::AccountLoadFailed(sender)
-                    // );
+                    let tx_signer = sequencer_tx.signer();
+                    fail_deposit_tx!(
+                        db,
+                        tx_signer,
+                        block.number,
+                        sequencer_tx,
+                        &mut receipts,
+                        &mut cumulative_gas_used,
+                        is_regolith,
+                        PayloadBuilderError::AccountLoadFailed(tx_signer)
+                    );
                     executed_txs.push(sequencer_tx.into_signed());
                     continue
                 }
@@ -466,4 +466,40 @@ where
     ) -> Result<BuildOutcome, PayloadBuilderError> {
         optimism_payload_builder(args)
     }
+}
+
+/// If the Deposited transaction failed, the deposit must still be included. In this case, we need
+/// to increment the sender nonce and disregard the state changes. The transaction is also recorded
+/// as using all gas unless it is a system transaction.
+#[macro_export]
+macro_rules! fail_deposit_tx {
+    (
+        $db:expr,
+        $sender:ident,
+        $block_number:expr,
+        $transaction:ident,
+        $receipts:expr,
+        $cumulative_gas_used:expr,
+        $is_regolith:ident,
+        $error:expr
+    ) => {
+        let mut sender_account = $db.basic($sender).ok().flatten().ok_or($error)?;
+        let old_nonce = sender_account.nonce;
+        sender_account.nonce += 1;
+
+        $db.insert_account($sender, sender_account);
+
+        if $is_regolith || !$transaction.is_system_transaction() {
+            *$cumulative_gas_used += $transaction.gas_limit();
+        }
+
+        $receipts.push(Some(Receipt {
+            tx_type: $transaction.tx_type(),
+            success: false,
+            cumulative_gas_used: *$cumulative_gas_used,
+            logs: vec![],
+            // Deposit nonces are only recorded after Regolith
+            deposit_nonce: $is_regolith.then_some(old_nonce),
+        }));
+    };
 }
