@@ -18,7 +18,7 @@ impl BlockExecutor for TestExecutor {
         _senders: Option<Vec<Address>>,
     ) -> Result<(), BlockExecutionError> {
         if self.0.is_none() {
-            return Err(BlockExecutionError::UnavailableForTest);
+            return Err(BlockExecutionError::UnavailableForTest)
         }
         Ok(())
     }
@@ -30,7 +30,7 @@ impl BlockExecutor for TestExecutor {
         _senders: Option<Vec<Address>>,
     ) -> Result<(), BlockExecutionError> {
         if self.0.is_none() {
-            return Err(BlockExecutionError::UnavailableForTest);
+            return Err(BlockExecutionError::UnavailableForTest)
         }
         Ok(())
     }

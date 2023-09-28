@@ -554,7 +554,10 @@ where
             let attr_validation_res = self.validate_version_specific_fields(version, &attrs.into());
 
             #[cfg(feature = "optimism")]
-            if matches!(version, EngineApiMessageVersion::V1) && attrs.gas_limit.is_none() && self.inner.chain_spec.optimism  {
+            if matches!(version, EngineApiMessageVersion::V1) &&
+                attrs.gas_limit.is_none() &&
+                self.inner.chain_spec.optimism
+            {
                 return Err(EngineApiError::MissingGasLimitInPayloadAttributes)
             }
 

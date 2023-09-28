@@ -379,6 +379,8 @@ impl MockTransaction {
             Self::Legacy { .. } => LEGACY_TX_TYPE_ID,
             Self::Eip1559 { .. } => EIP1559_TX_TYPE_ID,
             Self::Eip4844 { .. } => EIP4844_TX_TYPE_ID,
+            #[cfg(feature = "optimism")]
+            Self::Deposit(_) => DEPOSIT_TX_TYPE_ID,
         }
     }
 

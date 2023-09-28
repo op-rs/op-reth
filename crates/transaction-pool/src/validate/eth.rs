@@ -30,7 +30,7 @@ use reth_primitives::bytes::BytesMut;
 #[cfg(feature = "optimism")]
 use reth_primitives::BlockNumberOrTag;
 #[cfg(feature = "optimism")]
-use reth_revm::optimism::L1BlockInfo;
+use reth_revm::optimism::{self, RethL1BlockInfo};
 
 /// Validator for Ethereum transactions.
 #[derive(Debug, Clone)]
@@ -353,13 +353,21 @@ where
 
             let mut encoded = BytesMut::default();
             transaction.to_recovered_transaction().encode_enveloped(&mut encoded);
-            let cost_addition = match L1BlockInfo::try_from(&block) {
-                Ok(info) => info.calculate_tx_l1_cost(
+            let cost_addition = match optimism::extract_l1_info(&block) {
+                Ok(info) => match info.l1_tx_data_fee(
                     Arc::clone(&self.chain_spec),
                     block.timestamp,
-                    &encoded.freeze().into(),
+                    &encoded.freeze(),
                     transaction.is_deposit(),
-                ),
+                ) {
+                    Ok(cost) => cost,
+                    Err(err) => {
+                        return TransactionValidationOutcome::Error(
+                            *transaction.hash(),
+                            Box::new(err),
+                        )
+                    }
+                },
                 Err(err) => {
                     return TransactionValidationOutcome::Error(*transaction.hash(), Box::new(err))
                 }

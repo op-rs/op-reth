@@ -28,5 +28,6 @@ optimism = [
   "reth-primitives/optimism",
   "reth-revm-primitives/optimism",
   "reth-consensus-common/optimism",
-  "reth-interfaces/optimism"
+  "reth-interfaces/optimism",
+  "revm/optimism"
 ]

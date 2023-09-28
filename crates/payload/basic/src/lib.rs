@@ -58,12 +58,13 @@ use tracing::{debug, trace};
 
 mod metrics;
 
-#[cfg(feature = "optimism")]
-mod optimism;
-#[cfg(feature = "optimism")]
-pub use optimism::OptimismPayloadBuilder;
+// #[cfg(feature = "optimism")]
+// mod optimism;
+// #[cfg(feature = "optimism")]
+// pub use optimism::OptimismPayloadBuilder;
 
 /// The [`PayloadJobGenerator`] that creates [`BasicPayloadJob`]s.
+#[derive(Debug)]
 pub struct BasicPayloadJobGenerator<Client, Pool, Tasks, Builder> {
     /// The client that can interact with the chain.
     client: Client,
@@ -948,6 +949,7 @@ where
         attributes,
         chain_spec,
         initialized_cfg,
+        ..
     } = config;
 
     debug!(parent_hash=?parent_block.hash, parent_number=parent_block.number,  "building empty payload");

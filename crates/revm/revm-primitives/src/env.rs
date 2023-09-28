@@ -1,10 +1,14 @@
 use crate::config::revm_spec;
 use reth_primitives::{
+    bytes::BytesMut,
     constants::{BEACON_ROOTS_ADDRESS, SYSTEM_ADDRESS},
     recover_signer, Address, Bytes, Chain, ChainSpec, Head, Header, Transaction, TransactionKind,
     TransactionSignedEcRecovered, TxEip1559, TxEip2930, TxEip4844, TxLegacy, H256, U256,
 };
-use revm::primitives::{AnalysisKind, BlockEnv, CfgEnv, Env, SpecId, TransactTo, TxEnv};
+use reth_rlp::Encodable;
+use revm::primitives::{
+    AnalysisKind, BlockEnv, CfgEnv, Env, OptimismFields, SpecId, TransactTo, TxEnv,
+};
 
 #[cfg(feature = "optimism")]
 use reth_primitives::TxDeposit;
@@ -151,6 +155,8 @@ pub fn fill_tx_env_with_beacon_root_contract_call(env: &mut Env, parent_beacon_b
         // blob fields can be None for this tx
         blob_hashes: Vec::new(),
         max_fee_per_blob_gas: None,
+        #[cfg(feature = "optimism")]
+        optimism: OptimismFields::default(),
     };
 
     // ensure the block gas limit is >= the tx
@@ -306,7 +312,20 @@ where
             tx_env.max_fee_per_blob_gas = Some(U256::from(*max_fee_per_blob_gas));
         }
         #[cfg(feature = "optimism")]
-        Transaction::Deposit(TxDeposit { to, value, gas_limit, input, .. }) => {
+        Transaction::Deposit(TxDeposit {
+            to,
+            value,
+            gas_limit,
+            input,
+            source_hash,
+            mint,
+            is_system_transaction,
+            ..
+        }) => {
+            let envelope_size = transaction.as_ref().length();
+            let mut envelope = BytesMut::with_capacity(envelope_size);
+            transaction.as_ref().encode_without_signature(&mut envelope);
+
             tx_env.gas_limit = *gas_limit;
             tx_env.gas_price = U256::ZERO;
             tx_env.gas_priority_fee = None;
@@ -318,6 +337,12 @@ where
             tx_env.data = input.0.clone();
             tx_env.chain_id = None;
             tx_env.nonce = None;
+            tx_env.optimism = OptimismFields {
+                source_hash: Some(*source_hash),
+                mint: *mint,
+                is_system_transaction: Some(*is_system_transaction),
+                enveloped_tx: Some(envelope.freeze()),
+            }
         }
     }
 }

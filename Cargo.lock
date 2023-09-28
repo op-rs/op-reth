@@ -4520,7 +4520,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.29",
+ "syn 2.0.36",
 ]
 
 [[package]]
@@ -5469,6 +5469,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
+ "sha2",
  "shellexpand",
  "tempfile",
  "thiserror",
@@ -6156,6 +6157,7 @@ name = "reth-revm-primitives"
 version = "0.1.0-alpha.10"
 dependencies = [
  "reth-primitives",
+ "reth-rlp",
  "revm",
 ]
 
@@ -6460,7 +6462,7 @@ dependencies = [
 [[package]]
 name = "revm"
 version = "3.3.0"
-source = "git+https://github.com/bluealloy/revm?rev=516f62cc#516f62ccc1c5f2a62e5fc58115213fe04c7f7a8c"
+source = "git+https://github.com/bluealloy/revm#ded673c0ca1c0308cefec6f8fb853225742cfc8c"
 dependencies = [
  "auto_impl",
  "revm-interpreter",
@@ -6470,7 +6472,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "1.1.2"
-source = "git+https://github.com/bluealloy/revm?rev=516f62cc#516f62ccc1c5f2a62e5fc58115213fe04c7f7a8c"
+source = "git+https://github.com/bluealloy/revm#ded673c0ca1c0308cefec6f8fb853225742cfc8c"
 dependencies = [
  "derive_more",
  "enumn",
@@ -6481,7 +6483,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "2.0.3"
-source = "git+https://github.com/bluealloy/revm?rev=516f62cc#516f62ccc1c5f2a62e5fc58115213fe04c7f7a8c"
+source = "git+https://github.com/bluealloy/revm#ded673c0ca1c0308cefec6f8fb853225742cfc8c"
 dependencies = [
  "c-kzg",
  "hex",
@@ -6499,7 +6501,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "1.1.2"
-source = "git+https://github.com/bluealloy/revm?rev=516f62cc#516f62ccc1c5f2a62e5fc58115213fe04c7f7a8c"
+source = "git+https://github.com/bluealloy/revm#ded673c0ca1c0308cefec6f8fb853225742cfc8c"
 dependencies = [
  "arbitrary",
  "auto_impl",
@@ -7138,9 +7140,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.7"
+version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479fb9d862239e610720565ca91403019f2f00410f1864c5aa7479b950a76ed8"
+checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
 dependencies = [
  "cfg-if",
  "cpufeatures",

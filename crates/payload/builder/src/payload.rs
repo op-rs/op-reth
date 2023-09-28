@@ -180,7 +180,7 @@ impl PayloadBuilderAttributes {
             },
         );
 
-        Self {
+        Ok(Self {
             id,
             parent,
             timestamp: attributes.timestamp.as_u64(),
