@@ -76,25 +76,21 @@ macro_rules! get_value {
 // Generates all setters and getters
 macro_rules! make_setters_getters {
     ($($name:ident => $t:ty);*) => {
-  paste! {
-        $(
+        paste! {$(
             pub fn [<set_ $name>](&mut self, $name: $t) -> &mut Self {
                 set_value!(self => $name);
                 self
             }
 
-            pub fn [<with_$name>](mut self, $name: $t) -> Self {
+            pub fn [<with_ $name>](mut self, $name: $t) -> Self {
                 set_value!(self => $name);
                 self
             }
 
-            pub fn [<get_$name>](&self) -> $t {
+            pub fn [<get_ $name>](&self) -> $t {
                 get_value!(self => $name).clone()
             }
-
-        )*
-
-    }
+        )*}
     };
 }
 
@@ -173,7 +169,7 @@ impl MockTransaction {
         }
     }
 
-    /// Returns a new EIP1559 transaction with random address and hash and empty values
+    /// Returns a new EIP4844 transaction with random address and hash and empty values
     pub fn eip4844() -> Self {
         MockTransaction::Eip4844 {
             hash: H256::random(),
@@ -555,13 +551,13 @@ impl FromRecoveredTransaction for MockTransaction {
         let hash = transaction.hash();
         match transaction.transaction {
             Transaction::Legacy(TxLegacy {
-                chain_id,
+                chain_id: _,
                 nonce,
                 gas_price,
                 gas_limit,
                 to,
                 value,
-                input,
+                input: _,
             }) => MockTransaction::Legacy {
                 hash,
                 sender,
@@ -572,15 +568,15 @@ impl FromRecoveredTransaction for MockTransaction {
                 value: U256::from(value),
             },
             Transaction::Eip1559(TxEip1559 {
-                chain_id,
+                chain_id: _,
                 nonce,
                 gas_limit,
                 max_fee_per_gas,
                 max_priority_fee_per_gas,
                 to,
                 value,
-                input,
-                access_list,
+                input: _,
+                access_list: _,
             }) => MockTransaction::Eip1559 {
                 hash,
                 sender,
@@ -592,15 +588,15 @@ impl FromRecoveredTransaction for MockTransaction {
                 value: U256::from(value),
             },
             Transaction::Eip4844(TxEip4844 {
-                chain_id,
+                chain_id: _,
                 nonce,
                 gas_limit,
                 max_fee_per_gas,
                 max_priority_fee_per_gas,
                 to,
                 value,
-                input,
-                access_list,
+                input: _,
+                access_list: _,
                 blob_versioned_hashes: _,
                 max_fee_per_blob_gas,
             }) => MockTransaction::Eip4844 {

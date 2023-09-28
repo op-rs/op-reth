@@ -3,7 +3,7 @@
 use crate::{BundleStateWithReceipts, DatabaseProviderRW};
 use reth_db::{database::Database, models::StoredBlockBodyIndices, tables};
 use reth_primitives::{
-    hex_literal::hex, Account, BlockNumber, Bytes, Header, Log, Receipt, SealedBlock,
+    hex_literal::hex, Account, BlockNumber, Bytes, Header, Log, Receipt, Receipts, SealedBlock,
     SealedBlockWithSenders, StorageEntry, TxType, Withdrawal, H160, H256, U256,
 };
 use reth_rlp::Decodable;
@@ -49,6 +49,7 @@ pub fn assert_genesis_block<DB: Database>(provider: &DatabaseProviderRW<'_, DB>,
 
 /// Test chain with genesis, blocks, execution results
 /// that have valid changesets.
+#[derive(Debug)]
 pub struct BlockChainTestData {
     /// Genesis
     pub genesis: SealedBlock,
@@ -128,7 +129,7 @@ fn block1(number: BlockNumber) -> (SealedBlockWithSenders, BundleStateWithReceip
             ]),
         )]),
         vec![],
-        vec![vec![Some(Receipt {
+        Receipts::from_vec(vec![vec![Some(Receipt {
             tx_type: TxType::EIP2930,
             success: true,
             cumulative_gas_used: 300,
@@ -139,7 +140,7 @@ fn block1(number: BlockNumber) -> (SealedBlockWithSenders, BundleStateWithReceip
             }],
             #[cfg(feature = "optimism")]
             deposit_nonce: None,
-        })]],
+        })]]),
         number,
     );
 
@@ -186,7 +187,7 @@ fn block2(
             )]),
         )]),
         vec![],
-        vec![vec![Some(Receipt {
+        Receipts::from_vec(vec![vec![Some(Receipt {
             tx_type: TxType::EIP1559,
             success: false,
             cumulative_gas_used: 400,
@@ -197,7 +198,7 @@ fn block2(
             }],
             #[cfg(feature = "optimism")]
             deposit_nonce: None,
-        })]],
+        })]]),
         number,
     );
     (SealedBlockWithSenders { block, senders: vec![H160([0x31; 20])] }, bundle)

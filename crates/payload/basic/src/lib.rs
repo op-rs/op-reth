@@ -1,22 +1,18 @@
-#![cfg_attr(docsrs, feature(doc_cfg))]
+//! A basic payload generator for reth.
+
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/paradigmxyz/reth/main/assets/reth-docs.png",
     html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
     issue_tracker_base_url = "https://github.com/paradigmxzy/reth/issues/"
 )]
-#![warn(missing_docs, unreachable_pub)]
+#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
 #![deny(unused_must_use, rust_2018_idioms)]
-#![doc(test(
-    no_crate_inject,
-    attr(deny(warnings, rust_2018_idioms), allow(dead_code, unused_variables))
-))]
-
-//! A basic payload generator for reth.
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use crate::metrics::PayloadBuilderMetrics;
 use futures_core::ready;
 use futures_util::FutureExt;
-use reth_interfaces::Error;
+use reth_interfaces::{RethError, RethResult};
 use reth_payload_builder::{
     database::CachedReads, error::PayloadBuilderError, BuiltPayload, KeepPayloadJobAlive,
     PayloadBuilderAttributes, PayloadJob, PayloadJobGenerator,
@@ -29,12 +25,14 @@ use reth_primitives::{
         EMPTY_WITHDRAWALS, ETHEREUM_BLOCK_GAS_LIMIT, RETH_CLIENT_VERSION, SLOT_DURATION,
     },
     proofs, Block, BlockNumberOrTag, ChainSpec, Header, IntoRecoveredTransaction, Receipt,
-    SealedBlock, Withdrawal, EMPTY_OMMER_ROOT, H256, U256,
+    Receipts, SealedBlock, Withdrawal, EMPTY_OMMER_ROOT, H256, U256,
 };
 use reth_provider::{BlockReaderIdExt, BlockSource, BundleStateWithReceipts, StateProviderFactory};
 use reth_revm::{
-    database::StateProviderDatabase, env::tx_env_with_recovered, into_reth_log,
-    state_change::post_block_withdrawals_balance_increments,
+    database::StateProviderDatabase,
+    env::tx_env_with_recovered,
+    into_reth_log,
+    state_change::{apply_beacon_root_contract_call, post_block_withdrawals_balance_increments},
 };
 use reth_rlp::Encodable;
 use reth_tasks::TaskSpawner;
@@ -45,6 +43,7 @@ use revm::{
     Database, DatabaseCommit, State,
 };
 use std::{
+    fmt::Debug,
     future::Future,
     pin::Pin,
     sync::{atomic::AtomicBool, Arc},
@@ -190,7 +189,7 @@ where
 }
 
 /// Restricts how many generator tasks can be executed at once.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct PayloadTaskGuard(Arc<Semaphore>);
 
 // === impl PayloadTaskGuard ===
@@ -289,6 +288,7 @@ impl Default for BasicPayloadJobGeneratorConfig {
 }
 
 /// A basic payload job that continuously builds a payload with the best transactions from the pool.
+#[derive(Debug)]
 pub struct BasicPayloadJob<Client, Pool, Tasks, Builder> {
     /// The configuration for how the payload will be created.
     config: PayloadConfig,
@@ -581,7 +581,7 @@ impl Drop for Cancelled {
 }
 
 /// Static config for how to build a payload.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct PayloadConfig {
     /// Pre-configured block environment.
     initialized_block_env: BlockEnv,
@@ -639,6 +639,7 @@ pub enum BuildOutcome {
 /// This struct encapsulates the essential components and configuration required for the payload
 /// building process. It holds references to the Ethereum client, transaction pool, cached reads,
 /// payload configuration, cancellation status, and the best payload achieved so far.
+#[derive(Debug)]
 pub struct BuildArguments<Pool, Client> {
     client: Client,
     pool: Pool,
@@ -731,6 +732,16 @@ where
     let mut total_fees = U256::ZERO;
 
     let block_number = initialized_block_env.number.to::<u64>();
+
+    // apply eip-4788 pre block contract call
+    pre_block_beacon_root_contract_call(
+        &mut db,
+        &chain_spec,
+        block_number,
+        &initialized_cfg,
+        &initialized_block_env,
+        &attributes,
+    )?;
 
     let mut receipts = Vec::new();
     while let Some(pool_tx) = best_txs.next() {
@@ -841,15 +852,20 @@ where
     let WithdrawalsOutcome { withdrawals_root, withdrawals } =
         commit_withdrawals(&mut db, &chain_spec, attributes.timestamp, attributes.withdrawals)?;
 
-    // merge all transitions into bundle state.
+    // merge all transitions into bundle state, this would apply the withdrawal balance changes and
+    // 4788 contract call
     db.merge_transitions(BundleRetention::PlainState);
 
-    let bundle = BundleStateWithReceipts::new(db.take_bundle(), vec![receipts], block_number);
+    let bundle = BundleStateWithReceipts::new(
+        db.take_bundle(),
+        Receipts::from_vec(vec![receipts]),
+        block_number,
+    );
     let receipts_root = bundle.receipts_root_slow(block_number).expect("Number is in range");
     let logs_bloom = bundle.block_logs_bloom(block_number).expect("Number is in range");
 
     // calculate the state root
-    let state_root = state_provider.state_root(bundle)?;
+    let state_root = state_provider.state_root(&bundle)?;
 
     // create the block header
     let transactions_root = proofs::calculate_transaction_root(&executed_txs);
@@ -860,13 +876,13 @@ where
     let mut blob_gas_used = None;
 
     // only determine cancun fields when active
-    if chain_spec.is_cancun_activated_at_timestamp(attributes.timestamp) {
+    if chain_spec.is_cancun_active_at_timestamp(attributes.timestamp) {
         // grab the blob sidecars from the executed txs
         blob_sidecars = pool.get_all_blobs_exact(
             executed_txs.iter().filter(|tx| tx.is_eip4844()).map(|tx| tx.hash).collect(),
         )?;
 
-        excess_blob_gas = if chain_spec.is_cancun_activated_at_timestamp(parent_block.timestamp) {
+        excess_blob_gas = if chain_spec.is_cancun_active_at_timestamp(parent_block.timestamp) {
             let parent_excess_blob_gas = parent_block.excess_blob_gas.unwrap_or_default();
             let parent_blob_gas_used = parent_block.blob_gas_used.unwrap_or_default();
             Some(calculate_excess_blob_gas(parent_excess_blob_gas, parent_blob_gas_used))
@@ -926,7 +942,13 @@ where
     Client: StateProviderFactory,
 {
     let extra_data = config.extra_data();
-    let PayloadConfig { initialized_block_env, parent_block, attributes, chain_spec, .. } = config;
+    let PayloadConfig {
+        initialized_block_env,
+        parent_block,
+        attributes,
+        chain_spec,
+        initialized_cfg,
+    } = config;
 
     debug!(parent_hash=?parent_block.hash, parent_number=parent_block.number,  "building empty payload");
 
@@ -940,15 +962,27 @@ where
     let block_number = initialized_block_env.number.to::<u64>();
     let block_gas_limit: u64 = initialized_block_env.gas_limit.try_into().unwrap_or(u64::MAX);
 
+    // apply eip-4788 pre block contract call
+    pre_block_beacon_root_contract_call(
+        &mut db,
+        &chain_spec,
+        block_number,
+        &initialized_cfg,
+        &initialized_block_env,
+        &attributes,
+    )?;
+
     let WithdrawalsOutcome { withdrawals_root, withdrawals } =
         commit_withdrawals(&mut db, &chain_spec, attributes.timestamp, attributes.withdrawals)?;
 
-    // merge transition, this will apply the withdrawal balance changes.
+    // merge all transitions into bundle state, this would apply the withdrawal balance changes and
+    // 4788 contract call
     db.merge_transitions(BundleRetention::PlainState);
 
     // calculate the state root
-    let bundle_state = BundleStateWithReceipts::new(db.take_bundle(), vec![], block_number);
-    let state_root = state.state_root(bundle_state)?;
+    let bundle_state =
+        BundleStateWithReceipts::new(db.take_bundle(), Receipts::new(), block_number);
+    let state_root = state.state_root(&bundle_state)?;
 
     let header = Header {
         parent_hash: parent_block.hash,
@@ -1003,13 +1037,13 @@ impl WithdrawalsOutcome {
 /// Returns the withdrawals root.
 ///
 /// Returns `None` values pre shanghai
-fn commit_withdrawals<DB: Database<Error = Error>>(
+fn commit_withdrawals<DB: Database<Error = RethError>>(
     db: &mut State<DB>,
     chain_spec: &ChainSpec,
     timestamp: u64,
     withdrawals: Vec<Withdrawal>,
-) -> Result<WithdrawalsOutcome, Error> {
-    if !chain_spec.is_shanghai_activated_at_timestamp(timestamp) {
+) -> RethResult<WithdrawalsOutcome> {
+    if !chain_spec.is_shanghai_active_at_timestamp(timestamp) {
         return Ok(WithdrawalsOutcome::pre_shanghai())
     }
 
@@ -1029,6 +1063,50 @@ fn commit_withdrawals<DB: Database<Error = Error>>(
         withdrawals: Some(withdrawals),
         withdrawals_root: Some(withdrawals_root),
     })
+}
+
+/// Apply the [EIP-4788](https://eips.ethereum.org/EIPS/eip-4788) pre block contract call.
+///
+/// This constructs a new [EVM](revm::EVM) with the given DB, and environment ([CfgEnv] and
+/// [BlockEnv]) to execute the pre block contract call.
+///
+/// The parent beacon block root used for the call is gathered from the given
+/// [PayloadBuilderAttributes].
+///
+/// This uses [apply_beacon_root_contract_call] to ultimately apply the beacon root contract state
+/// change.
+fn pre_block_beacon_root_contract_call<DB>(
+    db: &mut DB,
+    chain_spec: &ChainSpec,
+    block_number: u64,
+    initialized_cfg: &CfgEnv,
+    initialized_block_env: &BlockEnv,
+    attributes: &PayloadBuilderAttributes,
+) -> Result<(), PayloadBuilderError>
+where
+    DB: Database + DatabaseCommit,
+    <DB as Database>::Error: Debug,
+{
+    // Configure the environment for the block.
+    let env = Env {
+        cfg: initialized_cfg.clone(),
+        block: initialized_block_env.clone(),
+        ..Default::default()
+    };
+
+    // apply pre-block EIP-4788 contract call
+    let mut evm_pre_block = revm::EVM::with_env(env);
+    evm_pre_block.database(db);
+
+    // initialize a block from the env, because the pre block call needs the block itself
+    apply_beacon_root_contract_call(
+        chain_spec,
+        attributes.timestamp,
+        block_number,
+        attributes.parent_beacon_block_root,
+        &mut evm_pre_block,
+    )
+    .map_err(|err| PayloadBuilderError::Internal(err.into()))
 }
 
 /// Checks if the new payload is better than the current best.

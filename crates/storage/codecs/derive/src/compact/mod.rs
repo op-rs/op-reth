@@ -1,4 +1,3 @@
-extern crate proc_macro2;
 use proc_macro::{self, TokenStream};
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
@@ -207,6 +206,7 @@ mod tests {
         // Expected output in a TokenStream format. Commas matter!
         let should_output = quote! {
             pub use TestStruct_flags::TestStructFlags;
+            #[allow(non_snake_case)]
             mod TestStruct_flags {
                 use bytes::Buf;
                 use modular_bitfield::prelude::*;

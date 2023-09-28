@@ -517,7 +517,6 @@ impl CallTraceNode {
         let acc_state = account_states.entry(addr).or_default();
         for change in self.trace.steps.iter().filter_map(|s| s.storage_change) {
             let StorageChange { key, value, had_value } = change;
-            let storage_map = acc_state.storage.get_or_insert_with(BTreeMap::new);
             let value_to_insert = if post_value {
                 H256::from(value)
             } else {
@@ -526,7 +525,7 @@ impl CallTraceNode {
                     None => continue,
                 }
             };
-            storage_map.insert(key.into(), value_to_insert);
+            acc_state.storage.insert(key.into(), value_to_insert);
         }
     }
 }
@@ -637,7 +636,7 @@ impl CallTraceStep {
     /// Returns true if the step is a STOP opcode
     #[inline]
     pub(crate) fn is_stop(&self) -> bool {
-        matches!(self.op.u8(), opcode::STOP)
+        matches!(self.op.get(), opcode::STOP)
     }
 
     /// Returns true if the step is a call operation, any of
@@ -645,7 +644,7 @@ impl CallTraceStep {
     #[inline]
     pub(crate) fn is_calllike_op(&self) -> bool {
         matches!(
-            self.op.u8(),
+            self.op.get(),
             opcode::CALL |
                 opcode::DELEGATECALL |
                 opcode::STATICCALL |

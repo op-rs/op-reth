@@ -8,7 +8,7 @@ use revm::{
     Database, EVMData, Inspector,
 };
 
-/// A wrapped [Inspector](revm::Inspector) that can be reused in the stack
+/// A wrapped [Inspector] that can be reused in the stack
 mod maybe_owned;
 pub use maybe_owned::MaybeOwnedInspector;
 
@@ -73,8 +73,8 @@ impl InspectorStack {
     }
 }
 
-#[derive(Default)]
 /// Configuration for the inspectors.
+#[derive(Debug, Default)]
 pub struct InspectorStackConfig {
     /// Enable revm inspector printer.
     /// In execution this will print opcode level traces directly to console.

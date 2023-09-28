@@ -58,6 +58,7 @@ enum ReverseHeadersDownloaderError {
 /// the batches of headers that this downloader yields will start at the chain tip and move towards
 /// the local head: falling block numbers.
 #[must_use = "Stream does nothing unless polled"]
+#[allow(missing_debug_implementations)]
 pub struct ReverseHeadersDownloader<H: HeadersClient> {
     /// Consensus client used to validate headers
     consensus: Arc<dyn Consensus>,
@@ -643,8 +644,7 @@ where
         self.into_task_with(&TokioTaskExecutor::default())
     }
 
-    /// Convert the downloader into a [`TaskDownloader`](super::task::TaskDownloader) by spawning
-    /// it via the given `spawner`.
+    /// Convert the downloader into a [`TaskDownloader`] by spawning it via the given `spawner`.
     pub fn into_task_with<S>(self, spawner: &S) -> TaskDownloader
     where
         S: TaskSpawner,

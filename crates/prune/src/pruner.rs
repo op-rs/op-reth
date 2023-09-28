@@ -1,6 +1,6 @@
 //! Support for pruning.
 
-use crate::{Metrics, PrunerError};
+use crate::{Metrics, PrunerError, PrunerEvent};
 use rayon::prelude::*;
 use reth_db::{
     abstraction::cursor::{DbCursorRO, DbCursorRW},
@@ -11,15 +11,17 @@ use reth_db::{
     transaction::DbTxMut,
     BlockNumberList,
 };
+use reth_interfaces::RethResult;
 use reth_primitives::{
-    BlockNumber, ChainSpec, PruneBatchSizes, PruneCheckpoint, PruneMode, PruneModes, PrunePart,
-    TxNumber, MINIMUM_PRUNING_DISTANCE,
+    listener::EventListeners, BlockNumber, ChainSpec, PruneBatchSizes, PruneCheckpoint, PruneMode,
+    PruneModes, PrunePart, TxNumber, MINIMUM_PRUNING_DISTANCE,
 };
 use reth_provider::{
     BlockReader, DatabaseProviderRW, ProviderFactory, PruneCheckpointReader, PruneCheckpointWriter,
     TransactionsProvider,
 };
-use std::{ops::RangeInclusive, sync::Arc, time::Instant};
+use std::{collections::BTreeMap, ops::RangeInclusive, sync::Arc, time::Instant};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, instrument, trace};
 
 /// Result of [Pruner::run] execution.
@@ -32,6 +34,7 @@ pub type PrunerResult = Result<bool, PrunerError>;
 pub type PrunerWithResult<DB> = (Pruner<DB>, PrunerResult);
 
 /// Pruning routine. Main pruning logic happens in [Pruner::run].
+#[derive(Debug)]
 pub struct Pruner<DB> {
     metrics: Metrics,
     provider_factory: ProviderFactory<DB>,
@@ -44,6 +47,7 @@ pub struct Pruner<DB> {
     modes: PruneModes,
     /// Maximum entries to prune per block, per prune part.
     batch_sizes: PruneBatchSizes,
+    listeners: EventListeners<PrunerEvent>,
 }
 
 impl<DB: Database> Pruner<DB> {
@@ -62,7 +66,13 @@ impl<DB: Database> Pruner<DB> {
             last_pruned_block_number: None,
             modes,
             batch_sizes,
+            listeners: Default::default(),
         }
+    }
+
+    /// Listen for events on the prune.
+    pub fn events(&mut self) -> UnboundedReceiverStream<PrunerEvent> {
+        self.listeners.new_listener()
     }
 
     /// Run the pruner
@@ -81,6 +91,8 @@ impl<DB: Database> Pruner<DB> {
 
         let mut done = true;
 
+        let mut parts_done = BTreeMap::new();
+
         if let Some((to_block, prune_mode)) =
             self.modes.prune_target_block_receipts(tip_block_number)?
         {
@@ -95,6 +107,7 @@ impl<DB: Database> Pruner<DB> {
             let part_start = Instant::now();
             let part_done = self.prune_receipts(&provider, to_block, prune_mode)?;
             done = done && part_done;
+            parts_done.insert(PrunePart::Receipts, part_done);
             self.metrics
                 .get_prune_part_metrics(PrunePart::Receipts)
                 .duration_seconds
@@ -107,6 +120,7 @@ impl<DB: Database> Pruner<DB> {
             let part_start = Instant::now();
             let part_done = self.prune_receipts_by_logs(&provider, tip_block_number)?;
             done = done && part_done;
+            parts_done.insert(PrunePart::ContractLogs, part_done);
             self.metrics
                 .get_prune_part_metrics(PrunePart::ContractLogs)
                 .duration_seconds
@@ -129,6 +143,7 @@ impl<DB: Database> Pruner<DB> {
             let part_start = Instant::now();
             let part_done = self.prune_transaction_lookup(&provider, to_block, prune_mode)?;
             done = done && part_done;
+            parts_done.insert(PrunePart::TransactionLookup, part_done);
             self.metrics
                 .get_prune_part_metrics(PrunePart::TransactionLookup)
                 .duration_seconds
@@ -155,6 +170,7 @@ impl<DB: Database> Pruner<DB> {
             let part_start = Instant::now();
             let part_done = self.prune_transaction_senders(&provider, to_block, prune_mode)?;
             done = done && part_done;
+            parts_done.insert(PrunePart::SenderRecovery, part_done);
             self.metrics
                 .get_prune_part_metrics(PrunePart::SenderRecovery)
                 .duration_seconds
@@ -181,6 +197,7 @@ impl<DB: Database> Pruner<DB> {
             let part_start = Instant::now();
             let part_done = self.prune_account_history(&provider, to_block, prune_mode)?;
             done = done && part_done;
+            parts_done.insert(PrunePart::AccountHistory, part_done);
             self.metrics
                 .get_prune_part_metrics(PrunePart::AccountHistory)
                 .duration_seconds
@@ -207,6 +224,7 @@ impl<DB: Database> Pruner<DB> {
             let part_start = Instant::now();
             let part_done = self.prune_storage_history(&provider, to_block, prune_mode)?;
             done = done && part_done;
+            parts_done.insert(PrunePart::StorageHistory, part_done);
             self.metrics
                 .get_prune_part_metrics(PrunePart::StorageHistory)
                 .duration_seconds
@@ -225,7 +243,22 @@ impl<DB: Database> Pruner<DB> {
         let elapsed = start.elapsed();
         self.metrics.duration_seconds.record(elapsed);
 
-        trace!(target: "pruner", %tip_block_number, ?elapsed, "Pruner finished");
+        trace!(
+            target: "pruner",
+            %tip_block_number,
+            ?elapsed,
+            %done,
+            ?parts_done,
+            "Pruner finished"
+        );
+
+        self.listeners.notify(PrunerEvent::Finished {
+            tip_block_number,
+            elapsed,
+            done,
+            parts_done,
+        });
+
         Ok(done)
     }
 
@@ -264,7 +297,7 @@ impl<DB: Database> Pruner<DB> {
         provider: &DatabaseProviderRW<'_, DB>,
         prune_part: PrunePart,
         to_block: BlockNumber,
-    ) -> reth_interfaces::Result<Option<RangeInclusive<BlockNumber>>> {
+    ) -> RethResult<Option<RangeInclusive<BlockNumber>>> {
         let from_block = provider
             .get_prune_checkpoint(prune_part)?
             .and_then(|checkpoint| checkpoint.block_number)
@@ -294,7 +327,7 @@ impl<DB: Database> Pruner<DB> {
         provider: &DatabaseProviderRW<'_, DB>,
         prune_part: PrunePart,
         to_block: BlockNumber,
-    ) -> reth_interfaces::Result<Option<RangeInclusive<TxNumber>>> {
+    ) -> RethResult<Option<RangeInclusive<TxNumber>>> {
         let from_tx_number = provider
             .get_prune_checkpoint(prune_part)?
             // Checkpoint exists, prune from the next transaction after the highest pruned one

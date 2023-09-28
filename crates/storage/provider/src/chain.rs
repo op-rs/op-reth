@@ -1,7 +1,7 @@
 //! Contains [Chain], a chain of blocks and their final state.
 
 use crate::bundle_state::BundleStateWithReceipts;
-use reth_interfaces::{executor::BlockExecutionError, Error};
+use reth_interfaces::{executor::BlockExecutionError, RethResult};
 use reth_primitives::{
     BlockHash, BlockNumHash, BlockNumber, ForkBlock, Receipt, SealedBlock, SealedBlockWithSenders,
     SealedHeader, TransactionSigned, TxHash,
@@ -163,7 +163,7 @@ impl Chain {
     /// Merge two chains by appending the given chain into the current one.
     ///
     /// The state of accounts for this chain is set to the state of the newest chain.
-    pub fn append_chain(&mut self, chain: Chain) -> Result<(), Error> {
+    pub fn append_chain(&mut self, chain: Chain) -> RethResult<()> {
         let chain_tip = self.tip();
         if chain_tip.hash != chain.fork_block_hash() {
             return Err(BlockExecutionError::AppendChainDoesntConnect {
@@ -235,6 +235,7 @@ impl Chain {
 }
 
 /// Wrapper type for `blocks` display in `Chain`
+#[derive(Debug)]
 pub struct DisplayBlocksChain<'a>(pub &'a BTreeMap<BlockNumber, SealedBlockWithSenders>);
 
 impl<'a> fmt::Display for DisplayBlocksChain<'a> {
@@ -359,7 +360,7 @@ pub enum ChainSplit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reth_primitives::{H160, H256};
+    use reth_primitives::{Receipts, H160, H256};
     use reth_revm_primitives::{
         db::BundleState,
         primitives::{AccountInfo, HashMap},
@@ -405,7 +406,7 @@ mod tests {
                 vec![vec![(H160([2; 20]), None, vec![])]],
                 vec![],
             ),
-            vec![vec![]],
+            Receipts::from_vec(vec![vec![]]),
             1,
         );
 
@@ -415,7 +416,7 @@ mod tests {
                 vec![vec![(H160([3; 20]), None, vec![])]],
                 vec![],
             ),
-            vec![vec![]],
+            Receipts::from_vec(vec![vec![]]),
             2,
         );
 

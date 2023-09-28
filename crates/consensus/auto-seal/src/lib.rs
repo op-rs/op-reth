@@ -1,16 +1,3 @@
-#![cfg_attr(docsrs, feature(doc_cfg))]
-#![doc(
-    html_logo_url = "https://raw.githubusercontent.com/paradigmxyz/reth/main/assets/reth-docs.png",
-    html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
-    issue_tracker_base_url = "https://github.com/paradigmxzy/reth/issues/"
-)]
-#![warn(missing_docs, unreachable_pub, unused_crate_dependencies)]
-#![deny(unused_must_use, rust_2018_idioms)]
-#![doc(test(
-    no_crate_inject,
-    attr(deny(warnings, rust_2018_idioms), allow(dead_code, unused_variables))
-))]
-
 //! A [Consensus] implementation for local testing purposes
 //! that automatically seals blocks.
 //!
@@ -19,6 +6,15 @@
 //!
 //! These downloaders poll the miner, assemble the block, and return transactions that are ready to
 //! be mined.
+
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/paradigmxyz/reth/main/assets/reth-docs.png",
+    html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
+    issue_tracker_base_url = "https://github.com/paradigmxzy/reth/issues/"
+)]
+#![warn(missing_debug_implementations, missing_docs, unreachable_pub, rustdoc::all)]
+#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use reth_beacon_consensus::BeaconEngineMessage;
 use reth_interfaces::{
@@ -98,6 +94,7 @@ impl Consensus for AutoSealConsensus {
 }
 
 /// Builder type for configuring the setup
+#[derive(Debug)]
 pub struct AutoSealBuilder<Client, Pool> {
     client: Client,
     consensus: AutoSealConsensus,
@@ -305,6 +302,8 @@ impl StorageInner {
         senders: Vec<Address>,
     ) -> Result<(BundleStateWithReceipts, u64), BlockExecutionError> {
         trace!(target: "consensus::auto", transactions=?&block.body, "executing transactions");
+        // TODO: there isn't really a parent beacon block root here, so not sure whether or not to
+        // call the 4788 beacon contract
 
         let (receipts, gas_used) =
             executor.execute_transactions(block, U256::ZERO, Some(senders))?;
@@ -351,7 +350,7 @@ impl StorageInner {
         let state_root = client
             .latest()
             .map_err(|_| BlockExecutionError::ProviderError)?
-            .state_root(bundle_state.clone())
+            .state_root(bundle_state)
             .unwrap();
         header.state_root = state_root;
         Ok(header)

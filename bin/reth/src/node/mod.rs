@@ -25,7 +25,10 @@ use eyre::Context;
 use fdlimit::raise_fd_limit;
 use futures::{future::Either, pin_mut, stream, stream_select, StreamExt};
 use reth_auto_seal_consensus::{AutoSealBuilder, AutoSealConsensus, MiningMode};
-use reth_beacon_consensus::{BeaconConsensus, BeaconConsensusEngine, MIN_BLOCKS_FOR_PIPELINE_RUN};
+use reth_beacon_consensus::{
+    hooks::{EngineHooks, PruneHook},
+    BeaconConsensus, BeaconConsensusEngine, MIN_BLOCKS_FOR_PIPELINE_RUN,
+};
 use reth_blockchain_tree::{
     config::BlockchainTreeConfig, externals::TreeExternals, BlockchainTree, ShareableBlockchainTree,
 };
@@ -43,9 +46,10 @@ use reth_interfaces::{
         either::EitherDownloader,
         headers::{client::HeadersClient, downloader::HeaderDownloader},
     },
+    RethResult,
 };
 use reth_network::{error::NetworkError, NetworkConfig, NetworkHandle, NetworkManager};
-use reth_network_api::NetworkInfo;
+use reth_network_api::{NetworkInfo, PeersInfo};
 use reth_primitives::{
     constants::eip4844::{LoadKzgSettingsError, MAINNET_KZG_TRUSTED_SETUP},
     kzg::KzgSettings,
@@ -355,7 +359,7 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
                 default_peers_path,
             )
             .await?;
-        info!(target: "reth::cli", peer_id = %network.peer_id(), local_addr = %network.local_addr(), "Connected to P2P network");
+        info!(target: "reth::cli", peer_id = %network.peer_id(), local_addr = %network.local_addr(), enode = %network.local_node_record(), "Connected to P2P network");
         debug!(target: "reth::cli", peer_id = ?network.peer_id(), "Full peer ID");
         let network_client = network.fetch_client().await?;
 
@@ -457,16 +461,23 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
             None
         };
 
-        let pruner = prune_config.map(|prune_config| {
-            info!(target: "reth::cli", "Pruner initialized");
-            reth_prune::Pruner::new(
+        let mut hooks = EngineHooks::new();
+
+        let pruner_events = if let Some(prune_config) = prune_config {
+            info!(target: "reth::cli", ?prune_config, "Pruner initialized");
+            let mut pruner = reth_prune::Pruner::new(
                 db.clone(),
                 self.chain.clone(),
                 prune_config.block_interval,
                 prune_config.parts,
                 self.chain.prune_batch_sizes,
-            )
-        });
+            );
+            let events = pruner.events();
+            hooks.add(PruneHook::new(pruner, Box::new(ctx.task_executor.clone())));
+            Either::Left(events)
+        } else {
+            Either::Right(stream::empty())
+        };
 
         // Configure the consensus engine
         let (beacon_consensus_engine, beacon_engine_handle) = BeaconConsensusEngine::with_channel(
@@ -482,7 +493,7 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
             MIN_BLOCKS_FOR_PIPELINE_RUN,
             consensus_engine_tx,
             consensus_engine_rx,
-            pruner,
+            hooks,
         )?;
         info!(target: "reth::cli", "Consensus engine initialized");
 
@@ -497,7 +508,8 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
                 )
             } else {
                 Either::Right(stream::empty())
-            }
+            },
+            pruner_events.map(Into::into)
         );
         ctx.task_executor.spawn_critical(
             "events task",
@@ -669,7 +681,7 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
         Ok(handle)
     }
 
-    fn lookup_head(&self, db: Arc<DatabaseEnv>) -> Result<Head, reth_interfaces::Error> {
+    fn lookup_head(&self, db: Arc<DatabaseEnv>) -> RethResult<Head> {
         let factory = ProviderFactory::new(db, self.chain.clone());
         let provider = factory.provider()?;
 
@@ -705,7 +717,7 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
         db: DB,
         client: Client,
         tip: H256,
-    ) -> Result<u64, reth_interfaces::Error>
+    ) -> RethResult<u64>
     where
         DB: Database,
         Client: HeadersClient,
@@ -721,7 +733,7 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
         db: DB,
         client: Client,
         tip: BlockHashOrNumber,
-    ) -> Result<SealedHeader, reth_interfaces::Error>
+    ) -> RethResult<SealedHeader>
     where
         DB: Database,
         Client: HeadersClient,

@@ -60,6 +60,11 @@ impl Block {
         BlockWithSenders { block: self, senders }
     }
 
+    /// Returns whether or not the block contains any blob transactions.
+    pub fn has_blob_transactions(&self) -> bool {
+        self.body.iter().any(|tx| tx.is_eip4844())
+    }
+
     /// Calculates a heuristic for the in-memory size of the [Block].
     #[inline]
     pub fn size(&self) -> usize {
@@ -202,6 +207,11 @@ impl SealedBlock {
             self.body.iter().map(TransactionSigned::size).sum::<usize>() + self.body.capacity() * std::mem::size_of::<TransactionSigned>() +
             self.ommers.iter().map(Header::size).sum::<usize>() + self.ommers.capacity() * std::mem::size_of::<Header>() +
             self.withdrawals.as_ref().map(|w| w.iter().map(Withdrawal::size).sum::<usize>() + w.capacity() * std::mem::size_of::<Withdrawal>()).unwrap_or(std::mem::size_of::<Option<Vec<Withdrawal>>>())
+    }
+
+    /// Calculates the total gas used by blob transactions in the sealed block.
+    pub fn blob_gas_used(&self) -> u64 {
+        self.blob_transactions().iter().filter_map(|tx| tx.blob_gas_used()).sum()
     }
 }
 
@@ -810,7 +820,7 @@ pub struct BlockBody {
 }
 
 impl BlockBody {
-    /// Create a [`Block`](Block) from the body and its header.
+    /// Create a [`Block`] from the body and its header.
     pub fn create_block(&self, header: Header) -> Block {
         Block {
             header,

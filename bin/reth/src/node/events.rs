@@ -10,6 +10,7 @@ use reth_primitives::{
     stage::{EntitiesCheckpoint, StageCheckpoint, StageId},
     BlockNumber,
 };
+use reth_prune::PrunerEvent;
 use reth_stages::{ExecOutput, PipelineEvent};
 use std::{
     future::Future,
@@ -21,7 +22,7 @@ use tokio::time::Interval;
 use tracing::{info, warn};
 
 /// Interval of reporting node state.
-const INFO_MESSAGE_INTERVAL: Duration = Duration::from_secs(30);
+const INFO_MESSAGE_INTERVAL: Duration = Duration::from_secs(25);
 
 /// The current high-level state of the node.
 struct NodeState {
@@ -127,6 +128,9 @@ impl NodeState {
 
                 info!(number=block.number, hash=?block.hash, "Block added to canonical chain");
             }
+            BeaconConsensusEngineEvent::CanonicalChainCommitted(head, elapsed) => {
+                info!(number=head.number, hash=?head.hash, ?elapsed, "Canonical chain committed");
+            }
             BeaconConsensusEngineEvent::ForkBlockAdded(block) => {
                 info!(number=block.number, hash=?block.hash, "Block added to fork chain");
             }
@@ -149,6 +153,20 @@ impl NodeState {
             }
         }
     }
+
+    fn handle_pruner_event(&self, event: PrunerEvent) {
+        match event {
+            PrunerEvent::Finished { tip_block_number, elapsed, done, parts_done } => {
+                info!(
+                    tip_block_number = tip_block_number,
+                    elapsed = ?elapsed,
+                    done = done,
+                    parts_done = ?parts_done,
+                    "Pruner finished"
+                );
+            }
+        }
+    }
 }
 
 /// A node event.
@@ -162,6 +180,8 @@ pub enum NodeEvent {
     ConsensusEngine(BeaconConsensusEngineEvent),
     /// A Consensus Layer health event.
     ConsensusLayerHealth(ConsensusLayerHealthEvent),
+    /// A pruner event
+    Pruner(PrunerEvent),
 }
 
 impl From<NetworkEvent> for NodeEvent {
@@ -188,6 +208,12 @@ impl From<ConsensusLayerHealthEvent> for NodeEvent {
     }
 }
 
+impl From<PrunerEvent> for NodeEvent {
+    fn from(event: PrunerEvent) -> Self {
+        NodeEvent::Pruner(event)
+    }
+}
+
 /// Displays relevant information to the user from components of the node, and periodically
 /// displays the high-level status of the node.
 pub async fn handle_events<E>(
@@ -199,7 +225,8 @@ pub async fn handle_events<E>(
 {
     let state = NodeState::new(network, latest_block_number);
 
-    let mut info_interval = tokio::time::interval(INFO_MESSAGE_INTERVAL);
+    let start = tokio::time::Instant::now() + Duration::from_secs(3);
+    let mut info_interval = tokio::time::interval_at(start, INFO_MESSAGE_INTERVAL);
     info_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     let handler = EventHandler { state, events, info_interval };
@@ -258,6 +285,9 @@ where
                 }
                 NodeEvent::ConsensusLayerHealth(event) => {
                     this.state.handle_consensus_layer_health_event(event)
+                }
+                NodeEvent::Pruner(event) => {
+                    this.state.handle_pruner_event(event);
                 }
             }
         }

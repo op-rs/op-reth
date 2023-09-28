@@ -88,7 +88,6 @@ pub struct TxPool<T: TransactionOrdering> {
     /// be moved to pending if the base fee changes in their favor (decreases) in future blocks.
     basefee_pool: ParkedPool<BasefeeOrd<T::Transaction>>,
     /// All blob transactions in the pool
-    #[allow(unused)]
     blob_transactions: BlobTransactions<T::Transaction>,
     /// All transactions in the pool.
     all_transactions: AllTransactions<T::Transaction>,
@@ -269,6 +268,7 @@ impl<T: TransactionOrdering> TxPool<T> {
             SubPool::Queued => self.queued_pool.contains(id),
             SubPool::Pending => self.pending_pool.contains(id),
             SubPool::BaseFee => self.basefee_pool.contains(id),
+            SubPool::Blob => self.blob_transactions.contains(id),
         }
     }
 
@@ -561,6 +561,7 @@ impl<T: TransactionOrdering> TxPool<T> {
             SubPool::Queued => self.queued_pool.remove_transaction(tx),
             SubPool::Pending => self.pending_pool.remove_transaction(tx),
             SubPool::BaseFee => self.basefee_pool.remove_transaction(tx),
+            SubPool::Blob => self.blob_transactions.remove_transaction(tx),
         }
     }
 
@@ -572,9 +573,10 @@ impl<T: TransactionOrdering> TxPool<T> {
         tx: &TransactionId,
     ) -> Option<Arc<ValidPoolTransaction<T::Transaction>>> {
         match pool {
-            SubPool::Queued => self.queued_pool.remove_transaction(tx),
             SubPool::Pending => self.pending_pool.prune_transaction(tx),
+            SubPool::Queued => self.queued_pool.remove_transaction(tx),
             SubPool::BaseFee => self.basefee_pool.remove_transaction(tx),
+            SubPool::Blob => self.blob_transactions.remove_transaction(tx),
         }
     }
 
@@ -618,6 +620,9 @@ impl<T: TransactionOrdering> TxPool<T> {
             }
             SubPool::BaseFee => {
                 self.basefee_pool.add_transaction(tx);
+            }
+            SubPool::Blob => {
+                self.blob_transactions.add_transaction(tx);
             }
         }
     }
@@ -693,6 +698,25 @@ impl<T: TransactionOrdering> TxPool<T> {
     pub(crate) fn is_empty(&self) -> bool {
         self.all_transactions.is_empty()
     }
+
+    /// Asserts all invariants of the  pool's:
+    ///
+    ///  - All maps are bijections (`by_id`, `by_hash`)
+    ///  - Total size is equal to the sum of all sub-pools
+    ///
+    /// # Panics
+    /// if any invariant is violated
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn assert_invariants(&self) {
+        let size = self.size();
+        let actual = size.basefee + size.pending + size.queued;
+        assert_eq!(size.total, actual,  "total size must be equal to the sum of all sub-pools, basefee:{}, pending:{}, queued:{}", size.basefee, size.pending, size.queued);
+        self.all_transactions.assert_invariants();
+        self.pending_pool.assert_invariants();
+        self.basefee_pool.assert_invariants();
+        self.queued_pool.assert_invariants();
+        self.blob_transactions.assert_invariants();
+    }
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -700,6 +724,13 @@ impl TxPool<crate::test_utils::MockOrdering> {
     /// Creates a mock instance for testing.
     pub fn mock() -> Self {
         Self::new(crate::test_utils::MockOrdering::default(), PoolConfig::default())
+    }
+}
+
+#[cfg(test)]
+impl<T: TransactionOrdering> Drop for TxPool<T> {
+    fn drop(&mut self) {
+        self.assert_invariants();
     }
 }
 
@@ -1298,9 +1329,19 @@ impl<T: PoolTransaction> AllTransactions<T> {
         // before attempting to insert a blob transaction, we need to ensure that additional
         // constraints are met that only apply to blob transactions
         if transaction.is_eip4844() {
+            state.insert(TxState::BLOB_TRANSACTION);
+
             transaction =
                 self.ensure_valid_blob_transaction(transaction, on_chain_balance, ancestor)?;
+            let blob_fee_cap = transaction.transaction.max_fee_per_blob_gas().unwrap_or_default();
+            if blob_fee_cap >= self.pending_blob_fee as u128 {
+                state.insert(TxState::ENOUGH_BLOB_FEE_CAP_BLOCK);
+            }
+        } else {
+            // Non-EIP4844 transaction always satisfy the blob fee cap condition
+            state.insert(TxState::ENOUGH_BLOB_FEE_CAP_BLOCK);
         }
+
         let transaction = Arc::new(transaction);
 
         // If there's no ancestor tx then this is the next transaction.
@@ -1461,6 +1502,12 @@ impl<T: PoolTransaction> AllTransactions<T> {
     /// Whether the pool is empty
     pub(crate) fn is_empty(&self) -> bool {
         self.txs.is_empty()
+    }
+
+    /// Asserts that the bijection between `by_hash` and `txs` is valid.
+    #[cfg(any(test, feature = "test-utils"))]
+    pub(crate) fn assert_invariants(&self) {
+        assert_eq!(self.by_hash.len(), self.txs.len(), "by_hash.len() != txs.len()");
     }
 }
 
@@ -1636,6 +1683,44 @@ mod tests {
         test_utils::{MockOrdering, MockTransaction, MockTransactionFactory},
         traits::TransactionOrigin,
     };
+
+    #[test]
+    fn test_insert_blob() {
+        let on_chain_balance = U256::MAX;
+        let on_chain_nonce = 0;
+        let mut f = MockTransactionFactory::default();
+        let mut pool = AllTransactions::default();
+        let tx = MockTransaction::eip4844().inc_price().inc_limit();
+        let valid_tx = f.validated(tx);
+        let InsertOk { updates, replaced_tx, move_to, state, .. } =
+            pool.insert_tx(valid_tx.clone(), on_chain_balance, on_chain_nonce).unwrap();
+        assert!(updates.is_empty());
+        assert!(replaced_tx.is_none());
+        assert!(state.contains(TxState::NO_NONCE_GAPS));
+        assert!(state.contains(TxState::ENOUGH_BALANCE));
+        assert!(state.contains(TxState::ENOUGH_BLOB_FEE_CAP_BLOCK));
+        assert_eq!(move_to, SubPool::Pending);
+
+        let inserted = pool.txs.get(&valid_tx.transaction_id).unwrap();
+        assert_eq!(inserted.subpool, SubPool::Pending);
+    }
+
+    #[test]
+    fn test_insert_blob_not_enough_blob_fee() {
+        let on_chain_balance = U256::MAX;
+        let on_chain_nonce = 0;
+        let mut f = MockTransactionFactory::default();
+        let mut pool = AllTransactions { pending_blob_fee: 10_000_000, ..Default::default() };
+        pool.pending_blob_fee = 10_000_000;
+        let tx = MockTransaction::eip4844().inc_price().inc_limit();
+        let valid_tx = f.validated(tx);
+        let InsertOk { state, .. } =
+            pool.insert_tx(valid_tx.clone(), on_chain_balance, on_chain_nonce).unwrap();
+        assert!(state.contains(TxState::NO_NONCE_GAPS));
+        assert!(!state.contains(TxState::ENOUGH_BLOB_FEE_CAP_BLOCK));
+
+        let _ = pool.txs.get(&valid_tx.transaction_id).unwrap();
+    }
 
     #[test]
     fn test_insert_pending() {

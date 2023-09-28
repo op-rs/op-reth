@@ -14,7 +14,7 @@ use crate::{
 use async_trait::async_trait;
 use reth_network_api::NetworkInfo;
 use reth_primitives::{
-    constants::eip4844::blob_fee,
+    eip4844::calc_blob_gasprice,
     Address, BlockId, BlockNumberOrTag, Bytes, FromRecoveredPooledTransaction, Header,
     IntoRecoveredTransaction, Receipt, SealedBlock,
     TransactionKind::{Call, Create},
@@ -475,7 +475,8 @@ where
         if request.nonce.is_none() {
             let nonce =
                 self.get_transaction_count(from, Some(BlockId::Number(BlockNumberOrTag::Pending)))?;
-            request.nonce = Some(nonce);
+            // note: `.to()` can't panic because the nonce is constructed from a `u64`
+            request.nonce = Some(U64::from(nonce.to::<u64>()));
         }
 
         let chain_id = self.chain_id();
@@ -498,6 +499,8 @@ where
                     access_list: request.access_list.clone(),
                     max_priority_fee_per_gas: Some(U256::from(max_fee_per_gas)),
                     transaction_type: None,
+                    blob_versioned_hashes: None,
+                    max_fee_per_blob_gas: None,
                 },
                 BlockId::Number(BlockNumberOrTag::Pending),
             )
@@ -965,7 +968,7 @@ pub(crate) fn build_transaction_receipt_with_block_receipts(
         logs_bloom: receipt.bloom_slow(),
         status_code: if receipt.success { Some(U64::from(1)) } else { Some(U64::from(0)) },
         // EIP-4844 fields
-        blob_gas_price: meta.excess_blob_gas.map(blob_fee),
+        blob_gas_price: meta.excess_blob_gas.map(calc_blob_gasprice).map(U128::from),
         blob_gas_used: transaction.transaction.blob_gas_used().map(U128::from),
         // Optimism fields
         #[cfg(feature = "optimism")]

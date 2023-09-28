@@ -8,7 +8,7 @@ use reth_db::database::Database;
 use reth_interfaces::{
     blockchain_tree::error::{BlockchainTreeError, InsertBlockError},
     consensus::{Consensus, ConsensusError},
-    Error,
+    RethResult,
 };
 use reth_primitives::{
     BlockHash, BlockNumber, ForkBlock, SealedBlockWithSenders, SealedHeader, U256,
@@ -47,7 +47,7 @@ impl DerefMut for AppendableChain {
 }
 
 impl AppendableChain {
-    /// Crate a new appendable chain from a given chain.
+    /// Create a new appendable chain from a given chain.
     pub fn new(chain: Chain) -> Self {
         Self { chain }
     }
@@ -183,7 +183,7 @@ impl AppendableChain {
         post_state_data_provider: BSDP,
         externals: &TreeExternals<DB, C, EF>,
         block_kind: BlockKind,
-    ) -> Result<BundleStateWithReceipts, Error>
+    ) -> RethResult<BundleStateWithReceipts>
     where
         BSDP: BundleStateDataProvider,
         DB: Database,
@@ -210,7 +210,7 @@ impl AppendableChain {
         // check state root if the block extends the canonical chain.
         if block_kind.extends_canonical_head() {
             // check state root
-            let state_root = provider.state_root(bundle_state.clone())?;
+            let state_root = provider.state_root(&bundle_state)?;
             if block.state_root != state_root {
                 return Err(ConsensusError::BodyStateRootDiff {
                     got: state_root,
@@ -230,7 +230,7 @@ impl AppendableChain {
         parent_block: &SealedHeader,
         post_state_data_provider: BSDP,
         externals: &TreeExternals<DB, C, EF>,
-    ) -> Result<BundleStateWithReceipts, Error>
+    ) -> RethResult<BundleStateWithReceipts>
     where
         BSDP: BundleStateDataProvider,
         DB: Database,
@@ -252,7 +252,7 @@ impl AppendableChain {
         parent_block: &SealedHeader,
         post_state_data_provider: BSDP,
         externals: &TreeExternals<DB, C, EF>,
-    ) -> Result<BundleStateWithReceipts, Error>
+    ) -> RethResult<BundleStateWithReceipts>
     where
         BSDP: BundleStateDataProvider,
         DB: Database,

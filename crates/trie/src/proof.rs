@@ -34,6 +34,7 @@ use reth_rlp::Encodable;
 ///
 /// After traversing the path, the proof generator continues to restore the root node of the trie
 /// until completion. The root node is then inserted at the start of the proof.
+#[derive(Debug)]
 pub struct Proof<'a, 'b, TX, H> {
     /// A reference to the database transaction.
     tx: &'a TX,
@@ -269,14 +270,12 @@ mod tests {
     use super::*;
     use crate::StateRoot;
     use reth_db::{database::Database, test_utils::create_test_rw_db};
+    use reth_interfaces::RethResult;
     use reth_primitives::{ChainSpec, StorageEntry, MAINNET};
     use reth_provider::{HashingWriter, ProviderFactory};
     use std::{str::FromStr, sync::Arc};
 
-    fn insert_genesis<DB: Database>(
-        db: DB,
-        chain_spec: Arc<ChainSpec>,
-    ) -> reth_interfaces::Result<()> {
+    fn insert_genesis<DB: Database>(db: DB, chain_spec: Arc<ChainSpec>) -> RethResult<()> {
         let provider_factory = ProviderFactory::new(db, chain_spec.clone());
         let mut provider = provider_factory.provider_rw()?;
 

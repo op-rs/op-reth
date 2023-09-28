@@ -10,6 +10,7 @@ use futures_util::{
     future::{BoxFuture, Fuse, FusedFuture},
     FutureExt, Stream, StreamExt,
 };
+use reth_interfaces::RethError;
 use reth_primitives::{
     Address, BlockHash, BlockNumber, BlockNumberOrTag, FromRecoveredTransaction,
 };
@@ -93,7 +94,7 @@ pub async fn maintain_transaction_pool<Client, P, St, Tasks>(
             pending_basefee: latest
                 .next_block_base_fee(chain_spec.base_fee_params)
                 .unwrap_or_default(),
-            pending_blob_fee: latest.next_block_blob_fee().map(|fee| fee.saturating_to()),
+            pending_blob_fee: latest.next_block_blob_fee(),
         };
         pool.set_block_info(info);
     }
@@ -239,8 +240,7 @@ pub async fn maintain_transaction_pool<Client, P, St, Tasks>(
                 // fees for the next block: `new_tip+1`
                 let pending_block_base_fee =
                     new_tip.next_block_base_fee(chain_spec.base_fee_params).unwrap_or_default();
-                let pending_block_blob_fee =
-                    new_tip.next_block_blob_fee().map(|fee| fee.saturating_to());
+                let pending_block_blob_fee = new_tip.next_block_blob_fee();
 
                 // we know all changed account in the new chain
                 let new_changed_accounts: HashSet<_> =
@@ -321,8 +321,7 @@ pub async fn maintain_transaction_pool<Client, P, St, Tasks>(
                 // fees for the next block: `tip+1`
                 let pending_block_base_fee =
                     tip.next_block_base_fee(chain_spec.base_fee_params).unwrap_or_default();
-                let pending_block_blob_fee =
-                    tip.next_block_blob_fee().map(|fee| fee.saturating_to());
+                let pending_block_blob_fee = tip.next_block_blob_fee();
 
                 let first_block = blocks.first();
                 trace!(
@@ -472,7 +471,7 @@ fn load_accounts<Client, I>(
     client: Client,
     at: BlockHash,
     addresses: I,
-) -> Result<LoadedAccounts, Box<(HashSet<Address>, reth_interfaces::Error)>>
+) -> Result<LoadedAccounts, Box<(HashSet<Address>, RethError)>>
 where
     I: Iterator<Item = Address>,
 
