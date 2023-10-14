@@ -65,7 +65,7 @@ mod metrics;
 
 /// The [`PayloadJobGenerator`] that creates [`BasicPayloadJob`]s.
 #[derive(Debug)]
-pub struct BasicPayloadJobGenerator<Client, Pool, Tasks, Builder> {
+pub struct BasicPayloadJobGenerator<Client, Pool, Tasks, Builder = ()> {
     /// The client that can interact with the chain.
     client: Client,
     /// txpool
@@ -158,10 +158,10 @@ where
             Arc::new(parent_block),
             self.config.extradata.clone(),
             attributes,
-            chain_spec: Arc::clone(&self.chain_spec),
+            Arc::clone(&self.chain_spec),
             #[cfg(feature = "optimism")]
-            compute_pending_block: self.config.compute_pending_block,
-        };
+            self.config.compute_pending_block,
+        );
 
         let until = tokio::time::Instant::now() + self.config.deadline;
         let deadline = Box::pin(tokio::time::sleep_until(until));
@@ -604,7 +604,7 @@ impl PayloadConfig {
         if self.chain_spec.optimism {
             return Default::default()
         }
-        reth_primitives::Bytes(self.extra_data.clone())
+        self.extra_data.clone()
     }
 }
 
@@ -1041,7 +1041,6 @@ where
         extra_data,
         blob_gas_used: None,
         excess_blob_gas: None,
-        extra_data,
         parent_beacon_block_root: attributes.parent_beacon_block_root,
     };
 

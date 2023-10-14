@@ -43,12 +43,14 @@ pub mod option_u64_hex {
     where
         D: Deserializer<'de>,
     {
-        Ok(U64::deserialize(deserializer).map_or(None, |v| Some(v.as_u64())))
+        Ok(U64::deserialize(deserializer)
+            .map_or(None, |v| Some(u64::from_be_bytes(v.to_be_bytes()))))
     }
 }
 
 /// serde functions for handling bytes as hex strings, such as [bytes::Bytes]
 pub mod hex_bytes {
+    use alloy_primitives::hex;
     use serde::{Deserialize, Deserializer, Serializer};
 
     /// Serialize a byte vec as a hex string with 0x prefix

@@ -131,6 +131,7 @@ pub trait RethNodeCommandConfig: fmt::Debug {
                 .extradata(conf.extradata_rlp_bytes())
                 .max_gas_limit(conf.max_gas_limit()),
             components.chain_spec(),
+            payload_builder,
         );
         let (payload_service, payload_builder) = PayloadBuilderService::new(payload_generator);
 

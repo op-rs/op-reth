@@ -784,10 +784,7 @@ impl<Ext: RethCliExt> NodeCommand<Ext> {
             .discovery_addr(SocketAddr::V4(SocketAddrV4::new(
                 self.network.addr,
                 // set discovery port based on instance number
-                match self.network.port {
-                    Some(port) => port + self.instance - 1,
-                    None => DEFAULT_DISCOVERY_PORT + self.instance - 1,
-                },
+                self.network.port + self.instance - 1,
             )));
 
         #[cfg(feature = "optimism")]

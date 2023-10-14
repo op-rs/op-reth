@@ -6,7 +6,7 @@ use crate::{
 };
 use futures_util::{ready, Stream};
 use reth_primitives::{
-    AccessList, Address, BlobTransactionSidecar, BlobTransactionValidationError,
+    AccessList, Address, BlobTransactionSidecar, BlobTransactionValidationError, Bytes,
     FromRecoveredPooledTransaction, FromRecoveredTransaction, IntoRecoveredTransaction, PeerId,
     PooledTransactionsElement, PooledTransactionsElementEcRecovered, SealedBlock, Transaction,
     TransactionKind, TransactionSignedEcRecovered, TxEip4844, TxHash, B256, EIP1559_TX_TYPE_ID,
@@ -726,9 +726,6 @@ pub trait PoolTransaction:
     /// [`TransactionKind::Create`] if the transaction is a contract creation.
     fn kind(&self) -> &TransactionKind;
 
-    /// Returns the input data of this transaction.
-    fn input(&self) -> &[u8];
-
     /// Returns a measurement of the heap usage of this type and all its internals.
     fn size(&self) -> usize;
 
@@ -963,10 +960,6 @@ impl PoolTransaction for EthPooledTransaction {
     /// [`TransactionKind::Create`] if the transaction is a contract creation.
     fn kind(&self) -> &TransactionKind {
         self.transaction.kind()
-    }
-
-    fn input(&self) -> &[u8] {
-        self.transaction.input().as_ref()
     }
 
     /// Returns a measurement of the heap usage of this type and all its internals.

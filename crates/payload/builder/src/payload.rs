@@ -1,6 +1,6 @@
 //! Contains types required for building a payload.
 
-use alloy_rlp::Encodable;
+use alloy_rlp::{DecodeError, Encodable};
 use reth_primitives::{
     Address, BlobTransactionSidecar, ChainSpec, Header, SealedBlock, Withdrawal, B256, U256,
 };
@@ -196,6 +196,7 @@ impl PayloadBuilderAttributes {
             gas_limit: attributes.gas_limit,
         })
     }
+
     /// Returns the configured [CfgEnv] and [BlockEnv] for the targeted payload (that has the
     /// `parent` as its parent).
     ///
