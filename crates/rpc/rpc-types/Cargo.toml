@@ -13,16 +13,14 @@ Reth RPC types
 [dependencies]
 # reth
 reth-primitives.workspace = true
-reth-rlp.workspace = true
-# errors
-thiserror.workspace = true
 
 # misc
+alloy-rlp.workspace = true
+thiserror.workspace = true
 itertools.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 jsonrpsee-types = { workspace = true, optional = true }
-
 
 [features]
 default = ["jsonrpsee-types"]
@@ -32,5 +30,3 @@ optimism = ["reth-primitives/optimism"]
 # misc
 rand.workspace = true
 similar-asserts = "1.4"
-
-

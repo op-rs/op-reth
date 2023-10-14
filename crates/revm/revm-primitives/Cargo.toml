@@ -9,10 +9,8 @@ repository.workspace = true
 description = "core reth specific revm utilities"
 
 [dependencies]
-# reth 
+# reth
 reth-primitives.workspace = true
-reth-rlp = { path = "../../rlp" }
-
 revm.workspace = true
 
 [features]

@@ -3,7 +3,7 @@ use crate::tracing::{
     utils::get_create_address,
 };
 pub use arena::CallTraceArena;
-use reth_primitives::{bytes::Bytes, Address, H256, U256};
+use reth_primitives::{Address, Bytes, B256, U256};
 use revm::{
     inspectors::GasInspector,
     interpreter::{
@@ -24,7 +24,7 @@ mod types;
 mod utils;
 use crate::tracing::{
     arena::PushTraceKind,
-    types::{CallTraceNode, StorageChange},
+    types::{CallTraceNode, StorageChange, StorageChangeReason},
     utils::gas_used,
 };
 pub use builder::{
@@ -335,7 +335,6 @@ impl TracingInspector {
                 step.memory.resize(interp.memory.len());
             }
         }
-
         if self.config.record_state_diff {
             let op = interp.current_opcode();
 
@@ -355,7 +354,12 @@ impl TracingInspector {
                 ) => {
                     // SAFETY: (Address,key) exists if part if StorageChange
                     let value = data.journaled_state.state[address].storage[key].present_value();
-                    let change = StorageChange { key: *key, value, had_value: *had_value };
+                    let reason = match op {
+                        opcode::SLOAD => StorageChangeReason::SLOAD,
+                        opcode::SSTORE => StorageChangeReason::SSTORE,
+                        _ => unreachable!(),
+                    };
+                    let change = StorageChange { key: *key, value, had_value: *had_value, reason };
                     Some(change)
                 }
                 _ => None,
@@ -396,7 +400,7 @@ where
         &mut self,
         evm_data: &mut EVMData<'_, DB>,
         address: &Address,
-        topics: &[H256],
+        topics: &[B256],
         data: &Bytes,
     ) {
         self.gas_inspector.log(evm_data, address, topics, data);

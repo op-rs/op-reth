@@ -19,6 +19,7 @@ reth-rpc-types.workspace = true
 reth-tasks.workspace = true
 reth-payload-builder.workspace = true
 reth-prune = { path = "../../prune" }
+reth-snapshot = { path = "../../snapshot" }
 reth-rpc-types-compat.workspace = true
 # async
 tokio = { workspace = true, features = ["sync"] }
@@ -42,7 +43,7 @@ reth-stages = { path = "../../stages", features = ["test-utils"] }
 reth-blockchain-tree = { path = "../../blockchain-tree", features = ["test-utils"] }
 reth-db = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
-reth-tracing = { path = "../../tracing" }
+reth-tracing.workspace = true
 reth-revm = { path = "../../revm" }
 reth-downloaders = { path = "../../net/downloaders" }
 

@@ -1,12 +1,13 @@
 use crate::{
-    payload::PayloadOrAttributes, EngineApiError, EngineApiMessageVersion, EngineApiResult,
+    metrics::EngineApiMetrics, payload::PayloadOrAttributes, EngineApiError,
+    EngineApiMessageVersion, EngineApiResult,
 };
 use async_trait::async_trait;
 use jsonrpsee_core::RpcResult;
 use reth_beacon_consensus::BeaconConsensusEngineHandle;
 use reth_interfaces::consensus::ForkchoiceState;
 use reth_payload_builder::PayloadStore;
-use reth_primitives::{BlockHash, BlockHashOrNumber, BlockNumber, ChainSpec, Hardfork, H256, U64};
+use reth_primitives::{BlockHash, BlockHashOrNumber, BlockNumber, ChainSpec, Hardfork, B256, U64};
 use reth_provider::{BlockReader, EvmEnvProvider, HeaderProvider, StateProviderFactory};
 use reth_rpc_api::EngineApiServer;
 use reth_rpc_types::engine::{
@@ -19,7 +20,7 @@ use reth_rpc_types_compat::engine::payload::{
     convert_payload_input_v2_to_payload, convert_to_payload_body_v1,
 };
 use reth_tasks::TaskSpawner;
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use tokio::sync::oneshot;
 use tracing::trace;
 
@@ -46,6 +47,8 @@ struct EngineApiInner<Provider> {
     payload_store: PayloadStore,
     /// For spawning and executing async tasks
     task_spawner: Box<dyn TaskSpawner>,
+    /// The metrics for engine api calls
+    metrics: EngineApiMetrics,
 }
 
 impl<Provider> EngineApi<Provider>
@@ -66,6 +69,7 @@ where
             beacon_consensus,
             payload_store,
             task_spawner,
+            metrics: EngineApiMetrics::default(),
         });
         Self { inner }
     }
@@ -97,8 +101,8 @@ where
     pub async fn new_payload_v3(
         &self,
         payload: ExecutionPayloadV3,
-        versioned_hashes: Vec<H256>,
-        parent_beacon_block_root: H256,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
     ) -> EngineApiResult<PayloadStatus> {
         let payload = ExecutionPayload::from(payload);
         let payload_or_attrs =
@@ -361,7 +365,7 @@ where
         let local_hash = self
             .inner
             .provider
-            .block_hash(terminal_block_number.as_u64())
+            .block_hash(terminal_block_number.to())
             .map_err(|err| EngineApiError::Internal(Box::new(err)))?;
 
         // Transition configuration exchange is successful if block hashes match
@@ -599,14 +603,20 @@ where
     /// Caution: This should not accept the `withdrawals` field
     async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV1");
-        Ok(EngineApi::new_payload_v1(self, payload).await?)
+        let start = Instant::now();
+        let res = EngineApi::new_payload_v1(self, payload).await;
+        self.inner.metrics.new_payload_v1.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_newPayloadV2`
     /// See also <https://github.com/ethereum/execution-apis/blob/584905270d8ad665718058060267061ecfd79ca5/src/engine/shanghai.md#engine_newpayloadv2>
     async fn new_payload_v2(&self, payload: ExecutionPayloadInputV2) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV2");
-        Ok(EngineApi::new_payload_v2(self, payload).await?)
+        let start = Instant::now();
+        let res = EngineApi::new_payload_v2(self, payload).await;
+        self.inner.metrics.new_payload_v2.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_newPayloadV3`
@@ -614,12 +624,16 @@ where
     async fn new_payload_v3(
         &self,
         payload: ExecutionPayloadV3,
-        versioned_hashes: Vec<H256>,
-        parent_beacon_block_root: H256,
+        versioned_hashes: Vec<B256>,
+        parent_beacon_block_root: B256,
     ) -> RpcResult<PayloadStatus> {
         trace!(target: "rpc::engine", "Serving engine_newPayloadV3");
-        Ok(EngineApi::new_payload_v3(self, payload, versioned_hashes, parent_beacon_block_root)
-            .await?)
+        let start = Instant::now();
+        let res =
+            EngineApi::new_payload_v3(self, payload, versioned_hashes, parent_beacon_block_root)
+                .await;
+        self.inner.metrics.new_payload_v3.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_forkchoiceUpdatedV1`
@@ -632,7 +646,11 @@ where
         payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV1");
-        Ok(EngineApi::fork_choice_updated_v1(self, fork_choice_state, payload_attributes).await?)
+        let start = Instant::now();
+        let res =
+            EngineApi::fork_choice_updated_v1(self, fork_choice_state, payload_attributes).await;
+        self.inner.metrics.fork_choice_updated_v1.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_forkchoiceUpdatedV2`
@@ -643,7 +661,11 @@ where
         payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV2");
-        Ok(EngineApi::fork_choice_updated_v2(self, fork_choice_state, payload_attributes).await?)
+        let start = Instant::now();
+        let res =
+            EngineApi::fork_choice_updated_v2(self, fork_choice_state, payload_attributes).await;
+        self.inner.metrics.fork_choice_updated_v2.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_forkchoiceUpdatedV2`
@@ -655,7 +677,11 @@ where
         payload_attributes: Option<PayloadAttributes>,
     ) -> RpcResult<ForkchoiceUpdated> {
         trace!(target: "rpc::engine", "Serving engine_forkchoiceUpdatedV3");
-        Ok(EngineApi::fork_choice_updated_v3(self, fork_choice_state, payload_attributes).await?)
+        let start = Instant::now();
+        let res =
+            EngineApi::fork_choice_updated_v3(self, fork_choice_state, payload_attributes).await;
+        self.inner.metrics.fork_choice_updated_v3.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_getPayloadV1`
@@ -671,7 +697,10 @@ where
     /// > Provider software MAY stop the corresponding build process after serving this call.
     async fn get_payload_v1(&self, payload_id: PayloadId) -> RpcResult<ExecutionPayloadV1> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV1");
-        Ok(EngineApi::get_payload_v1(self, payload_id).await?)
+        let start = Instant::now();
+        let res = EngineApi::get_payload_v1(self, payload_id).await;
+        self.inner.metrics.get_payload_v1.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_getPayloadV2`
@@ -685,7 +714,10 @@ where
     /// > Provider software MAY stop the corresponding build process after serving this call.
     async fn get_payload_v2(&self, payload_id: PayloadId) -> RpcResult<ExecutionPayloadEnvelopeV2> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV2");
-        Ok(EngineApi::get_payload_v2(self, payload_id).await?)
+        let start = Instant::now();
+        let res = EngineApi::get_payload_v2(self, payload_id).await;
+        self.inner.metrics.get_payload_v2.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_getPayloadV3`
@@ -699,7 +731,10 @@ where
     /// > Provider software MAY stop the corresponding build process after serving this call.
     async fn get_payload_v3(&self, payload_id: PayloadId) -> RpcResult<ExecutionPayloadEnvelopeV3> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadV3");
-        Ok(EngineApi::get_payload_v3(self, payload_id).await?)
+        let start = Instant::now();
+        let res = EngineApi::get_payload_v3(self, payload_id).await;
+        self.inner.metrics.get_payload_v3.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_getPayloadBodiesByHashV1`
@@ -709,7 +744,10 @@ where
         block_hashes: Vec<BlockHash>,
     ) -> RpcResult<ExecutionPayloadBodiesV1> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadBodiesByHashV1");
-        Ok(EngineApi::get_payload_bodies_by_hash(self, block_hashes)?)
+        let start = Instant::now();
+        let res = EngineApi::get_payload_bodies_by_hash(self, block_hashes);
+        self.inner.metrics.get_payload_bodies_by_hash_v1.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_getPayloadBodiesByRangeV1`
@@ -734,7 +772,10 @@ where
         count: U64,
     ) -> RpcResult<ExecutionPayloadBodiesV1> {
         trace!(target: "rpc::engine", "Serving engine_getPayloadBodiesByRangeV1");
-        Ok(EngineApi::get_payload_bodies_by_range(self, start.as_u64(), count.as_u64()).await?)
+        let start_time = Instant::now();
+        let res = EngineApi::get_payload_bodies_by_range(self, start.to(), count.to()).await;
+        self.inner.metrics.get_payload_bodies_by_range_v1.record(start_time.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_exchangeTransitionConfigurationV1`
@@ -744,7 +785,10 @@ where
         config: TransitionConfiguration,
     ) -> RpcResult<TransitionConfiguration> {
         trace!(target: "rpc::engine", "Serving engine_exchangeTransitionConfigurationV1");
-        Ok(EngineApi::exchange_transition_configuration(self, config).await?)
+        let start = Instant::now();
+        let res = EngineApi::exchange_transition_configuration(self, config).await;
+        self.inner.metrics.exchange_transition_configuration.record(start.elapsed());
+        Ok(res?)
     }
 
     /// Handler for `engine_exchangeCapabilitiesV1`
@@ -767,7 +811,7 @@ mod tests {
     use reth_beacon_consensus::BeaconEngineMessage;
     use reth_interfaces::test_utils::generators::random_block;
     use reth_payload_builder::test_utils::spawn_test_payload_service;
-    use reth_primitives::{SealedBlock, H256, MAINNET};
+    use reth_primitives::{SealedBlock, B256, MAINNET};
     use reth_provider::test_utils::MockEthProvider;
     use reth_tasks::TokioTaskExecutor;
     use std::sync::Arc;
@@ -845,7 +889,7 @@ mod tests {
 
             let (start, count) = (1, 10);
             let blocks =
-                random_block_range(&mut rng, start..=start + count - 1, H256::default(), 0..2);
+                random_block_range(&mut rng, start..=start + count - 1, B256::default(), 0..2);
             handle.provider.extend_blocks(blocks.iter().cloned().map(|b| (b.hash(), b.unseal())));
 
             let expected = blocks
@@ -865,7 +909,7 @@ mod tests {
 
             let (start, count) = (1, 100);
             let blocks =
-                random_block_range(&mut rng, start..=start + count - 1, H256::default(), 0..2);
+                random_block_range(&mut rng, start..=start + count - 1, B256::default(), 0..2);
 
             // Insert only blocks in ranges 1-25 and 50-75
             let first_missing_range = 26..=50;
@@ -960,7 +1004,7 @@ mod tests {
             let transition_config = TransitionConfiguration {
                 terminal_total_difficulty: handle.chain_spec.fork(Hardfork::Paris).ttd().unwrap(),
                 terminal_block_hash: consensus_terminal_block.hash(),
-                terminal_block_number: terminal_block_number.into(),
+                terminal_block_number: U64::from(terminal_block_number),
             };
 
             // Unknown block number
@@ -998,7 +1042,7 @@ mod tests {
             let transition_config = TransitionConfiguration {
                 terminal_total_difficulty: handle.chain_spec.fork(Hardfork::Paris).ttd().unwrap(),
                 terminal_block_hash: terminal_block.hash(),
-                terminal_block_number: terminal_block_number.into(),
+                terminal_block_number: U64::from(terminal_block_number),
             };
 
             handle.provider.add_block(terminal_block.hash(), terminal_block.unseal());

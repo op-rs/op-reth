@@ -1,18 +1,18 @@
 //! Contains types required for building a payload.
 
+use alloy_rlp::Encodable;
 use reth_primitives::{
-    Address, BlobTransactionSidecar, ChainSpec, Header, SealedBlock, Withdrawal, H256, U256,
+    Address, BlobTransactionSidecar, ChainSpec, Header, SealedBlock, Withdrawal, B256, U256,
 };
 use reth_revm_primitives::config::revm_spec_by_timestamp_after_merge;
-use reth_rlp::{DecodeError, Encodable};
 use reth_rpc_types::engine::{
     ExecutionPayloadEnvelopeV2, ExecutionPayloadEnvelopeV3, ExecutionPayloadV1, PayloadAttributes,
     PayloadId,
 };
 
 use reth_rpc_types_compat::engine::payload::{
-    convert_block_to_payload_field_v2, convert_standalonewithdraw_to_withdrawal,
-    try_block_to_payload_v1, try_block_to_payload_v3,
+    block_to_payload_v3, convert_block_to_payload_field_v2,
+    convert_standalone_withdraw_to_withdrawal, try_block_to_payload_v1,
 };
 use revm_primitives::{BlobExcessGasAndPrice, BlockEnv, CfgEnv, SpecId};
 
@@ -105,7 +105,7 @@ impl From<BuiltPayload> for ExecutionPayloadEnvelopeV3 {
         let BuiltPayload { block, fees, sidecars, .. } = value;
 
         ExecutionPayloadEnvelopeV3 {
-            execution_payload: try_block_to_payload_v3(block),
+            execution_payload: block_to_payload_v3(block),
             block_value: fees,
             // From the engine API spec:
             //
@@ -127,17 +127,17 @@ pub struct PayloadBuilderAttributes {
     /// Id of the payload
     pub id: PayloadId,
     /// Parent block to build the payload on top
-    pub parent: H256,
+    pub parent: B256,
     /// Timestamp for the generated payload
     pub timestamp: u64,
     /// Address of the recipient for collecting transaction fee
     pub suggested_fee_recipient: Address,
     /// Randomness value for the generated payload
-    pub prev_randao: H256,
+    pub prev_randao: B256,
     /// Withdrawals for the generated payload
     pub withdrawals: Vec<Withdrawal>,
     /// Root of the parent beacon block
-    pub parent_beacon_block_root: Option<H256>,
+    pub parent_beacon_block_root: Option<B256>,
     /// NoTxPool option for the generated payload
     #[cfg(feature = "optimism")]
     pub no_tx_pool: bool,
@@ -155,7 +155,7 @@ impl PayloadBuilderAttributes {
     /// Creates a new payload builder for the given parent block and the attributes.
     ///
     /// Derives the unique [PayloadId] for the given parent and attributes
-    pub fn try_new(parent: H256, attributes: PayloadAttributes) -> Result<Self, DecodeError> {
+    pub fn try_new(parent: B256, attributes: PayloadAttributes) -> Result<Self, DecodeError> {
         #[cfg(feature = "optimism")]
         let transactions = attributes
             .transactions
@@ -175,7 +175,7 @@ impl PayloadBuilderAttributes {
             |withdrawals: Vec<reth_rpc_types::engine::payload::Withdrawal>| {
                 withdrawals
                     .into_iter()
-                    .map(convert_standalonewithdraw_to_withdrawal) // Removed the parentheses here
+                    .map(convert_standalone_withdraw_to_withdrawal) // Removed the parentheses here
                     .collect::<Vec<_>>()
             },
         );
@@ -183,7 +183,7 @@ impl PayloadBuilderAttributes {
         Ok(Self {
             id,
             parent,
-            timestamp: attributes.timestamp.as_u64(),
+            timestamp: attributes.timestamp.to(),
             suggested_fee_recipient: attributes.suggested_fee_recipient,
             prev_randao: attributes.prev_randao,
             withdrawals: withdraw.unwrap_or_default(),
@@ -216,7 +216,7 @@ impl PayloadBuilderAttributes {
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
         // cancun now, we need to set the excess blob gas to the default value
         let blob_excess_gas_and_price = parent
-            .next_block_blob_fee()
+            .next_block_excess_blob_gas()
             .map_or_else(
                 || {
                     if cfg.spec_id == SpecId::CANCUN {
@@ -258,16 +258,16 @@ impl PayloadBuilderAttributes {
 ///
 /// Returns an 8-byte identifier by hashing the payload components with sha256 hash.
 pub(crate) fn payload_id(
-    parent: &H256,
+    parent: &B256,
     attributes: &PayloadAttributes,
     #[cfg(feature = "optimism")] txs: &Vec<TransactionSigned>,
 ) -> PayloadId {
     use sha2::Digest;
     let mut hasher = sha2::Sha256::new();
-    hasher.update(parent.as_bytes());
-    hasher.update(&attributes.timestamp.as_u64().to_be_bytes()[..]);
-    hasher.update(attributes.prev_randao.as_bytes());
-    hasher.update(attributes.suggested_fee_recipient.as_bytes());
+    hasher.update(parent.as_slice());
+    hasher.update(&attributes.timestamp.to::<u64>().to_be_bytes()[..]);
+    hasher.update(attributes.prev_randao.as_slice());
+    hasher.update(attributes.suggested_fee_recipient.as_slice());
     if let Some(withdrawals) = &attributes.withdrawals {
         let mut buf = Vec::new();
         withdrawals.encode(&mut buf);

@@ -2,7 +2,11 @@
 
 use crate::{
     args::GasPriceOracleArgs,
-    cli::{config::RethRpcConfig, ext::RethNodeCommandConfig},
+    cli::{
+        components::{RethNodeComponents, RethRpcComponents, RethRpcServerHandles},
+        config::RethRpcConfig,
+        ext::RethNodeCommandConfig,
+    },
 };
 use clap::{
     builder::{PossibleValue, RangedU64ValueParser, TypedValueParser},
@@ -11,8 +15,8 @@ use clap::{
 use futures::TryFutureExt;
 use reth_network_api::{NetworkInfo, Peers};
 use reth_provider::{
-    BlockReaderIdExt, CanonStateSubscriptions, ChainSpecProvider, ChangeSetReader, EvmEnvProvider,
-    HeaderProvider, StateProviderFactory,
+    AccountReader, BlockReaderIdExt, CanonStateSubscriptions, ChainSpecProvider, ChangeSetReader,
+    EvmEnvProvider, HeaderProvider, StateProviderFactory,
 };
 use reth_rpc::{
     eth::{
@@ -50,10 +54,10 @@ pub(crate) const RPC_DEFAULT_MAX_REQUEST_SIZE_MB: u32 = 15;
 /// This is only relevant for very large trace responses.
 pub(crate) const RPC_DEFAULT_MAX_RESPONSE_SIZE_MB: u32 = 115;
 /// Default number of incoming connections.
-pub(crate) const RPC_DEFAULT_MAX_CONNECTIONS: u32 = 100;
+pub(crate) const RPC_DEFAULT_MAX_CONNECTIONS: u32 = 500;
 
 /// Parameters for configuring the rpc more granularity via CLI
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 #[command(next_help_heading = "RPC")]
 pub struct RpcServerArgs {
     /// Enable the HTTP-RPC server
@@ -174,31 +178,15 @@ impl RpcServerArgs {
     /// for the auth server that handles the `engine_` API that's accessed by the consensus
     /// layer.
     #[allow(clippy::too_many_arguments)]
-    pub async fn start_servers<Provider, Pool, Network, Tasks, Events, Engine, Conf>(
+    pub async fn start_servers<Reth, Engine, Conf>(
         &self,
-        provider: Provider,
-        pool: Pool,
-        network: Network,
-        executor: Tasks,
-        events: Events,
+        components: &Reth,
         engine_api: Engine,
         jwt_secret: JwtSecret,
         conf: &mut Conf,
-    ) -> eyre::Result<(RpcServerHandle, AuthServerHandle)>
+    ) -> eyre::Result<RethRpcServerHandles>
     where
-        Provider: BlockReaderIdExt
-            + HeaderProvider
-            + StateProviderFactory
-            + EvmEnvProvider
-            + ChainSpecProvider
-            + ChangeSetReader
-            + Clone
-            + Unpin
-            + 'static,
-        Pool: TransactionPool + Clone + 'static,
-        Network: NetworkInfo + Peers + Clone + 'static,
-        Tasks: TaskSpawner + Clone + 'static,
-        Events: CanonStateSubscriptions + Clone + 'static,
+        Reth: RethNodeComponents,
         Engine: EngineApiServer,
         Conf: RethNodeCommandConfig,
     {
@@ -207,19 +195,20 @@ impl RpcServerArgs {
         let module_config = self.transport_rpc_module_config();
         debug!(target: "reth::cli", http=?module_config.http(), ws=?module_config.ws(), "Using RPC module config");
 
-        let (mut rpc_modules, auth_module, mut registry) = RpcModuleBuilder::default()
-            .with_provider(provider)
-            .with_pool(pool)
-            .with_network(network)
-            .with_events(events)
-            .with_executor(executor)
+        let (mut modules, auth_module, mut registry) = RpcModuleBuilder::default()
+            .with_provider(components.provider())
+            .with_pool(components.pool())
+            .with_network(components.network())
+            .with_events(components.events())
+            .with_executor(components.task_executor())
             .build_with_auth_server(module_config, engine_api);
 
+        let rpc_components = RethRpcComponents { registry: &mut registry, modules: &mut modules };
         // apply configured customization
-        conf.extend_rpc_modules(self, &mut registry, &mut rpc_modules)?;
+        conf.extend_rpc_modules(self, components, rpc_components)?;
 
         let server_config = self.rpc_server_config();
-        let launch_rpc = rpc_modules.start_server(server_config).map_ok(|handle| {
+        let launch_rpc = modules.clone().start_server(server_config).map_ok(|handle| {
             if let Some(url) = handle.ipc_endpoint() {
                 info!(target: "reth::cli", url=%url, "RPC IPC server started");
             }
@@ -239,7 +228,14 @@ impl RpcServerArgs {
         });
 
         // launch servers concurrently
-        Ok(futures::future::try_join(launch_rpc, launch_auth).await?)
+        let (rpc, auth) = futures::future::try_join(launch_rpc, launch_auth).await?;
+        let handles = RethRpcServerHandles { rpc, auth };
+
+        // call hook
+        let rpc_components = RethRpcComponents { registry: &mut registry, modules: &mut modules };
+        conf.on_rpc_server_started(self, components, rpc_components, handles.clone())?;
+
+        Ok(handles)
     }
 
     /// Convenience function for starting a rpc server with configs which extracted from cli args.
@@ -253,6 +249,7 @@ impl RpcServerArgs {
     ) -> Result<RpcServerHandle, RpcError>
     where
         Provider: BlockReaderIdExt
+            + AccountReader
             + HeaderProvider
             + StateProviderFactory
             + EvmEnvProvider
@@ -320,6 +317,10 @@ impl RethRpcConfig for RpcServerArgs {
     fn is_ipc_enabled(&self) -> bool {
         // By default IPC is enabled therefor it is enabled if the `ipcdisable` is false.
         !self.ipcdisable
+    }
+
+    fn ipc_path(&self) -> &str {
+        self.ipcpath.as_str()
     }
 
     fn eth_config(&self) -> EthConfig {

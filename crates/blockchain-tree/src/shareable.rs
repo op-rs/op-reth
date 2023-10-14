@@ -7,7 +7,6 @@ use reth_interfaces::{
         error::InsertBlockError, BlockchainTreeEngine, BlockchainTreeViewer, CanonicalOutcome,
         InsertPayloadOk,
     },
-    consensus::Consensus,
     RethResult,
 };
 use reth_primitives::{
@@ -26,21 +25,19 @@ use tracing::trace;
 
 /// Shareable blockchain tree that is behind tokio::RwLock
 #[derive(Clone, Debug)]
-pub struct ShareableBlockchainTree<DB: Database, C: Consensus, EF: ExecutorFactory> {
+pub struct ShareableBlockchainTree<DB: Database, EF: ExecutorFactory> {
     /// BlockchainTree
-    pub tree: Arc<RwLock<BlockchainTree<DB, C, EF>>>,
+    pub tree: Arc<RwLock<BlockchainTree<DB, EF>>>,
 }
 
-impl<DB: Database, C: Consensus, EF: ExecutorFactory> ShareableBlockchainTree<DB, C, EF> {
+impl<DB: Database, EF: ExecutorFactory> ShareableBlockchainTree<DB, EF> {
     /// Create a new shareable database.
-    pub fn new(tree: BlockchainTree<DB, C, EF>) -> Self {
+    pub fn new(tree: BlockchainTree<DB, EF>) -> Self {
         Self { tree: Arc::new(RwLock::new(tree)) }
     }
 }
 
-impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreeEngine
-    for ShareableBlockchainTree<DB, C, EF>
-{
+impl<DB: Database, EF: ExecutorFactory> BlockchainTreeEngine for ShareableBlockchainTree<DB, EF> {
     fn buffer_block(&self, block: SealedBlockWithSenders) -> Result<(), InsertBlockError> {
         let mut tree = self.tree.write();
         // Blockchain tree metrics shouldn't be updated here, see
@@ -103,9 +100,7 @@ impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreeEngine
     }
 }
 
-impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreeViewer
-    for ShareableBlockchainTree<DB, C, EF>
-{
+impl<DB: Database, EF: ExecutorFactory> BlockchainTreeViewer for ShareableBlockchainTree<DB, EF> {
     fn blocks(&self) -> BTreeMap<BlockNumber, HashSet<BlockHash>> {
         trace!(target: "blockchain_tree", "Returning all blocks in blockchain tree");
         self.tree.read().block_indices().block_number_to_block_hashes().clone()
@@ -149,6 +144,11 @@ impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreeViewer
         None
     }
 
+    fn is_canonical(&self, hash: BlockHash) -> RethResult<bool> {
+        trace!(target: "blockchain_tree", ?hash, "Checking if block is canonical");
+        self.tree.read().is_block_hash_canonical(&hash)
+    }
+
     fn lowest_buffered_ancestor(&self, hash: BlockHash) -> Option<SealedBlockWithSenders> {
         trace!(target: "blockchain_tree", ?hash, "Returning lowest buffered ancestor");
         self.tree.read().lowest_buffered_ancestor(&hash).cloned()
@@ -157,11 +157,6 @@ impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreeViewer
     fn canonical_tip(&self) -> BlockNumHash {
         trace!(target: "blockchain_tree", "Returning canonical tip");
         self.tree.read().block_indices().canonical_tip()
-    }
-
-    fn is_canonical(&self, hash: BlockHash) -> RethResult<bool> {
-        trace!(target: "blockchain_tree", ?hash, "Checking if block is canonical");
-        self.tree.read().is_block_hash_canonical(&hash)
     }
 
     fn pending_blocks(&self) -> (BlockNumber, Vec<BlockHash>) {
@@ -193,8 +188,8 @@ impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreeViewer
     }
 }
 
-impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreePendingStateProvider
-    for ShareableBlockchainTree<DB, C, EF>
+impl<DB: Database, EF: ExecutorFactory> BlockchainTreePendingStateProvider
+    for ShareableBlockchainTree<DB, EF>
 {
     fn find_pending_state_provider(
         &self,
@@ -206,8 +201,8 @@ impl<DB: Database, C: Consensus, EF: ExecutorFactory> BlockchainTreePendingState
     }
 }
 
-impl<DB: Database, C: Consensus, EF: ExecutorFactory> CanonStateSubscriptions
-    for ShareableBlockchainTree<DB, C, EF>
+impl<DB: Database, EF: ExecutorFactory> CanonStateSubscriptions
+    for ShareableBlockchainTree<DB, EF>
 {
     fn subscribe_to_canonical_state(&self) -> reth_provider::CanonStateNotifications {
         trace!(target: "blockchain_tree", "Registered subscriber for canonical state");
