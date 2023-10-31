@@ -17,7 +17,11 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(clippy::non_canonical_clone_impl)]
 
-#[cfg(all(feature = "value-256", not(feature = "optimism"), not(feature = "ignore-value-256-compile-err")))]
+#[cfg(all(
+    feature = "value-256",
+    not(feature = "optimism"),
+    not(feature = "ignore-value-256-compile-err")
+))]
 compile_error!("The `optimism` feature flag is required if `value-256` is enabled.");
 
 mod account;
