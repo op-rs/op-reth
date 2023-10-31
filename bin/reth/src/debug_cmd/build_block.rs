@@ -246,8 +246,11 @@ impl Command {
             // TODO: add support for withdrawals
             withdrawals: None,
             #[cfg(feature = "optimism")]
-            optimism_payload_attributes: reth_rpc_types::engine::OptimismPayloadAttributes::default(
-            ),
+            optimism_payload_attributes: reth_rpc_types::engine::OptimismPayloadAttributes {
+                transactions: None,
+                no_tx_pool: None,
+                gas_limit: None,
+            },
         };
         let payload_config = PayloadConfig::new(
             Arc::clone(&best_block),
