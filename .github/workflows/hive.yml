@@ -22,7 +22,7 @@ jobs:
       binary_name: reth
 
   prepare-hive:
-    if: github.repository == 'paradigmxyz/reth'
+    if: github.repository == 'op-rs/op-reth'
     timeout-minutes: 45
     runs-on: depot-ubuntu-latest-16
     steps:
