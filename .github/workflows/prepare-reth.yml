@@ -29,7 +29,7 @@ on:
 
 jobs:
   prepare-reth:
-    if: github.repository == 'paradigmxyz/reth'
+    if: github.repository == 'op-rs/op-reth'
     timeout-minutes: 45
     runs-on: depot-ubuntu-latest
     steps:
