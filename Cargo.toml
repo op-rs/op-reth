@@ -49,7 +49,6 @@ members = [
     "crates/exex/exex/",
     "crates/exex/test-utils/",
     "crates/exex/types/",
-    "crates/exex/external-proofs/",
     "crates/metrics/",
     "crates/net/banlist/",
     "crates/net/discv4/",
@@ -77,6 +76,7 @@ members = [
     "crates/optimism/cli",
     "crates/optimism/consensus",
     "crates/optimism/evm/",
+    "crates/optimism/exex/",
     "crates/optimism/flashblocks/",
     "crates/optimism/hardforks/",
     "crates/optimism/node/",
@@ -415,6 +415,7 @@ reth-op = { path = "crates/optimism/reth", default-features = false }
 reth-optimism-chainspec = { path = "crates/optimism/chainspec", default-features = false }
 reth-optimism-cli = { path = "crates/optimism/cli" }
 reth-optimism-consensus = { path = "crates/optimism/consensus", default-features = false }
+reth-optimism-exex = { path = "crates/optimism/exex" }
 reth-optimism-forks = { path = "crates/optimism/hardforks", default-features = false }
 reth-optimism-payload-builder = { path = "crates/optimism/payload" }
 reth-optimism-primitives = { path = "crates/optimism/primitives", default-features = false }

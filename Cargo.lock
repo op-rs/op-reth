@@ -3734,26 +3734,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "external-proofs"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "async-trait",
- "auto_impl",
- "eyre",
- "futures-util",
- "reth-db-api",
- "reth-exex",
- "reth-node-api",
- "reth-node-types",
- "reth-primitives-traits",
- "reth-provider",
- "reth-trie",
- "serde",
- "thiserror 2.0.16",
-]
-
-[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9350,6 +9330,26 @@ dependencies = [
  "reth-rpc-eth-api",
  "reth-storage-errors",
  "revm",
+ "thiserror 2.0.16",
+]
+
+[[package]]
+name = "reth-optimism-exex"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "async-trait",
+ "auto_impl",
+ "eyre",
+ "futures-util",
+ "reth-db-api",
+ "reth-exex",
+ "reth-node-api",
+ "reth-node-types",
+ "reth-primitives-traits",
+ "reth-provider",
+ "reth-trie",
+ "serde",
  "thiserror 2.0.16",
 ]
 
