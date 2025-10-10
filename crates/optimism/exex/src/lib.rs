@@ -13,7 +13,7 @@ mod storage;
 /// saving the current state, new blocks as they're added, and serving proof RPCs
 /// based on the saved data.
 #[derive(Debug)]
-pub struct ExternalProofExEx<Node>
+pub struct OpProofsExEx<Node>
 where
     Node: FullNodeComponents,
     Node::Provider: StateReader,
@@ -21,7 +21,7 @@ where
     ctx: ExExContext<Node>,
 }
 
-impl<Node, Primitives> ExternalProofExEx<Node>
+impl<Node, Primitives> OpProofsExEx<Node>
 where
     Node: FullNodeComponents<Types: NodeTypes<Primitives = Primitives>>,
     Primitives: NodePrimitives,
