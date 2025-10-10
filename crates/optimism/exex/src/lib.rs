@@ -1,13 +1,12 @@
 //! External Proofs ExEx - processes blocks and tracks state changes
 
+mod storage;
+
 use futures_util::TryStreamExt;
+use reth_exex::{ExExContext, ExExEvent};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_provider::StateReader;
-
-use reth_exex::{ExExContext, ExExEvent};
-
-mod storage;
 
 /// Saves and serves trie nodes to make proofs faster. This handles the process of
 /// saving the current state, new blocks as they're added, and serving proof RPCs
