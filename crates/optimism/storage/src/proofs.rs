@@ -1,11 +1,11 @@
-#![expect(dead_code, unreachable_pub)]
+//! Storage API for
 
 use alloy_primitives::{map::HashMap, B256, U256};
 use async_trait::async_trait;
 use auto_impl::auto_impl;
+use core::fmt::Debug;
 use reth_primitives_traits::Account;
 use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
-use std::fmt::Debug;
 use thiserror::Error;
 
 /// Error type for storage operations
@@ -45,7 +45,7 @@ pub trait OpProofsTrieCursor: Send + Sync {
 /// Seeks and iterates over hashed entries in the database by key.
 pub trait OpProofsHashedCursor: Send + Sync {
     /// Value returned by the cursor.
-    type Value: std::fmt::Debug;
+    type Value: Debug;
 
     /// Seek an entry greater or equal to the given key and position the cursor there.
     /// Returns the first entry with the key greater or equal to the sought key.
@@ -58,7 +58,9 @@ pub trait OpProofsHashedCursor: Send + Sync {
 /// Diff of trie updates and post state for a block.
 #[derive(Debug, Clone)]
 pub struct BlockStateDiff {
+    /// Trie updates for branch nodes
     pub trie_updates: TrieUpdates,
+    /// Post state for leaf nodes (accounts and storage)
     pub post_state: HashedPostState,
 }
 

@@ -12,6 +12,12 @@
 mod chain;
 pub use chain::OpStorage;
 
+pub mod proofs;
+pub use proofs::{
+    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
+    OpProofsStorageResult, OpProofsTrieCursor,
+};
+
 #[cfg(test)]
 mod tests {
     use reth_codecs::{test_utils::UnusedBits, validate_bitflag_backwards_compat};

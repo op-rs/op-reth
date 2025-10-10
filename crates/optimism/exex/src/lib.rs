@@ -1,6 +1,4 @@
-//! External Proofs ExEx - processes blocks and tracks state changes
-
-mod storage;
+//! OP Proofs ExEx - processes blocks and tracks state changes within fault proof window
 
 use futures_util::TryStreamExt;
 use reth_exex::{ExExContext, ExExEvent};
