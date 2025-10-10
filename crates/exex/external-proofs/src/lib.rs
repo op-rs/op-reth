@@ -1,11 +1,12 @@
 //! OP Proofs ExEx - processes blocks and tracks state changes
 
 use crate::{
-    backfill::BackfillJob, in_memory::InMemoryProofsStorage, live::LiveTrieCollector,
+    backfill::BackfillJob, live::LiveTrieCollector, mdbx::MdbxOpProofsStorage,
     storage::OpProofsStorage,
 };
 use futures_util::TryStreamExt;
 use reth_chainspec::ChainInfo;
+use reth_db::DatabaseEnv;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
@@ -13,7 +14,7 @@ use reth_primitives_traits::AlloyBlockHeader;
 use reth_provider::{
     BlockNumReader, BlockReader, DBProvider, DatabaseProviderFactory, TransactionVariant,
 };
-use std::sync::Arc;
+use std::{env, path::PathBuf, sync::Arc};
 use tracing::info;
 
 pub mod backfill;
@@ -37,7 +38,7 @@ where
     Node: FullNodeComponents,
 {
     ctx: ExExContext<Node>,
-    storage: Arc<InMemoryProofsStorage>,
+    storage: Arc<MdbxOpProofsStorage<DatabaseEnv>>,
 }
 
 impl<Node, Primitives> OpProofsExEx<Node>
@@ -47,7 +48,12 @@ where
 {
     /// Create a new `OpProofsExEx` instance
     pub fn new(ctx: ExExContext<Node>) -> Self {
-        Self { ctx, storage: Arc::new(InMemoryProofsStorage::new()) }
+        let datadir = env::var("OP_PROOFS_DATA_DIR").unwrap();
+        let datadir = PathBuf::from(datadir);
+
+        let storage = MdbxOpProofsStorage::new_from_path(datadir).unwrap();
+
+        Self { ctx, storage: Arc::new(storage) }
     }
 
     /// Main execution loop for the ExEx
@@ -59,7 +65,7 @@ where
         let ChainInfo { best_number, best_hash } = self.ctx.provider().chain_info()?;
         BackfillJob::new(self.storage.clone(), &db_tx).run(best_number, best_hash).await?;
 
-        let collector = LiveTrieCollector::<Node, Arc<InMemoryProofsStorage>>::new(
+        let collector = LiveTrieCollector::<Node, Arc<MdbxOpProofsStorage<DatabaseEnv>>>::new(
             self.ctx.evm_config().clone(),
             self.ctx.provider().clone(),
             self.storage.clone(),

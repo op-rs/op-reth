@@ -25,7 +25,7 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
 };
 use reth_primitives_traits::Account;
-use reth_trie::{BranchNodeCompact, Nibbles};
+use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
 use std::path::Path;
 
 pub use codec::{BlockNumberHash, MaybeDeleted, VersionedValue};
@@ -106,7 +106,6 @@ impl MdbxOpProofsStorage<DatabaseEnv> {
     }
 }
 
-// Implement ExternalStorage trait - will be filled in phases 4-6
 #[async_trait::async_trait]
 impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB> {
     type AccountTrieCursor = BlockNumberVersionedCursor<
@@ -135,7 +134,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             let mut cursor = tx.cursor_dup_write::<tables::ExternalAccountBranches>()?;
 
             for (path, branch) in &updates {
-                let key: reth_trie_common::StoredNibbles = path.clone().into();
+                let key: StoredNibbles = path.clone().into();
 
                 // For DupSort tables, we need to delete existing entry before inserting
                 // because upsert appends rather than updates
@@ -156,7 +155,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             let mut cursor = tx.cursor_write::<tables::ExternalAccountBranchesIndex>()?;
 
             for (path, _) in updates {
-                let key: reth_trie_common::StoredNibbles = path.into();
+                let key: StoredNibbles = path.into();
 
                 // Get existing list or create new
                 let mut list =
@@ -191,10 +190,8 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             let mut cursor = tx.cursor_dup_write::<tables::ExternalStorageBranches>()?;
 
             for (path, branch) in &items {
-                let key = models::StorageBranchSubKey::new(
-                    hashed_address,
-                    reth_trie_common::StoredNibbles(path.clone()),
-                );
+                let key =
+                    models::StorageBranchSubKey::new(hashed_address, StoredNibbles(path.clone()));
 
                 // For DupSort tables, delete existing entry before inserting
                 if let Some(existing) = cursor.seek_by_key_subkey(key.clone(), block_number)? {
@@ -214,10 +211,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             let mut cursor = tx.cursor_write::<tables::ExternalStorageBranchesIndex>()?;
 
             for (path, _) in items {
-                let key = models::StorageBranchSubKey::new(
-                    hashed_address,
-                    reth_trie_common::StoredNibbles(path),
-                );
+                let key = models::StorageBranchSubKey::new(hashed_address, StoredNibbles(path));
 
                 // Get existing list or create new
                 let mut list =
