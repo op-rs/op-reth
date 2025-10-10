@@ -3744,6 +3744,7 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
+ "op-reth",
  "reth-chainspec",
  "reth-db",
  "reth-db-api",
