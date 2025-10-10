@@ -29,3 +29,4 @@ eyre.workspace = true
 futures-util.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+derive_more.workspace = true

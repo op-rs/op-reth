@@ -1,5 +1,6 @@
 //! OP Proofs ExEx - processes blocks and tracks state changes within fault proof window
 
+use derive_more::Constructor;
 use futures_util::TryStreamExt;
 use reth_exex::{ExExContext, ExExEvent};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
@@ -9,7 +10,7 @@ use reth_provider::StateReader;
 /// Saves and serves trie nodes to make proofs faster. This handles the process of
 /// saving the current state, new blocks as they're added, and serving proof RPCs
 /// based on the saved data.
-#[derive(Debug)]
+#[derive(Debug, Constructor)]
 pub struct OpProofsExEx<Node>
 where
     Node: FullNodeComponents,
@@ -23,11 +24,6 @@ where
     Node: FullNodeComponents<Types: NodeTypes<Primitives = Primitives>>,
     Primitives: NodePrimitives,
 {
-    /// Create a new `ExternalProofExEx` instance
-    pub const fn new(ctx: ExExContext<Node>) -> Self {
-        Self { ctx }
-    }
-
     /// Main execution loop for the ExEx
     pub async fn run(mut self) -> eyre::Result<()> {
         while let Some(notification) = self.ctx.notifications.try_next().await? {
