@@ -9593,7 +9593,6 @@ version = "1.8.2"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
- "async-trait",
  "auto_impl",
  "eyre",
  "reth-codecs",
