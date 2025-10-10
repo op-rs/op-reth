@@ -69,8 +69,13 @@ pub struct BlockStateDiff {
 /// are not stored to reduce write amplification. This matches Reth's non-historical trie storage.
 #[auto_impl(Arc)]
 pub trait OpProofsStorage: Send + Sync + Debug {
+    /// Cursor for iterating over trie branches.
     type TrieCursor: OpProofsTrieCursor;
+
+    /// Cursor for iterating over storage leaves.
     type StorageCursor: OpProofsHashedCursor<Value = U256>;
+
+    /// Cursor for iterating over account leaves.
     type AccountHashedCursor: OpProofsHashedCursor<Value = Account>;
 
     /// Store a batch of account trie branches. Used for saving existing state. For live state
