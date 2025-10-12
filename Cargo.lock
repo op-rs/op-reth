@@ -3903,6 +3903,7 @@ dependencies = [
  "async-trait",
  "auto_impl",
  "eyre",
+ "futures",
  "futures-util",
  "reth-db-api",
  "reth-exex",
@@ -3912,7 +3913,9 @@ dependencies = [
  "reth-provider",
  "reth-trie",
  "serde",
+ "test-case",
  "thiserror 2.0.16",
+ "tokio",
 ]
 
 [[package]]
