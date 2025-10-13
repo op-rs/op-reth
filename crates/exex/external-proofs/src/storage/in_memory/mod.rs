@@ -1,4 +1,4 @@
-//! In-memory implementation of `ExternalStorage`` for testing purposes.
+//! In-memory implementation of `ExternalStorage` for testing purposes.
 //!
 //! This module provides a complete in-memory implementation of the
 //! [`ExternalStorage`](crate::storage::ExternalStorage) trait that can be used for
