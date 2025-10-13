@@ -3892,6 +3892,8 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
+ "reth-chainspec",
+ "reth-db",
  "reth-db-api",
  "reth-exex",
  "reth-node-api",
@@ -3903,6 +3905,7 @@ dependencies = [
  "test-case",
  "thiserror 2.0.16",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
