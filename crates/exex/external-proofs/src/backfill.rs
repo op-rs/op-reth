@@ -361,6 +361,7 @@ where
             .cursor_dup_read::<tables::HashedStorages>()?;
 
         if let Some(ref key) = last_key {
+            info!("Seeking to last processed key for hashed storage: {:?}", key);
             cursor.seek_by_key_subkey(key.0, key.1)?;
             cursor.next_dup()?; // Skip the last processed entry
         }
@@ -368,6 +369,9 @@ where
         loop {
             let source = HashedStoragesIterWithStorageKey::new(HashedStoragesIter::new(cursor));
             let save_fn = async |entries: Vec<((B256, B256), U256)>| -> eyre::Result<()> {
+                info!("Saving {} entries for hashed storage", entries.len());
+                info!("first entry key: {:?}", entries[0].0);
+                info!("last entry key: {:?}", entries[entries.len() - 1].0);
                 // Group entries by hashed address
                 let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> =
                     HashMap::default();
@@ -581,7 +585,7 @@ mod tests {
         storage::{OpProofsHashedCursor, OpProofsTrieCursor},
     };
     use alloy_primitives::{keccak256, Address, U256};
-    use reth_db::{test_utils::create_test_rw_db, Database};
+    use reth_db::Database;
     use reth_db_api::{cursor::DbCursorRW, transaction::DbTxMut};
     use reth_primitives_traits::Account;
     use reth_provider::test_utils::create_test_provider_factory;
@@ -605,7 +609,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_backfill_hashed_accounts() {
-        let db = create_test_rw_db();
+        let provider = create_test_provider_factory();
+        let db = provider.db_ref();
+        let storage = InMemoryProofsStorage::new();
 
         // Insert test accounts into database
         let tx = db.tx_mut().unwrap();
@@ -636,11 +642,8 @@ mod tests {
         tx.commit().unwrap();
 
         // Run backfill
-        // Note: For tests, we can't use the actual provider factory pattern
-        // This test will need to be updated or the backfill logic will need
-        // to support both patterns. For now, skip this test.
-        // TODO: Update test to work with new cursor recreation pattern
-        return;
+        let job = BackfillJob::new(&storage, &provider);
+        job.backfill_hashed_accounts().await.unwrap();
 
         // Verify data was stored (will be in sorted order)
         let mut account_cursor = storage.account_hashed_cursor(100).unwrap();
@@ -656,7 +659,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_backfill_hashed_storage() {
-        let db = create_test_rw_db();
+        let provider = create_test_provider_factory();
+        let db = provider.db_ref();
         let storage = InMemoryProofsStorage::new();
 
         // Insert test storage into database
@@ -688,9 +692,8 @@ mod tests {
         tx.commit().unwrap();
 
         // Run backfill
-        // Note: Test disabled - needs update for new cursor recreation pattern
-        // TODO: Update test to work with provider factory
-        return;
+        let job = BackfillJob::new(&storage, &provider);
+        job.backfill_hashed_storages().await.unwrap();
 
         // Verify data was stored for addr1
         let mut storage_cursor = storage.storage_hashed_cursor(addr1, 100).unwrap();
@@ -714,7 +717,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_backfill_accounts_trie() {
-        let db = create_test_rw_db();
+        let provider = create_test_provider_factory();
+        let db = provider.db_ref();
         let storage = InMemoryProofsStorage::new();
 
         // Insert test trie nodes into database
@@ -735,9 +739,8 @@ mod tests {
         tx.commit().unwrap();
 
         // Run backfill
-        // Note: Test disabled - needs update for new cursor recreation pattern
-        // TODO: Update test to work with provider factory
-        return;
+        let job = BackfillJob::new(&storage, &provider);
+        job.backfill_accounts_trie().await.unwrap();
 
         // Verify data was stored
         let mut trie_cursor = storage.account_trie_cursor(100).unwrap();
@@ -751,7 +754,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_backfill_storages_trie() {
-        let db = create_test_rw_db();
+        let provider = create_test_provider_factory();
+        let db = provider.db_ref();
         let storage = InMemoryProofsStorage::new();
 
         // Insert test storage trie nodes into database
@@ -793,9 +797,8 @@ mod tests {
         tx.commit().unwrap();
 
         // Run backfill
-        // Note: Test disabled - needs update for new cursor recreation pattern
-        // TODO: Update test to work with provider factory
-        return;
+        let job = BackfillJob::new(&storage, &provider);
+        job.backfill_storages_trie().await.unwrap();
 
         // Verify data was stored for addr1
         let mut trie_cursor = storage.storage_trie_cursor(addr1, 100).unwrap();
@@ -902,7 +905,6 @@ mod tests {
     #[tokio::test]
     async fn test_backfill_run_skips_if_already_done() {
         let provider = create_test_provider_factory();
-        let db = provider.db_ref();
         let storage = InMemoryProofsStorage::new();
 
         // Set earliest block to simulate already backfilled

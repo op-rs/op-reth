@@ -624,7 +624,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
                 continue;
             };
 
-            return Ok(Some((hashed_address, value)));
+            return Ok(Some((hashed_address, hashed_storage_key)));
         }
     }
 }

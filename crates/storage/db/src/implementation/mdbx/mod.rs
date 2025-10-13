@@ -420,7 +420,7 @@ impl DatabaseEnv {
         // Previously, MDBX set this value as `256 * 1024` constant. Let's fallback to this,
         // because we want to prioritize freelist lookup speed over database growth.
         // https://github.com/paradigmxyz/reth/blob/fa2b9b685ed9787636d962f4366caf34a9186e66/crates/storage/libmdbx-rs/mdbx-sys/libmdbx/mdbx.c#L16017.
-        inner_env.set_rp_augment_limit(1_000_000_000);
+        inner_env.set_rp_augment_limit(256 * 1024);
 
         if let Some(log_level) = args.log_level {
             // Levels higher than [LogLevel::Notice] require libmdbx built with `MDBX_DEBUG` option.
