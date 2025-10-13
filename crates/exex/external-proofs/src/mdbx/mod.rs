@@ -16,6 +16,7 @@ use crate::{
 use alloy_primitives::map::HashMap;
 use alloy_primitives::{B256, U256};
 use reth_db::{
+    cursor::DbDupCursorRW,
     mdbx::{init_db_for, DatabaseArguments},
     ClientVersion, DatabaseEnv, DatabaseError,
 };
@@ -136,22 +137,14 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             for (path, branch) in &updates {
                 let key: StoredNibbles = path.clone().into();
 
-                // For DupSort tables, we need to delete existing entry before inserting
-                // because upsert appends rather than updates
-                if let Some(existing) = cursor.seek_by_key_subkey(key.clone(), block_number)? {
-                    if existing.block_number == block_number {
-                        cursor.delete_current()?;
-                    }
-                }
-
                 let maybe_deleted = codec::MaybeDeleted::from(branch.clone());
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.upsert(key, &value)?;
+                cursor.append_dup(key, value)?;
             }
         }
 
-        // Update index
-        {
+        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        if block_number > 0 {
             let mut cursor = tx.cursor_write::<tables::ExternalAccountBranchesIndex>()?;
 
             for (path, _) in updates {
@@ -193,21 +186,14 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
                 let key =
                     models::StorageBranchSubKey::new(hashed_address, StoredNibbles(path.clone()));
 
-                // For DupSort tables, delete existing entry before inserting
-                if let Some(existing) = cursor.seek_by_key_subkey(key.clone(), block_number)? {
-                    if existing.block_number == block_number {
-                        cursor.delete_current()?;
-                    }
-                }
-
                 let maybe_deleted = codec::MaybeDeleted::from(branch.clone());
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.upsert(key, &value)?;
+                cursor.append_dup(key, value)?;
             }
         }
 
-        // Update index
-        {
+        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        if block_number > 0 {
             let mut cursor = tx.cursor_write::<tables::ExternalStorageBranchesIndex>()?;
 
             for (path, _) in items {
@@ -245,21 +231,14 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedAccounts>()?;
 
             for (address, account) in &accounts {
-                // For DupSort tables, delete existing entry before inserting
-                if let Some(existing) = cursor.seek_by_key_subkey(*address, block_number)? {
-                    if existing.block_number == block_number {
-                        cursor.delete_current()?;
-                    }
-                }
-
                 let maybe_deleted = codec::MaybeDeleted::from(account.clone());
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.upsert(*address, &value)?;
+                cursor.append_dup(*address, value)?;
             }
         }
 
-        // Update index
-        {
+        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        if block_number > 0 {
             let mut cursor = tx.cursor_write::<tables::ExternalHashedAccountsIndex>()?;
 
             for (address, _) in accounts {
@@ -298,13 +277,6 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             for (storage_key, value) in &storages {
                 let key = models::HashedStorageSubKey::new(hashed_address, *storage_key);
 
-                // For DupSort tables, delete existing entry before inserting
-                if let Some(existing) = cursor.seek_by_key_subkey(key.clone(), block_number)? {
-                    if existing.block_number == block_number {
-                        cursor.delete_current()?;
-                    }
-                }
-
                 // Convert U256 to B256 for storage
                 // Zero values are treated as deletions in Ethereum
                 let maybe_deleted = if value.is_zero() {
@@ -314,12 +286,12 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
                     codec::MaybeDeleted::from(Some(value_b256))
                 };
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.upsert(key, &value)?;
+                cursor.append_dup(key, value)?;
             }
         }
 
-        // Update index
-        {
+        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        if block_number > 0 {
             let mut cursor = tx.cursor_write::<tables::ExternalHashedStoragesIndex>()?;
 
             for (storage_key, _) in storages {
@@ -571,5 +543,88 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
 
         tx.commit()?;
         Ok(())
+    }
+
+    async fn get_last_stored_account_branch(&self) -> OpProofsStorageResult<Option<Nibbles>> {
+        let tx = self.db.tx()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalAccountBranches>()?;
+        cursor.last()?;
+
+        loop {
+            let Some((nibbles, VersionedValue { value, .. })) = cursor.current()? else {
+                return Ok(None);
+            };
+            let Some(value) = value.0 else {
+                cursor.prev()?;
+                continue;
+            };
+
+            return Ok(Some(nibbles.0));
+        }
+    }
+
+    async fn get_last_stored_storage_branch(
+        &self,
+    ) -> OpProofsStorageResult<Option<(B256, Nibbles)>> {
+        let tx = self.db.tx()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalStorageBranches>()?;
+        cursor.last()?;
+
+        loop {
+            let Some((StorageBranchSubKey { hashed_address, path }, VersionedValue { value, .. })) =
+                cursor.current()?
+            else {
+                return Ok(None);
+            };
+
+            let Some(value) = value.0 else {
+                cursor.prev()?;
+                continue;
+            };
+
+            return Ok(Some((hashed_address, path.0)));
+        }
+    }
+
+    async fn get_last_stored_hashed_account(&self) -> OpProofsStorageResult<Option<B256>> {
+        let tx = self.db.tx()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalHashedAccounts>()?;
+        cursor.last()?;
+
+        loop {
+            let Some((hashed_address, VersionedValue { value, .. })) = cursor.current()? else {
+                return Ok(None);
+            };
+
+            let Some(value) = value.0 else {
+                cursor.prev()?;
+                continue;
+            };
+
+            return Ok(Some(hashed_address));
+        }
+    }
+
+    async fn get_last_stored_hashed_storage(&self) -> OpProofsStorageResult<Option<(B256, B256)>> {
+        let tx = self.db.tx()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalHashedStorages>()?;
+        cursor.last()?;
+
+        loop {
+            let Some((
+                HashedStorageSubKey { hashed_address, hashed_storage_key },
+                VersionedValue { value, .. },
+            )) = cursor.current()?
+            else {
+                return Ok(None);
+            };
+
+            let Some(value) = value.0 else {
+                cursor.prev()?;
+                continue;
+            };
+
+            return Ok(Some((hashed_address, value)));
+        }
     }
 }

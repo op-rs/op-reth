@@ -1,0 +1,873 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Comprehensive metrics dashboard for External Proofs ExEx storage operations. Tracks block processing performance, storage operation latencies (per-item for bulk operations), and cursor performance. Use this to identify bottlenecks, optimize storage operations, and monitor overall ExEx health.",
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": null,
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 200,
+      "options": {
+        "content": "# External Proofs Storage Metrics\n\nThis dashboard monitors the performance of the **External Proofs ExEx** storage layer.\n\n**Key Concepts:**\n- **Block Processing**: End-to-end time to process each block (execution + state root + writes)\n- **Per-Item Metrics**: Bulk write operations (store_*) report **per-item latency**, making metrics comparable regardless of batch size\n- **Contexts**: Operations are tagged by when they occur (execution, state_root, write, metadata)\n- **Cursors**: Iterator-like access patterns for reading trie and hashed state\n\n**What to Watch:**\n- High write latencies during backfill indicate storage bottlenecks\n- Storage overhead % shows how much time is spent in DB vs EVM execution\n- Cursor operation latencies impact state root calculation performance",
+        "mode": "markdown"
+      },
+      "pluginVersion": "8.0.0",
+      "title": "Dashboard Overview",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "id": 100,
+      "panels": [],
+      "title": "Block Processing Overview - High-Level Performance",
+      "type": "row"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "Average time spent in each phase of block processing over 5 minutes. Total = Execution (EVM) + State Root (trie calculation) + Write (storage). This shows the overall performance and where time is spent.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Duration (ms)",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "1000 * (rate(reth_external_proofs_block_total_duration_seconds_sum[5m]) / rate(reth_external_proofs_block_total_duration_seconds_count[5m]))",
+          "legendFormat": "Total",
+          "refId": "A"
+        },
+        {
+          "expr": "1000 * (rate(reth_external_proofs_block_execution_duration_seconds_sum[5m]) / rate(reth_external_proofs_block_execution_duration_seconds_count[5m]))",
+          "legendFormat": "Execution",
+          "refId": "B"
+        },
+        {
+          "expr": "1000 * (rate(reth_external_proofs_block_state_root_duration_seconds_sum[5m]) / rate(reth_external_proofs_block_state_root_duration_seconds_count[5m]))",
+          "legendFormat": "State Root",
+          "refId": "C"
+        },
+        {
+          "expr": "1000 * (rate(reth_external_proofs_block_write_duration_seconds_sum[5m]) / rate(reth_external_proofs_block_write_duration_seconds_count[5m]))",
+          "legendFormat": "Write",
+          "refId": "D"
+        }
+      ],
+      "title": "Block Processing Duration - Average (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "99th percentile (worst case) block processing times. Use this to identify performance spikes and outliers. If p99 is much higher than average, investigate what causes the slowdowns.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Duration (ms)",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "1000 * histogram_quantile(0.99, rate(reth_external_proofs_block_total_duration_seconds_bucket[5m]))",
+          "legendFormat": "Total (p99)",
+          "refId": "A"
+        },
+        {
+          "expr": "1000 * histogram_quantile(0.99, rate(reth_external_proofs_block_execution_duration_seconds_bucket[5m]))",
+          "legendFormat": "Execution (p99)",
+          "refId": "B"
+        },
+        {
+          "expr": "1000 * histogram_quantile(0.99, rate(reth_external_proofs_block_state_root_duration_seconds_bucket[5m]))",
+          "legendFormat": "State Root (p99)",
+          "refId": "C"
+        },
+        {
+          "expr": "1000 * histogram_quantile(0.99, rate(reth_external_proofs_block_write_duration_seconds_bucket[5m]))",
+          "legendFormat": "Write (p99)",
+          "refId": "D"
+        }
+      ],
+      "title": "Block Processing Duration - P99 Worst Case (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "Current throughput: how many blocks per second are being processed. During backfill this should be high and steady. During live sync, this matches the chain's block production rate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 12
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(reth_external_proofs_block_total_duration_seconds_count[5m])",
+          "refId": "A"
+        }
+      ],
+      "title": "Throughput: Blocks/Second",
+      "type": "stat"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "What percentage of total time is spent in EVM execution (non-storage). Lower values mean storage is the bottleneck. Green is good (fast storage), red means storage overhead is high.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 12
+      },
+      "id": 4,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "100 * (rate(reth_external_proofs_block_execution_duration_seconds_sum[5m]) / rate(reth_external_proofs_block_total_duration_seconds_sum[5m]))",
+          "legendFormat": "Execution %",
+          "refId": "A"
+        }
+      ],
+      "title": "EVM Time % (vs Storage Overhead)",
+      "type": "gauge"
+    },
+    {
+      "datasource": null,
+      "gridPos": {
+        "h": 2,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 201,
+      "options": {
+        "content": "### 💡 Interpreting Block Metrics\n\n**Total Duration** = Combined time for all phases\n\n**Execution** = EVM execution (non-storage)\n\n**State Root** = Trie calculation (uses cursors)\n\n**Write** = Persisting trie updates to storage\n\nIf Write >> Execution, storage is the bottleneck!",
+        "mode": "markdown"
+      },
+      "pluginVersion": "8.0.0",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 101,
+      "panels": [],
+      "title": "Storage Operations - Detailed Operation Metrics",
+      "type": "row"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "How frequently each storage operation is called. High store_* rates during backfill are normal. During live sync, you'll see more cursor operations for state root calculation.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Operations/sec",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (operation) (rate(reth_external_proofs_storage_operation_duration_seconds_count[5m]))",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Storage Operations Frequency by Type (ops/sec)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "Storage operations grouped by when they occur. WRITE context = backfill/persistence. EXECUTION context = EVM state reads. STATE_ROOT context = trie traversal. This shows which phase is most storage-intensive.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Operations/sec",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "mappings": [],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (context) (rate(reth_external_proofs_storage_operation_duration_seconds_count[5m]))",
+          "legendFormat": "{{context}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Storage Operations by Context (execution/state_root/write)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "⚠️ PER-ITEM latency for bulk write operations. This shows microseconds per account/storage slot, not per batch. Compare across operations to find which type of write is slowest.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Duration (μs)",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "µs"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "1000000 * (rate(reth_external_proofs_storage_operation_duration_seconds_sum{operation=~\"store_.*\"}[5m]) / rate(reth_external_proofs_storage_operation_duration_seconds_count{operation=~\"store_.*\"}[5m]))",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Write Operations - Avg Per-Item Latency (μs)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "⚠️ P99 (worst case) PER-ITEM latency for bulk writes. Spikes here indicate storage contention or slow disk. Values >1000μs (1ms) per item may indicate performance issues.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Duration (μs)",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "µs"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "1000000 * histogram_quantile(0.99, rate(reth_external_proofs_storage_operation_duration_seconds_bucket{operation=~\"store_.*\"}[5m]))",
+          "legendFormat": "{{operation}} (p99)",
+          "refId": "A"
+        }
+      ],
+      "title": "Write Operations - P99 Per-Item Latency (μs)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 102,
+      "panels": [],
+      "title": "Cursor Operations - Trie Traversal Performance",
+      "type": "row"
+    },
+    {
+      "datasource": null,
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "id": 202,
+      "options": {
+        "content": "**Cursors** are iterator-like objects used for traversing tries during state root calculation. Fast cursor operations are critical for performance.\n\n- **Trie Cursors**: Navigate account and storage trie branch nodes (seek, next, seek_exact)\n- **Hashed Cursors**: Access leaf data (accounts, storage values) by hash (seek, next, is_storage_empty)\n\nSlow cursor operations directly impact state root calculation time. Watch for patterns: many `seek` calls may indicate non-sequential access.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "8.0.0",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "Frequency of cursor operations. High rates during state root calculation are normal. 'next' should dominate (sequential access is faster than random seeks).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Operations/sec",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (operation) (rate(reth_external_proofs_storage_operation_duration_seconds_count{operation=~\".*cursor.*\"}[5m]))",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Cursor Operations Frequency (ops/sec)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "Average latency per cursor operation in microseconds. Seek operations are typically slower than next (sequential iteration). Latencies >100μs may indicate index issues or disk slowness.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Duration (μs)",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "µs"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "1000000 * (rate(reth_external_proofs_storage_operation_duration_seconds_sum{operation=~\".*cursor.*\"}[5m]) / rate(reth_external_proofs_storage_operation_duration_seconds_count{operation=~\".*cursor.*\"}[5m]))",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Cursor Operation Latency - Average (μs)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 103,
+      "panels": [],
+      "title": "Detailed Analysis - Deep Dive & Troubleshooting",
+      "type": "row"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "Heatmap showing the distribution of all storage operation latencies. Darker colors = more operations at that latency. Use this to identify patterns: single peak (consistent performance) vs multiple peaks (variable performance).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "id": 11,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "scheme": "Spectral",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "show": true,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(reth_external_proofs_storage_operation_duration_seconds_bucket[5m])) by (le)",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Storage Operation Latency Distribution - Heatmap",
+      "type": "heatmap"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "The 10 slowest operation/context combinations by average latency. Focus optimization efforts here. Remember: bulk operations show PER-ITEM latency.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "µs"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
+      "id": 12,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "expr": "topk(10, 1000000 * (rate(reth_external_proofs_storage_operation_duration_seconds_sum[5m]) / rate(reth_external_proofs_storage_operation_duration_seconds_count[5m])))",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "🐌 Top 10 Slowest Operations - Optimization Targets",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Duration (μs)",
+              "context": "Context",
+              "operation": "Operation"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "The 10 most frequently called operations. Even small latency improvements here have big impact on overall performance (Amdahl's Law).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
+      "id": 13,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "expr": "topk(10, rate(reth_external_proofs_storage_operation_duration_seconds_count[5m]))",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "🔥 Top 10 Most Frequent Operations - High Impact Optimizations",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Value": "Rate (ops/sec)",
+              "context": "Context",
+              "operation": "Operation"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["reth", "external-proofs", "storage"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "External Proofs Storage Metrics",
+  "uid": "external-proofs-storage",
+  "version": 1
+}
+

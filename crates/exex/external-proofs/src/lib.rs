@@ -2,7 +2,8 @@
 
 use crate::{
     backfill::BackfillJob, live::LiveTrieCollector, mdbx::MdbxOpProofsStorage,
-    storage::OpProofsStorage,
+    metrics::StorageMetrics, storage::OpProofsStorage,
+    storage_with_metrics::OpProofsStorageWithMetrics,
 };
 use futures_util::TryStreamExt;
 use reth_chainspec::ChainInfo;
@@ -21,10 +22,12 @@ pub mod backfill;
 pub mod in_memory;
 pub mod live;
 pub mod mdbx;
+pub mod metrics;
 pub mod models;
 pub mod proof;
 pub mod provider;
 pub mod storage;
+pub mod storage_with_metrics;
 
 #[cfg(test)]
 mod storage_tests;
@@ -38,7 +41,8 @@ where
     Node: FullNodeComponents,
 {
     ctx: ExExContext<Node>,
-    storage: Arc<MdbxOpProofsStorage<DatabaseEnv>>,
+    storage: Arc<OpProofsStorageWithMetrics<MdbxOpProofsStorage<DatabaseEnv>>>,
+    metrics: Arc<StorageMetrics>,
 }
 
 impl<Node, Primitives> OpProofsExEx<Node>
@@ -52,23 +56,26 @@ where
         let datadir = PathBuf::from(datadir);
 
         let storage = MdbxOpProofsStorage::new_from_path(datadir).unwrap();
+        let metrics = Arc::new(StorageMetrics::new());
+        let storage_with_metrics = OpProofsStorageWithMetrics::new(storage, metrics.clone());
 
-        Self { ctx, storage: Arc::new(storage) }
+        Self { ctx, storage: Arc::new(storage_with_metrics), metrics }
     }
 
     /// Main execution loop for the ExEx
     pub async fn run(mut self) -> eyre::Result<()> {
         // Run the earliest block job (idempotent)
-        let db_provider =
-            self.ctx.provider().database_provider_ro()?.disable_long_read_transaction_safety();
-        let db_tx = db_provider.into_tx();
         let ChainInfo { best_number, best_hash } = self.ctx.provider().chain_info()?;
-        BackfillJob::new(self.storage.clone(), &db_tx).run(best_number, best_hash).await?;
+        BackfillJob::new(&*self.storage, self.ctx.provider()).run(best_number, best_hash).await?;
 
-        let collector = LiveTrieCollector::<Node, Arc<MdbxOpProofsStorage<DatabaseEnv>>>::new(
+        let collector = LiveTrieCollector::<
+            Node,
+            Arc<OpProofsStorageWithMetrics<MdbxOpProofsStorage<DatabaseEnv>>>,
+        >::new(
             self.ctx.evm_config().clone(),
             self.ctx.provider().clone(),
             self.storage.clone(),
+            self.metrics.clone(),
         );
 
         // check if we can process up to the latest block

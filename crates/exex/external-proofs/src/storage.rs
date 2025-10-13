@@ -190,4 +190,14 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         block_number: u64,
         hash: B256,
     ) -> OpProofsStorageResult<()>;
+
+    async fn get_last_stored_account_branch(&self) -> OpProofsStorageResult<Option<Nibbles>>;
+
+    async fn get_last_stored_storage_branch(
+        &self,
+    ) -> OpProofsStorageResult<Option<(B256, Nibbles)>>;
+
+    async fn get_last_stored_hashed_account(&self) -> OpProofsStorageResult<Option<B256>>;
+
+    async fn get_last_stored_hashed_storage(&self) -> OpProofsStorageResult<Option<(B256, B256)>>;
 }

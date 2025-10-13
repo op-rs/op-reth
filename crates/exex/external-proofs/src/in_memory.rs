@@ -633,6 +633,28 @@ impl OpProofsStorage for InMemoryProofsStorage {
         inner.earliest_block = Some((block_number, hash));
         Ok(())
     }
+
+    async fn get_last_stored_account_branch(&self) -> OpProofsStorageResult<Option<Nibbles>> {
+        let inner = self.inner.read().await;
+        Ok(inner.account_branches.keys().max().map(|(_, path)| *path))
+    }
+
+    async fn get_last_stored_storage_branch(
+        &self,
+    ) -> OpProofsStorageResult<Option<(B256, Nibbles)>> {
+        let inner = self.inner.read().await;
+        Ok(inner.storage_branches.keys().max().map(|(_, address, path)| (*address, *path)))
+    }
+
+    async fn get_last_stored_hashed_account(&self) -> OpProofsStorageResult<Option<B256>> {
+        let inner = self.inner.read().await;
+        Ok(inner.hashed_accounts.keys().max().map(|(_, address)| *address))
+    }
+
+    async fn get_last_stored_hashed_storage(&self) -> OpProofsStorageResult<Option<(B256, B256)>> {
+        let inner = self.inner.read().await;
+        Ok(inner.hashed_storages.keys().max().map(|(_, address, slot)| (*address, *slot)))
+    }
 }
 
 #[cfg(test)]

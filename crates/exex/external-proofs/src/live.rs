@@ -1,6 +1,7 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
+    metrics::StorageMetrics,
     provider::OpProofsStateProviderRef,
     storage::{BlockStateDiff, OpProofsStorage},
 };
@@ -12,7 +13,7 @@ use reth_provider::{
     StateRootProvider,
 };
 use reth_revm::database::StateProviderDatabase;
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 use tracing::debug;
 
 /// Live trie collector for external proofs storage.
@@ -25,6 +26,7 @@ where
     evm_config: Node::Evm,
     provider: Node::Provider,
     storage: PreimageStore,
+    metrics: Arc<StorageMetrics>,
 }
 
 impl<Node, Store, Primitives> LiveTrieCollector<Node, Store>
@@ -34,8 +36,13 @@ where
     Store: OpProofsStorage + Clone + 'static,
 {
     /// Create a new `LiveTrieCollector` instance
-    pub const fn new(evm_config: Node::Evm, provider: Node::Provider, storage: Store) -> Self {
-        Self { evm_config, provider, storage }
+    pub const fn new(
+        evm_config: Node::Evm,
+        provider: Node::Provider,
+        storage: Store,
+        metrics: Arc<StorageMetrics>,
+    ) -> Self {
+        Self { evm_config, provider, storage, metrics }
     }
 
     /// Execute a block and store the updates in the storage.
@@ -43,16 +50,15 @@ where
         &self,
         block: &RecoveredBlock<Primitives::Block>,
     ) -> eyre::Result<()> {
-        let start = Instant::now();
-        // ensure that we have the state of the parent block
+        let total_start = Instant::now();
+
+        // Ensure that we have the state of the parent block
         let (Some((earliest, _)), Some((latest, _))) = (
             self.storage.get_earliest_block_number().await?,
             self.storage.get_latest_block_number().await?,
         ) else {
             return Err(eyre::eyre!("No blocks stored"));
         };
-
-        let fetch_block_duration = start.elapsed();
 
         let parent_block_number = block.number() - 1;
         if parent_block_number < earliest {
@@ -80,21 +86,20 @@ where
             parent_block_number,
         );
 
-        let init_provider_duration = start.elapsed() - fetch_block_duration;
-
+        // Execute block (EVM)
+        let execution_start = Instant::now();
         let db = StateProviderDatabase::new(&state_provider);
         let block_executor = self.evm_config.batch_executor(db);
-
         let execution_result =
             block_executor.execute(&(*block).clone()).map_err(|err| eyre::eyre!(err))?;
+        let execution_duration = execution_start.elapsed();
 
-        let execute_block_duration = start.elapsed() - init_provider_duration;
-
+        // Calculate state root
+        let state_root_start = Instant::now();
         let hashed_state = state_provider.hashed_post_state(&execution_result.state);
         let (state_root, trie_updates) =
             state_provider.state_root_with_updates(hashed_state.clone())?;
-
-        let calculate_state_root_duration = start.elapsed() - execute_block_duration;
+        let state_root_duration = state_root_start.elapsed();
 
         if state_root != block.state_root() {
             return Err(eyre::eyre!(
@@ -105,21 +110,30 @@ where
             ));
         }
 
+        // Write trie updates
+        let write_start = Instant::now();
         self.storage
             .store_trie_updates(
                 block_number,
                 BlockStateDiff { trie_updates, post_state: hashed_state },
             )
             .await?;
+        let write_duration = write_start.elapsed();
 
-        let write_trie_updates_duration = start.elapsed() - calculate_state_root_duration;
+        let total_duration = total_start.elapsed();
 
-        debug!("execute_and_store_block_updates duration: {:?}", start.elapsed());
-        debug!("- fetch_block_duration: {:?}", fetch_block_duration);
-        debug!("- init_provider_duration: {:?}", init_provider_duration);
-        debug!("- execute_block_duration: {:?}", execute_block_duration);
-        debug!("- calculate_state_root_duration: {:?}", calculate_state_root_duration);
-        debug!("- write_trie_updates_duration: {:?}", write_trie_updates_duration);
+        // Record metrics
+        let block_metrics = self.metrics.block_metrics();
+        block_metrics.execution_duration_seconds.record(execution_duration);
+        block_metrics.state_root_duration_seconds.record(state_root_duration);
+        block_metrics.write_duration_seconds.record(write_duration);
+        block_metrics.total_duration_seconds.record(total_duration);
+
+        // Keep debug logs for backward compatibility
+        debug!("execute_and_store_block_updates duration: {:?}", total_duration);
+        debug!("- execution_duration: {:?}", execution_duration);
+        debug!("- state_root_duration: {:?}", state_root_duration);
+        debug!("- write_duration: {:?}", write_duration);
 
         Ok(())
     }
