@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        in_memory::InMemoryExternalStorage,
         storage::{
+            in_memory::InMemoryExternalStorage,
             BlockStateDiff, ExternalHashedCursor, ExternalStorage, ExternalStorageError,
             ExternalTrieCursor,
         },

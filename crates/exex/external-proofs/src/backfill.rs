@@ -351,8 +351,10 @@ impl<'a, Tx: DbTx, S: ExternalStorage + Send> BackfillJob<'a, Tx, S> {
 mod tests {
     use super::*;
     use crate::{
-        in_memory::InMemoryExternalStorage,
-        storage::{ExternalHashedCursor, ExternalTrieCursor},
+        storage:: {
+            in_memory::InMemoryExternalStorage,
+            ExternalHashedCursor, ExternalTrieCursor
+        },
     };
     use alloy_primitives::{keccak256, Address, U256};
     use reth_db::{test_utils::create_test_rw_db, Database};
