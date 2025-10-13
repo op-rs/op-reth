@@ -6,7 +6,7 @@ use reth_db_api::{
 use reth_trie::StoredNibbles;
 use serde::{Deserialize, Serialize};
 
-/// Composite key: (hashed_address, path) for storage trie branches
+/// Composite key: (`hashed_address`, `path`) for storage trie branches
 ///
 /// Used to efficiently index storage branches by both account address and trie path.
 /// The encoding ensures lexicographic ordering: first by address, then by path.
@@ -54,7 +54,7 @@ impl Decode for StorageTrieSubKey {
     }
 }
 
-/// Composite key: (hashed_address, hashed_storage_key) for hashed storage values
+/// Composite key: (`hashed_address`, `hashed_storage_key`) for hashed storage values
 ///
 /// Used to efficiently index storage values by both account address and storage key.
 /// The encoding ensures lexicographic ordering: first by address, then by storage key.
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn test_storage_branch_subkey_encode_decode() {
         let addr = B256::from([1u8; 32]);
-        let path = StoredNibbles(Nibbles::from_nibbles_unchecked(&[1, 2, 3, 4]));
+        let path = StoredNibbles(Nibbles::from_nibbles_unchecked([1, 2, 3, 4]));
         let key = StorageTrieSubKey::new(addr, path.clone());
 
         let encoded = key.clone().encode();
@@ -152,12 +152,12 @@ mod tests {
     fn test_storage_branch_subkey_ordering() {
         let addr1 = B256::from([1u8; 32]);
         let addr2 = B256::from([2u8; 32]);
-        let path1 = StoredNibbles(Nibbles::from_nibbles_unchecked(&[1, 2]));
-        let path2 = StoredNibbles(Nibbles::from_nibbles_unchecked(&[1, 3]));
+        let path1 = StoredNibbles(Nibbles::from_nibbles_unchecked([1, 2]));
+        let path2 = StoredNibbles(Nibbles::from_nibbles_unchecked([1, 3]));
 
         let key1 = StorageTrieSubKey::new(addr1, path1.clone());
-        let key2 = StorageTrieSubKey::new(addr1, path2.clone());
-        let key3 = StorageTrieSubKey::new(addr2, path1.clone());
+        let key2 = StorageTrieSubKey::new(addr1, path2);
+        let key3 = StorageTrieSubKey::new(addr2, path1);
 
         // Encoded bytes should be sortable: first by address, then by path
         let enc1 = key1.encode();

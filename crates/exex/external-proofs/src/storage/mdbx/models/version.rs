@@ -44,22 +44,22 @@ impl<T: Decompress> Decompress for MaybeDeleted<T> {
     fn decompress(value: &[u8]) -> Result<Self, reth_db_api::DatabaseError> {
         if value.is_empty() {
             // Empty = deleted
-            Ok(MaybeDeleted(None))
+            Ok(Self(None))
         } else {
             // Non-empty = present
             let inner = T::decompress(value)?;
-            Ok(MaybeDeleted(Some(inner)))
+            Ok(Self(Some(inner)))
         }
     }
 }
 
-/// Versioned value wrapper for DupSort tables
+/// Versioned value wrapper for `DupSort` tables
 ///
-/// For DupSort tables in MDBX, the Value type must contain the SubKey as a field.
-/// This wrapper combines a block_number (the SubKey) with the actual value.
+/// For `DupSort` tables in MDBX, the Value type must contain the `SubKey` as a field.
+/// This wrapper combines a `block_number` (the `SubKey`) with the actual value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VersionedValue<T> {
-    /// Block number (SubKey for DupSort)
+    /// Block number (`SubKey` for `DupSort`)
     pub block_number: u64,
     /// The actual value (may be deleted)
     pub value: MaybeDeleted<T>,
@@ -89,7 +89,7 @@ impl<T: Decompress> Decompress for VersionedValue<T> {
             return Err(reth_db_api::DatabaseError::Decode);
         }
 
-        let mut buf = &value[..];
+        let mut buf: &[u8] = value;
         let block_number = buf.get_u64();
         let value = MaybeDeleted::<T>::decompress(&value[8..])?;
 
