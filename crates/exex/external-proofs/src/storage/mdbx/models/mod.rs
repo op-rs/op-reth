@@ -1,13 +1,12 @@
 //! MDBX tables and models for external proofs storage.
-use std::fmt;
-use reth_db_api::{
-    TableSet, TableType, TableViewer,
-    table::{DupSort, TableInfo},
-    tables,
-};
-use reth_trie::{StoredNibbles, BranchNodeCompact};
-use reth_primitives_traits::Account;
 use alloy_primitives::B256;
+use reth_db_api::{
+    table::{DupSort, TableInfo},
+    tables, TableSet, TableType, TableViewer,
+};
+use reth_primitives_traits::Account;
+use reth_trie::{BranchNodeCompact, StoredNibbles};
+use std::fmt;
 
 mod block;
 pub use block::*;

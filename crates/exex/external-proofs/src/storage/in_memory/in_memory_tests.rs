@@ -2,12 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        storage::{
-            in_memory::InMemoryExternalStorage,
-            BlockStateDiff, ExternalHashedCursor, ExternalStorage, ExternalStorageError,
-            ExternalTrieCursor,
-        },
+    use crate::storage::{
+        in_memory::InMemoryExternalStorage, BlockStateDiff, ExternalHashedCursor, ExternalStorage,
+        ExternalStorageError, ExternalTrieCursor,
     };
     use alloy_primitives::{map::HashMap, B256, U256};
     use reth_primitives_traits::Account;
