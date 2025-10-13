@@ -1,9 +1,7 @@
 //! Backfill job for proofs storage. Handles storing the existing state into the proofs storage.
 
-use crate::mdbx::{HashedStorageSubKey, StorageBranchSubKey};
-
 use super::storage::OpProofsStorage;
-use alloy_primitives::B256;
+use alloy_primitives::{B256, U256};
 use reth_db_api::{
     cursor::{DbCursorRO, DbDupCursorRO},
     tables,
@@ -11,7 +9,7 @@ use reth_db_api::{
     DatabaseError,
 };
 use reth_primitives_traits::{Account, StorageEntry};
-use reth_storage_api::DBProvider;
+use reth_provider::DBProvider;
 use reth_trie::{BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey};
 use std::{collections::HashMap, time::Instant};
 use tracing::info;
@@ -98,6 +96,49 @@ define_simple_cursor_iter!(
 );
 define_dup_cursor_iter!(StoragesTrieIter, tables::StoragesTrie, B256, StorageTrieEntry);
 
+// Create an iterator for HashedStorages that also returns the storage key
+struct HashedStoragesIterWithStorageKey<C>(HashedStoragesIter<C>);
+
+impl<C> HashedStoragesIterWithStorageKey<C> {
+    const fn new(cursor: HashedStoragesIter<C>) -> Self {
+        Self(cursor)
+    }
+}
+
+impl<C: DbDupCursorRO<tables::HashedStorages> + DbCursorRO<tables::HashedStorages>> Iterator
+    for HashedStoragesIterWithStorageKey<C>
+{
+    type Item = Result<((B256, B256), U256), DatabaseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Some(Ok((address, entry))) = self.0.next() else {
+            return None;
+        };
+        Some(Ok(((address, entry.key), entry.value)))
+    }
+}
+
+// Create an iterator for StoragesTrie that also returns the storage key
+struct StoragesTrieIterWithStorageKey<C>(StoragesTrieIter<C>);
+
+impl<C> StoragesTrieIterWithStorageKey<C> {
+    const fn new(cursor: StoragesTrieIter<C>) -> Self {
+        Self(cursor)
+    }
+}
+
+impl<C: DbDupCursorRO<tables::StoragesTrie> + DbCursorRO<tables::StoragesTrie>> Iterator
+    for StoragesTrieIterWithStorageKey<C>
+{
+    type Item = Result<((B256, Nibbles), BranchNodeCompact), DatabaseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Some(Ok((address, entry))) = self.0.next() else {
+            return None;
+        };
+        Some(Ok(((address, entry.nibbles.0), entry.node)))
+    }
+}
 /// Trait to estimate the progress of a backfill job based on the key.
 trait CompletionEstimatable {
     // Returns a progress estimate as a percentage (0.0 to 1.0)
@@ -129,6 +170,13 @@ impl CompletionEstimatable for StoredNibbles {
     }
 }
 
+impl<T> CompletionEstimatable for (B256, T) {
+    fn estimate_progress(&self) -> f64 {
+        // use the first 3 bytes of the hashed account address as a progress estimate
+        self.0.estimate_progress()
+    }
+}
+
 /// Backfill a table from a source iterator to a storage function. Handles batching and logging.
 /// Returns the last key processed (if any) for potential resumption.
 async fn backfill<
@@ -138,7 +186,7 @@ async fn backfill<
     Value: Clone + 'static,
 >(
     name: &str,
-    mut source: S,
+    source: S,
     storage_threshold: usize,
     log_threshold: usize,
     cursor_recreation_threshold: usize,
@@ -234,18 +282,21 @@ where
     /// Backfill hashed accounts data
     async fn backfill_hashed_accounts(&self) -> eyre::Result<()> {
         let mut total_processed = 0u64;
-        let mut last_key: Option<B256> = self.storage.get_last_stored_hashed_account().await?;
+        let last_key: Option<B256> = self.storage.get_last_stored_hashed_account().await?;
+
+        let mut cursor = self
+            .provider
+            .database_provider_ro()?
+            .tx_ref()
+            .cursor_read::<tables::HashedAccounts>()?;
+
+        // Seek to last processed key if resuming
+        if let Some(ref key) = last_key {
+            cursor.seek(*key)?;
+            cursor.next()?; // Skip the last processed entry
+        }
 
         loop {
-            let provider = self.provider.database_provider_ro()?;
-            let mut cursor = provider.tx_ref().cursor_read::<tables::HashedAccounts>()?;
-
-            // Seek to last processed key if resuming
-            if let Some(ref key) = last_key {
-                cursor.seek(*key)?;
-                cursor.next()?; // Skip the last processed entry
-            }
-
             let source = HashedAccountsIter::new(cursor);
             let save_fn = async |entries: Vec<(B256, Account)>| -> eyre::Result<()> {
                 self.storage
@@ -274,11 +325,19 @@ where
 
             // If we got a last key, we need to recreate cursor and continue
             if let Some(key) = new_last_key {
-                last_key = Some(key);
                 info!(
                     "Recreating cursor for hashed accounts, total processed: {}",
                     total_processed
                 );
+
+                cursor = self
+                    .provider
+                    .database_provider_ro()?
+                    .tx_ref()
+                    .cursor_read::<tables::HashedAccounts>()?;
+
+                cursor.seek(key)?;
+                cursor.next()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -292,26 +351,28 @@ where
     /// Backfill hashed storage data
     async fn backfill_hashed_storages(&self) -> eyre::Result<()> {
         let mut total_processed = 0u64;
-        let mut last_key: Option<(B256, B256)> =
-            self.storage.get_last_stored_hashed_storage().await?;
+
+        let last_key: Option<(B256, B256)> = self.storage.get_last_stored_hashed_storage().await?;
+
+        let mut cursor = self
+            .provider
+            .database_provider_ro()?
+            .tx_ref()
+            .cursor_dup_read::<tables::HashedStorages>()?;
+
+        if let Some(ref key) = last_key {
+            cursor.seek_by_key_subkey(key.0, key.1)?;
+            cursor.next_dup()?; // Skip the last processed entry
+        }
 
         loop {
-            let provider = self.provider.database_provider_ro()?;
-            let mut cursor = provider.tx_ref().cursor_dup_read::<tables::HashedStorages>()?;
-
-            // Seek to last processed key if resuming
-            if let Some(ref key) = last_key {
-                cursor.seek_by_key_subkey(key.0, key.1)?;
-                cursor.next_dup()?; // Skip the last processed entry
-            }
-
-            let source = HashedStoragesIter::new(cursor);
-            let save_fn = async |entries: Vec<(B256, StorageEntry)>| -> eyre::Result<()> {
+            let source = HashedStoragesIterWithStorageKey::new(HashedStoragesIter::new(cursor));
+            let save_fn = async |entries: Vec<((B256, B256), U256)>| -> eyre::Result<()> {
                 // Group entries by hashed address
                 let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> =
                     HashMap::default();
-                for (address, entry) in entries {
-                    by_address.entry(address).or_default().push((entry.key, entry.value));
+                for ((address, storage_key), value) in entries {
+                    by_address.entry(address).or_default().push((storage_key, value));
                 }
 
                 // Store each address's storage entries
@@ -335,10 +396,16 @@ where
 
             // If we got a last key, we need to recreate cursor and continue
             if let Some(key) = new_last_key {
-                last_key = Some(key);
                 info!("Recreating cursor for hashed storage, total processed: {}", total_processed);
-                // Drop provider to release the read transaction
-                drop(provider);
+
+                cursor = self
+                    .provider
+                    .database_provider_ro()?
+                    .tx_ref()
+                    .cursor_dup_read::<tables::HashedStorages>()?;
+
+                cursor.seek_by_key_subkey(key.0, key.1)?;
+                cursor.next_dup()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -352,18 +419,17 @@ where
     /// Backfill accounts trie data
     async fn backfill_accounts_trie(&self) -> eyre::Result<()> {
         let mut total_processed = 0u64;
-        let mut last_key: Option<Nibbles> = self.storage.get_last_stored_account_branch().await?;
+        let last_key: Option<Nibbles> = self.storage.get_last_stored_account_branch().await?;
+
+        let mut cursor =
+            self.provider.database_provider_ro()?.tx_ref().cursor_read::<tables::AccountsTrie>()?;
+
+        if let Some(ref key) = last_key {
+            cursor.seek(StoredNibbles(key.clone()))?;
+            cursor.next()?; // Skip the last processed entry
+        }
 
         loop {
-            let provider = self.provider.database_provider_ro()?;
-            let mut cursor = provider.tx_ref().cursor_read::<tables::AccountsTrie>()?;
-
-            // Seek to last processed key if resuming
-            if let Some(ref key) = last_key {
-                cursor.seek(StoredNibbles(key.clone()))?;
-                cursor.next()?; // Skip the last processed entry
-            }
-
             let source = AccountsTrieIter::new(cursor);
             let save_fn =
                 async |entries: Vec<(StoredNibbles, BranchNodeCompact)>| -> eyre::Result<()> {
@@ -393,10 +459,16 @@ where
 
             // If we got a last key, we need to recreate cursor and continue
             if let Some(key) = new_last_key {
-                last_key = Some(key.0);
                 info!("Recreating cursor for accounts trie, total processed: {}", total_processed);
-                // Drop provider to release the read transaction
-                drop(provider);
+
+                cursor = self
+                    .provider
+                    .database_provider_ro()?
+                    .tx_ref()
+                    .cursor_read::<tables::AccountsTrie>()?;
+
+                cursor.seek(StoredNibbles(key.0.clone()))?;
+                cursor.next()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -410,37 +482,41 @@ where
     /// Backfill storage trie data
     async fn backfill_storages_trie(&self) -> eyre::Result<()> {
         let mut total_processed = 0u64;
-        let mut last_key: Option<(B256, Nibbles)> =
+        let last_key: Option<(B256, Nibbles)> =
             self.storage.get_last_stored_storage_branch().await?;
 
+        let mut cursor = self
+            .provider
+            .database_provider_ro()?
+            .tx_ref()
+            .cursor_dup_read::<tables::StoragesTrie>()?;
+
+        // Seek to last processed key if resuming
+        if let Some(ref key) = last_key {
+            cursor.seek_by_key_subkey(key.0, StoredNibblesSubKey(key.1))?;
+            cursor.next_dup()?; // Skip the last processed entry
+        }
         loop {
-            let provider = self.provider.database_provider_ro()?;
-            let mut cursor = provider.tx_ref().cursor_dup_read::<tables::StoragesTrie>()?;
-
-            // Seek to last processed key if resuming
-            if let Some(ref key) = last_key {
-                cursor.seek_by_key_subkey(key.0, StoredNibblesSubKey(key.1))?;
-                cursor.next_dup()?; // Skip the last processed entry
-            }
-
             let source = StoragesTrieIter::new(cursor);
-            let save_fn = async |entries: Vec<(B256, StorageTrieEntry)>| -> eyre::Result<()> {
-                // Group entries by hashed address
-                let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
-                    HashMap::default();
-                for (hashed_address, storage_entry) in entries {
-                    by_address
-                        .entry(hashed_address)
-                        .or_default()
-                        .push((storage_entry.nibbles.0, Some(storage_entry.node)));
-                }
+            let source = StoragesTrieIterWithStorageKey::new(source);
+            let save_fn =
+                async |entries: Vec<((B256, Nibbles), BranchNodeCompact)>| -> eyre::Result<()> {
+                    // Group entries by hashed address
+                    let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
+                        HashMap::default();
+                    for ((hashed_address, storage_path), branch) in entries {
+                        by_address
+                            .entry(hashed_address)
+                            .or_default()
+                            .push((storage_path, Some(branch)));
+                    }
 
-                // Store each address's storage trie branches
-                for (address, branches) in by_address {
-                    self.storage.store_storage_branches(0, address, branches).await?;
-                }
-                Ok(())
-            };
+                    // Store each address's storage trie branches
+                    for (address, branches) in by_address {
+                        self.storage.store_storage_branches(0, address, branches).await?;
+                    }
+                    Ok(())
+                };
 
             let (processed, new_last_key) = backfill(
                 "storage trie",
@@ -456,10 +532,16 @@ where
 
             // If we got a last key, we need to recreate cursor and continue
             if let Some(key) = new_last_key {
-                last_key = Some(key);
                 info!("Recreating cursor for storage trie, total processed: {}", total_processed);
-                // Drop provider to release the read transaction
-                drop(provider);
+
+                cursor = self
+                    .provider
+                    .database_provider_ro()?
+                    .tx_ref()
+                    .cursor_dup_read::<tables::StoragesTrie>()?;
+
+                cursor.seek_by_key_subkey(key.0, StoredNibblesSubKey(key.1))?;
+                cursor.next_dup()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -502,6 +584,7 @@ mod tests {
     use reth_db::{test_utils::create_test_rw_db, Database};
     use reth_db_api::{cursor::DbCursorRW, transaction::DbTxMut};
     use reth_primitives_traits::Account;
+    use reth_provider::test_utils::create_test_provider_factory;
     use reth_trie::{BranchNodeCompact, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey};
     use std::sync::Arc;
 
@@ -523,7 +606,6 @@ mod tests {
     #[tokio::test]
     async fn test_backfill_hashed_accounts() {
         let db = create_test_rw_db();
-        let storage = InMemoryProofsStorage::new();
 
         // Insert test accounts into database
         let tx = db.tx_mut().unwrap();
@@ -737,7 +819,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_full_backfill_run() {
-        let db = create_test_rw_db();
+        let provider = create_test_provider_factory();
+        let db = provider.db_ref();
         let storage = InMemoryProofsStorage::new();
 
         // Insert some test data
@@ -787,8 +870,7 @@ mod tests {
         tx.commit().unwrap();
 
         // Run full backfill
-        let tx = db.tx().unwrap();
-        let job = BackfillJob::new(&storage, &tx);
+        let job = BackfillJob::new(&storage, &provider);
         let best_number = 100;
         let best_hash = B256::repeat_byte(0x42);
 
@@ -819,14 +901,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_backfill_run_skips_if_already_done() {
-        let db = create_test_rw_db();
+        let provider = create_test_provider_factory();
+        let db = provider.db_ref();
         let storage = InMemoryProofsStorage::new();
 
         // Set earliest block to simulate already backfilled
         storage.set_earliest_block_number(50, B256::repeat_byte(0x01)).await.unwrap();
 
-        let tx = db.tx().unwrap();
-        let job = BackfillJob::new(&storage, &tx);
+        let job = BackfillJob::new(&storage, &provider);
 
         // Run backfill - should skip
         job.run(100, B256::repeat_byte(0x42)).await.unwrap();
