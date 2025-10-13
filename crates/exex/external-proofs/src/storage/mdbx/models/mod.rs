@@ -1,4 +1,4 @@
-//! MDBX models for external proofs storage.
+//! MDBX tables and models for external proofs storage.
 use std::fmt;
 use reth_db_api::{
     TableSet, TableType, TableViewer,

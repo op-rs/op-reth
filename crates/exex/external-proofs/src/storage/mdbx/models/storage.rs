@@ -1,7 +1,3 @@
-//! Custom data models for MDBX external storage
-//!
-//! This module defines composite key types used for efficient indexing in MDBX tables.
-
 use alloy_primitives::B256;
 use reth_db_api::{
     table::{Decode, Encode},
@@ -9,10 +5,6 @@ use reth_db_api::{
 };
 use reth_trie::StoredNibbles;
 use serde::{Deserialize, Serialize};
-
-// ============================================================================
-// Composite Keys
-// ============================================================================
 
 /// Composite key: (hashed_address, path) for storage trie branches
 ///
@@ -106,10 +98,6 @@ impl Decode for HashedStorageSubKey {
         Ok(Self { hashed_address, hashed_storage_key })
     }
 }
-
-// ============================================================================
-// Proof Window Key
-// ============================================================================
 
 /// Proof Window key for tracking active proof window bounds
 ///
