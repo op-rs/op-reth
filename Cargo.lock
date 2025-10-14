@@ -9350,7 +9350,6 @@ dependencies = [
  "reth-optimism-trie",
  "reth-provider",
  "serde",
- "test-case",
  "thiserror 2.0.16",
  "tokio",
 ]
