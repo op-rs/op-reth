@@ -202,10 +202,6 @@ impl<'a, Storage: OpProofsStorage> AccountReader for OpProofsStateProviderRef<'a
             .map_err(Into::<ProviderError>::into)?
             .and_then(|(key, account)| (key == hashed_key).then_some(account)));
 
-        info!("basic_account: {:?}", result);
-
-        info!("provider result: {:?}", self.latest.basic_account(address));
-
         Ok(result)
     }
 }
