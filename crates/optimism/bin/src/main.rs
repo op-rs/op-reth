@@ -12,14 +12,14 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 /// The storage DB for proofs history.
 #[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
 enum ProofsHistoryStorage {
-    /// SQL Lite
-    Sqlite,
+    /// MDBX
+    MDBX,
 }
 
 impl std::fmt::Display for ProofsHistoryStorage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Sqlite => f.write_str("sqlite"),
+            Self::MDBX => f.write_str("mdbx"),
         }
     }
 }
@@ -38,7 +38,7 @@ struct Args {
     /// The storage DB for proofs history.
     #[arg(
         long = "proofs-history.storage",
-        default_value_t = ProofsHistoryStorage::Sqlite,
+        default_value_t = ProofsHistoryStorage::MDBX,
         value_name = "PROOFS_HISTORY_STORAGE"
     )]
     pub proofs_history_storage: ProofsHistoryStorage,
@@ -73,14 +73,14 @@ fn main() {
 
         let rollup_args = args.rollup_args;
 
-        let handle =
-            builder
-                .node(OpNode::new(rollup_args))
-                .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
-                    let proofs_helper = OpProofsExEx::new(exex_context);
-                    Ok(proofs_helper.run())
-                })
-                .launch_with_debug_capabilities().await?;
+        let handle = builder
+            .node(OpNode::new(rollup_args))
+            .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
+                let proofs_helper = OpProofsExEx::new(exex_context);
+                Ok(proofs_helper.run())
+            })
+            .launch_with_debug_capabilities()
+            .await?;
         handle.node_exit_future.await
     }) {
         eprintln!("Error: {err:?}");
