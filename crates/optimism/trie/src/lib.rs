@@ -1,8 +1,8 @@
 //! Standalone crate for Optimism Trie Node storage.
 //!
 //! External storage for intermediary trie nodes that are otherwise discarded by pipeline and
-//! live sync upon successful state root update. Enables efficient retrieval of inputs to proof
-//! computation for duration of OP fault proof window.
+//! live sync upon successful state root update. Storing these intermediary trie nodes enables
+//! efficient retrieval of inputs to proof computation for duration of OP fault proof window.
 
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/paradigmxyz/reth/main/assets/reth-docs.png",
