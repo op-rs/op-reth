@@ -48,10 +48,20 @@ struct InMemoryStorageInner {
 }
 
 impl InMemoryStorageInner {
-    fn store_trie_updates(&mut self, block_number: u64, block_state_diff: BlockStateDiff) {
+    fn store_trie_updates(
+        &mut self,
+        block_number: u64,
+        block_state_diff: BlockStateDiff,
+    ) -> (u64, u64, u64, u64) {
+        let mut account_trie_updates_written = 0;
+        let mut storage_trie_updates_written = 0;
+        let mut hashed_accounts_written = 0;
+        let mut hashed_storages_written = 0;
+
         // Store account branch nodes
         for (path, branch) in block_state_diff.trie_updates.account_nodes_ref() {
             self.account_branches.insert((block_number, *path), Some(branch.clone()));
+            account_trie_updates_written += 1;
         }
 
         // Store removed account nodes
@@ -67,6 +77,7 @@ impl InMemoryStorageInner {
 
         for (path, branch) in account_removals {
             self.account_branches.insert((block_number, *path), branch);
+            account_trie_updates_written += 1;
         }
 
         // Store storage branch nodes and removals
@@ -74,6 +85,7 @@ impl InMemoryStorageInner {
             // Store storage branch nodes
             for (path, branch) in storage_trie_updates.storage_nodes_ref() {
                 self.storage_branches.insert((block_number, *address, *path), Some(branch.clone()));
+                storage_trie_updates_written += 1;
             }
 
             // Store removed storage nodes
@@ -87,11 +99,13 @@ impl InMemoryStorageInner {
 
             for (path, branch) in storage_removals {
                 self.storage_branches.insert((block_number, *address, *path), branch);
+                storage_trie_updates_written += 1;
             }
         }
 
         for (address, account) in &block_state_diff.post_state.accounts {
             self.hashed_accounts.insert((block_number, *address), *account);
+            hashed_accounts_written += 1;
         }
 
         for (hashed_address, storage) in &block_state_diff.post_state.storages {
@@ -119,17 +133,26 @@ impl InMemoryStorageInner {
                     if !value.is_zero() {
                         self.hashed_storages
                             .insert((block_number, *hashed_address, slot), U256::ZERO);
+                        hashed_storages_written += 1;
                     }
                 }
             } else {
                 for (slot, value) in &storage.storage {
                     self.hashed_storages.insert((block_number, *hashed_address, *slot), *value);
+                    hashed_storages_written += 1;
                 }
             }
         }
 
         self.trie_updates.insert(block_number, block_state_diff.trie_updates.clone());
         self.post_states.insert(block_number, block_state_diff.post_state.clone());
+
+        (
+            account_trie_updates_written,
+            storage_trie_updates_written,
+            hashed_accounts_written,
+            hashed_storages_written,
+        )
     }
 }
 
@@ -518,12 +541,22 @@ impl OpProofsStorage for InMemoryProofsStorage {
         &self,
         block_number: u64,
         block_state_diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()> {
+    ) -> OpProofsStorageResult<(u64, u64, u64, u64)> {
         let mut inner = self.inner.write().await;
 
-        inner.store_trie_updates(block_number, block_state_diff);
+        let (
+            account_trie_updates_written,
+            storage_trie_updates_written,
+            hashed_accounts_written,
+            hashed_storages_written,
+        ) = inner.store_trie_updates(block_number, block_state_diff);
 
-        Ok(())
+        Ok((
+            account_trie_updates_written,
+            storage_trie_updates_written,
+            hashed_accounts_written,
+            hashed_storages_written,
+        ))
     }
 
     async fn fetch_trie_updates(&self, block_number: u64) -> OpProofsStorageResult<BlockStateDiff> {

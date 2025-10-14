@@ -1,6 +1,6 @@
 //! Metrics for external proofs storage operations.
 
-use metrics::{describe_histogram, Histogram};
+use metrics::{describe_histogram, Counter, Histogram};
 use reth_metrics::Metrics;
 use rustc_hash::FxHashMap;
 use std::time::{Duration, Instant};
@@ -293,4 +293,12 @@ pub struct BlockMetrics {
     pub state_root_duration_seconds: Histogram,
     /// Time spent writing trie updates to storage in seconds
     pub write_duration_seconds: Histogram,
+    /// Number of trie updates written
+    pub account_trie_updates_written_total: Counter,
+    /// Number of storage trie updates written
+    pub storage_trie_updates_written_total: Counter,
+    /// Number of hashed accounts written
+    pub hashed_accounts_written_total: Counter,
+    /// Number of hashed storages written
+    pub hashed_storages_written_total: Counter,
 }

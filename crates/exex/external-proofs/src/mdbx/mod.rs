@@ -318,13 +318,18 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
         &self,
         block_number: u64,
         block_state_diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()> {
+    ) -> OpProofsStorageResult<(u64, u64, u64, u64)> {
         // Extract trie updates and post state
         let BlockStateDiff { trie_updates, post_state } = block_state_diff;
 
         // For now, we don't have the block hash in BlockStateDiff, so use ZERO
         // This matches the in-memory implementation
         let block_hash = B256::ZERO;
+
+        let mut account_trie_updates_written = 0;
+        let mut storage_trie_updates_written = 0;
+        let mut hashed_accounts_written = 0;
+        let mut hashed_storages_written = 0;
 
         // Store account trie branches
         if !trie_updates.account_nodes.is_empty() {
@@ -333,6 +338,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
                 .into_iter()
                 .map(|(path, node)| (path, node.into()))
                 .collect();
+            account_trie_updates_written += updates.len();
             self.store_account_branches(block_number, updates).await?;
         }
 
@@ -344,6 +350,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
                     .into_iter()
                     .map(|(path, node)| (path, node.into()))
                     .collect();
+                storage_trie_updates_written += updates.len();
                 self.store_storage_branches(block_number, address, updates).await?;
             }
         }
@@ -351,6 +358,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
         // Store hashed accounts
         if !post_state.accounts.is_empty() {
             let accounts: Vec<_> = post_state.accounts.into_iter().collect();
+            hashed_accounts_written += accounts.len();
             self.store_hashed_accounts(accounts, block_number).await?;
         }
 
@@ -358,6 +366,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
         for (address, storage) in post_state.storages {
             if !storage.storage.is_empty() {
                 let storages: Vec<_> = storage.storage.into_iter().collect();
+                hashed_storages_written += storages.len();
                 self.store_hashed_storages(address, storages, block_number).await?;
             }
         }
@@ -381,7 +390,12 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             tx.commit()?;
         }
 
-        Ok(())
+        Ok((
+            account_trie_updates_written as u64,
+            storage_trie_updates_written as u64,
+            hashed_accounts_written as u64,
+            hashed_storages_written as u64,
+        ))
     }
 
     fn storage_trie_cursor(
@@ -443,7 +457,15 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             .seek_exact(models::MetadataKey::EarliestBlock)?
             .map(|(_, hash)| hash.into_components());
 
-        Ok(result)
+        if let Some(result) = result {
+            return Ok(Some(result));
+        }
+
+        let latest_result = cursor
+            .seek_exact(models::MetadataKey::LatestBlock)?
+            .map(|(_, hash)| hash.into_components());
+
+        Ok(latest_result)
     }
 
     async fn get_latest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
@@ -451,11 +473,19 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
 
         let mut cursor = tx.cursor_read::<tables::ExternalBlockMetadata>()?;
 
-        let result = cursor
+        let latest_result = cursor
             .seek_exact(models::MetadataKey::LatestBlock)?
             .map(|(_, hash)| hash.into_components());
 
-        Ok(result)
+        if let Some(latest_result) = latest_result {
+            return Ok(Some(latest_result));
+        }
+
+        let earliest_result = cursor
+            .seek_exact(models::MetadataKey::EarliestBlock)?
+            .map(|(_, hash)| hash.into_components());
+
+        Ok(earliest_result)
     }
 
     async fn fetch_trie_updates(

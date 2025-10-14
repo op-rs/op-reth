@@ -297,7 +297,7 @@ where
         &self,
         block_number: u64,
         block_state_diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()> {
+    ) -> OpProofsStorageResult<(u64, u64, u64, u64)> {
         self.metrics
             .record_operation_async(
                 StorageOperation::StoreTrieUpdates,

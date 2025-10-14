@@ -3,6 +3,7 @@
 //! This module provides efficient cursors that merge versioned data from multiple blocks.
 //! The cursors use a streaming merge approach that processes data in a single pass.
 //!
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use alloy_primitives::{B256, U256};
@@ -10,6 +11,7 @@ use reth_db_api::cursor::{DbCursorRO, DbDupCursorRO};
 use reth_db_api::table::{DupSort, Table};
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
+use tracing::info;
 
 use super::tables;
 use crate::mdbx::{HashedStorageSubKey, StorageBranchSubKey};
@@ -31,7 +33,7 @@ pub struct BlockNumberVersionedCursor<T: Table + DupSort, Cursor> {
 }
 
 impl<
-        V,
+        V: Debug,
         T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
         Cursor: DbCursorRO<T> + DbDupCursorRO<T>,
     > BlockNumberVersionedCursor<T, Cursor>
@@ -44,6 +46,7 @@ impl<
         &mut self,
         target_path: T::Key,
     ) -> OpProofsStorageResult<Option<(T::Key, T::Value)>> {
+        info!("get_latest_key_value: {:?}", target_path);
         // Try to position cursor at or after max_block_number
         // If found, the cursor is positioned at a value with block_number >= max_block_number
         let seek_result = self
@@ -51,9 +54,19 @@ impl<
             .seek_by_key_subkey(target_path.clone(), self.max_block_number)
             .map_err(|e| OpProofsStorageError::Other(e.into()))?;
 
-        if seek_result.is_some() {
-            // Found a value >= max_block_number, go back one to get the latest value <= max_block_number
-            return self.cursor.prev_dup().map_err(|e| OpProofsStorageError::Other(e.into()));
+        if let Some(value) = seek_result {
+            // Found a value >= max_block_number, go back one to get the latest value <= max_block_number if value > max_block_number
+            if value.block_number > self.max_block_number {
+                let res = Ok(self
+                    .cursor
+                    .prev_dup()
+                    .map_err(|e| OpProofsStorageError::Other(e.into()))?
+                    .and_then(|res| if res.0 == target_path { Some(res) } else { None }));
+
+                return res;
+            } else {
+                return Ok(Some((target_path, value)));
+            }
         }
 
         // No value >= max_block_number exists
@@ -68,22 +81,39 @@ impl<
             .is_none()
         {
             // Key doesn't exist
+            info!("get_latest_key_value: None");
             return Ok(None);
         }
 
         // Key exists, find the last dup entry (which will have the highest block_number < max_block_number)
         let mut last = None;
-        while let Some(kv) =
+        while let Some((key, value)) =
             self.cursor.next_dup().map_err(|e| OpProofsStorageError::Other(e.into()))?
         {
-            last = Some(kv);
+            // If the key is not the target path, we've found the last dup entry
+            if key != target_path {
+                break;
+            }
+
+            // If the block number is greater than the max block number, we've found the last dup entry
+            if value.block_number > self.max_block_number {
+                break;
+            }
+
+            last = Some((key, value));
         }
 
         // If last is None, it means there's only one entry (the one from seek_exact)
         if last.is_none() {
             // Go back to get that first entry
-            self.cursor.seek_exact(target_path).map_err(|e| OpProofsStorageError::Other(e.into()))
+            let res = self
+                .cursor
+                .seek_exact(target_path)
+                .map_err(|e| OpProofsStorageError::Other(e.into()))?;
+            info!("get_latest_key_value (seek exact): {:?}", res);
+            return Ok(res);
         } else {
+            info!("get_latest_key_value: {:?}", last);
             Ok(last)
         }
     }
@@ -92,6 +122,7 @@ impl<
         &mut self,
         target_path: T::Key,
     ) -> OpProofsStorageResult<Option<(T::Key, V)>> {
+        info!("get_next_key_value: {:?}", target_path);
         // Seek to the next key >= target_path
         let Some((mut key, _)) =
             self.cursor.seek(target_path).map_err(|e| OpProofsStorageError::Other(e.into()))?
@@ -100,15 +131,20 @@ impl<
             return Ok(None);
         };
 
+        info!("found initial key: {:?}", key);
+
         loop {
             // Now get the latest value for this key that's <= max_block_number
             let latest = self
                 .get_latest_key_value(key.clone())
                 .map_err(|e| OpProofsStorageError::Other(e.into()))?;
 
+            info!("latest: {:?}", latest);
+
             if let Some((latest_key, latest_value)) = latest {
                 // if non-deleted, return the latest value (extract from VersionedValue)
                 if let Some(latest_value) = latest_value.value.0 {
+                    info!("returning latest value: {:?}", latest_value);
                     return Ok(Some((latest_key, latest_value)));
                 }
                 // Value was deleted, continue to next key
@@ -123,6 +159,7 @@ impl<
                 .is_none()
             {
                 // Key disappeared, shouldn't happen
+                info!("key disappeared");
                 return Ok(None);
             }
 
@@ -131,8 +168,11 @@ impl<
                 self.cursor.next_no_dup().map_err(|e| OpProofsStorageError::Other(e.into()))?
             else {
                 // No more keys
+                info!("no more keys");
                 return Ok(None);
             };
+
+            info!("next key: {:?}", next_key);
             key = next_key;
         }
     }
@@ -200,7 +240,7 @@ pub struct MdbxOpProofsStorageTrieCursor<T: Table + DupSort, Cursor> {
 }
 
 impl<
-        V,
+        V: Debug,
         T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
         Cursor: DbCursorRO<T> + DbDupCursorRO<T>,
     > MdbxOpProofsStorageTrieCursor<T, Cursor>

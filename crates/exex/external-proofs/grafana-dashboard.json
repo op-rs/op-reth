@@ -284,12 +284,74 @@
       "type": "gauge"
     },
     {
+      "datasource": "prometheus",
+      "description": "Rate of items written to storage per second during block processing. Shows the volume of updates: account trie branches, storage trie branches, hashed accounts, and hashed storage slots. High rates indicate heavy state changes.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "Items/sec",
+            "axisPlacement": "auto",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineWidth": 2
+          },
+          "mappings": [],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(reth_external_proofs_block_account_trie_updates_written_total[5m])",
+          "legendFormat": "Account Trie Updates",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(reth_external_proofs_block_storage_trie_updates_written_total[5m])",
+          "legendFormat": "Storage Trie Updates",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(reth_external_proofs_block_hashed_accounts_written_total[5m])",
+          "legendFormat": "Hashed Accounts",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(reth_external_proofs_block_hashed_storages_written_total[5m])",
+          "legendFormat": "Hashed Storages",
+          "refId": "D"
+        }
+      ],
+      "title": "Items Written Per Second - Volume of State Updates",
+      "type": "timeseries"
+    },
+    {
       "datasource": null,
       "gridPos": {
         "h": 2,
         "w": 12,
-        "x": 12,
-        "y": 12
+        "x": 0,
+        "y": 20
       },
       "id": 201,
       "options": {
@@ -307,7 +369,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 22
       },
       "id": 101,
       "panels": [],
@@ -338,7 +400,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 17
+        "y": 23
       },
       "id": 5,
       "options": {
@@ -388,7 +450,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 17
+        "y": 23
       },
       "id": 6,
       "options": {
@@ -435,7 +497,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 25
+        "y": 31
       },
       "id": 7,
       "options": {
@@ -482,7 +544,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 25
+        "y": 31
       },
       "id": 8,
       "options": {
@@ -512,7 +574,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 39
       },
       "id": 102,
       "panels": [],
@@ -525,7 +587,7 @@
         "h": 2,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 40
       },
       "id": 202,
       "options": {
@@ -560,7 +622,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 36
+        "y": 42
       },
       "id": 9,
       "options": {
@@ -607,7 +669,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 36
+        "y": 42
       },
       "id": 10,
       "options": {
@@ -637,7 +699,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 50
       },
       "id": 103,
       "panels": [],
@@ -666,7 +728,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 51
       },
       "id": 11,
       "options": {
@@ -742,7 +804,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 53
+        "y": 59
       },
       "id": 12,
       "options": {
@@ -812,7 +874,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 53
+        "y": 59
       },
       "id": 13,
       "options": {

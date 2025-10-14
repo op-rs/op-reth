@@ -25,6 +25,7 @@ use reth_trie::{
     StateRoot, StorageMultiProof, StorageRoot, TrieInput,
 };
 use std::fmt::Debug;
+use tracing::info;
 
 /// State provider for external proofs storage.
 pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
@@ -193,13 +194,19 @@ impl<'a, Storage: OpProofsStorage> HashedPostStateProvider
 impl<'a, Storage: OpProofsStorage> AccountReader for OpProofsStateProviderRef<'a, Storage> {
     fn basic_account(&self, address: &Address) -> ProviderResult<Option<Account>> {
         let hashed_key = keccak256(address.0);
-        Ok(self
+        let result = (self
             .storage
             .account_hashed_cursor(self.block_number)
             .map_err(Into::<ProviderError>::into)?
             .seek(hashed_key)
             .map_err(Into::<ProviderError>::into)?
-            .and_then(|(key, account)| (key == hashed_key).then_some(account)))
+            .and_then(|(key, account)| (key == hashed_key).then_some(account)));
+
+        info!("basic_account: {:?}", result);
+
+        info!("provider result: {:?}", self.latest.basic_account(address));
+
+        Ok(result)
     }
 }
 

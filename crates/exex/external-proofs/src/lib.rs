@@ -12,9 +12,7 @@ use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_primitives_traits::AlloyBlockHeader;
-use reth_provider::{
-    BlockNumReader, BlockReader, DBProvider, DatabaseProviderFactory, TransactionVariant,
-};
+use reth_provider::{BlockNumReader, BlockReader, TransactionVariant};
 use std::{env, path::PathBuf, sync::Arc};
 use tracing::info;
 

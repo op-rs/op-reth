@@ -164,7 +164,7 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         &self,
         block_number: u64,
         block_state_diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()>;
+    ) -> OpProofsStorageResult<(u64, u64, u64, u64)>;
 
     /// Fetch all updates for a given block number.
     async fn fetch_trie_updates(&self, block_number: u64) -> OpProofsStorageResult<BlockStateDiff>;

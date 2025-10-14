@@ -112,7 +112,13 @@ where
 
         // Write trie updates
         let write_start = Instant::now();
-        self.storage
+        let (
+            account_trie_updates_written,
+            storage_trie_updates_written,
+            hashed_accounts_written,
+            hashed_storages_written,
+        ) = self
+            .storage
             .store_trie_updates(
                 block_number,
                 BlockStateDiff { trie_updates, post_state: hashed_state },
@@ -128,12 +134,20 @@ where
         block_metrics.state_root_duration_seconds.record(state_root_duration);
         block_metrics.write_duration_seconds.record(write_duration);
         block_metrics.total_duration_seconds.record(total_duration);
+        block_metrics.account_trie_updates_written_total.increment(account_trie_updates_written);
+        block_metrics.storage_trie_updates_written_total.increment(storage_trie_updates_written);
+        block_metrics.hashed_accounts_written_total.increment(hashed_accounts_written);
+        block_metrics.hashed_storages_written_total.increment(hashed_storages_written);
 
         // Keep debug logs for backward compatibility
         debug!("execute_and_store_block_updates duration: {:?}", total_duration);
         debug!("- execution_duration: {:?}", execution_duration);
         debug!("- state_root_duration: {:?}", state_root_duration);
         debug!("- write_duration: {:?}", write_duration);
+        debug!("- account_trie_updates_written: {:?}", account_trie_updates_written);
+        debug!("- storage_trie_updates_written: {:?}", storage_trie_updates_written);
+        debug!("- hashed_accounts_written: {:?}", hashed_accounts_written);
+        debug!("- hashed_storages_written: {:?}", hashed_storages_written);
 
         Ok(())
     }
