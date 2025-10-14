@@ -9603,6 +9603,7 @@ dependencies = [
  "alloy-primitives",
  "auto_impl",
  "bytes",
+ "derive_more",
  "eyre",
  "futures",
  "reth-codecs",

@@ -1,5 +1,6 @@
 use alloy_primitives::B256;
 use bytes::BufMut;
+use derive_more::{From, Into};
 use reth_db::{
     table::{Compress, Decompress},
     DatabaseError,
@@ -9,20 +10,8 @@ use serde::{Deserialize, Serialize};
 /// Wrapper for block number and block hash tuple to implement [`Compress`]/[`Decompress`].
 ///
 /// Used for storing block metadata (number + hash).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, From, Into)]
 pub struct BlockNumberHash(pub u64, pub B256);
-
-impl From<(u64, B256)> for BlockNumberHash {
-    fn from((number, hash): (u64, B256)) -> Self {
-        Self(number, hash)
-    }
-}
-
-impl From<BlockNumberHash> for (u64, B256) {
-    fn from(bnh: BlockNumberHash) -> Self {
-        (bnh.0, bnh.1)
-    }
-}
 
 impl BlockNumberHash {
     /// Create a new block number and hash pair
