@@ -12,4 +12,4 @@ mod store;
 pub use store::MdbxProofsStorage;
 
 mod cursor;
-pub use cursor::{MdbxTrieCursor, MdbxStorageCursor, MdbxAccountCursor};
+pub use cursor::{MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor};

@@ -1,7 +1,7 @@
-use reth_trie::{Nibbles, BranchNodeCompact};
-use reth_primitives_traits::Account;
-use alloy_primitives::{B256, U256};
 use crate::storage::{OpProofsHashedCursor, OpProofsStorageResult, OpProofsTrieCursor};
+use alloy_primitives::{B256, U256};
+use reth_primitives_traits::Account;
+use reth_trie::{BranchNodeCompact, Nibbles};
 
 /// MDBX implementation of `OpProofsTrieCursor`.
 #[derive(Debug)]
@@ -36,9 +36,9 @@ impl OpProofsTrieCursor for MdbxTrieCursor {
 pub struct MdbxStorageCursor {}
 
 impl OpProofsHashedCursor for MdbxStorageCursor {
-  type Value = U256;
+    type Value = U256;
 
-  fn seek(&mut self, _key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn seek(&mut self, _key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
         unimplemented!()
     }
 
@@ -52,9 +52,9 @@ impl OpProofsHashedCursor for MdbxStorageCursor {
 pub struct MdbxAccountCursor {}
 
 impl OpProofsHashedCursor for MdbxAccountCursor {
-  type Value = Account;
+    type Value = Account;
 
-  fn seek(&mut self, _key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn seek(&mut self, _key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
         unimplemented!()
     }
 
