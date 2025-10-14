@@ -17,9 +17,6 @@ reth-trie = { workspace = true, features = ["serde"] }
 reth-primitives-traits = { workspace = true, features = ["serde", "reth-codec"] }
 reth-db = { workspace = true, features = ["mdbx"] }
 
-# op-reth
-reth-optimism-primitives = { workspace = true, optional = true, features = ["serde", "reth-codec"] }
-
 # ethereum
 alloy-primitives = { workspace = true, features = ["serde"] }
 
@@ -46,7 +43,6 @@ reth-trie = { workspace = true, features = ["test-utils"] }
 
 [features]
 op = [
-    "dep:reth-optimism-primitives",
     "reth-primitives-traits/op",
     "reth-db/op",
     "reth-codecs/op",

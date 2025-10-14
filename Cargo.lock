@@ -9607,7 +9607,6 @@ dependencies = [
  "eyre",
  "reth-codecs",
  "reth-db",
- "reth-optimism-primitives",
  "reth-primitives-traits",
  "reth-trie",
  "serde",
