@@ -1,14 +1,13 @@
 //! In-memory implementation of [`OpProofsStorage`] for testing purposes
 
-use super::BlockStateDiff;
 use crate::{
-    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
-    OpProofsTrieCursor,
+    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
+    OpProofsStorageResult, OpProofsTrieCursor,
 };
-use alloc::{collections::BTreeMap, sync::Arc};
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_primitives_traits::Account;
 use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
+use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::RwLock;
 
 /// In-memory implementation of [`OpProofsStorage`] for testing purposes

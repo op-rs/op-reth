@@ -14,8 +14,8 @@
 
 pub mod api;
 pub use api::{
-    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
-    OpProofsTrieCursor,
+    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
+    OpProofsStorageResult, OpProofsTrieCursor,
 };
 
 pub mod backfill;

@@ -3,9 +3,9 @@
 #[cfg(test)]
 mod tests {
     use alloy_primitives::{map::HashMap, B256, U256};
-    use reth_optimism_storage::{
-        proofs::{BlockStateDiff, InMemoryProofsStorage},
-        OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError, OpProofsTrieCursor,
+    use reth_optimism_trie::{
+        BlockStateDiff, InMemoryProofsStorage, OpProofsHashedCursor, OpProofsStorage,
+        OpProofsStorageError, OpProofsTrieCursor,
     };
     use reth_primitives_traits::Account;
     use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles, TrieMask};

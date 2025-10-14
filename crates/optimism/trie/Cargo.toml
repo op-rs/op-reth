@@ -1,5 +1,5 @@
 [package]
-name = "reth-optimism-trie-storage"
+name = "reth-optimism-trie"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,19 +7,17 @@ license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
+
 [lints]
 workspace = true
 
 [dependencies]
 # reth
-reth-optimism-primitives = { workspace = true, features = ["serde", "reth-codec"] }
-reth-storage-api = { workspace = true, features = ["db-api"] }
-reth-trie = { workspace = true, optional = true }
+reth-trie.workspace = true
 reth-primitives-traits.workspace = true
 reth-db-api.workspace = true
 
 # ethereum
-alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 
 # async

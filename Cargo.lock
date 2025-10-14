@@ -9346,7 +9346,7 @@ dependencies = [
  "reth-exex",
  "reth-node-api",
  "reth-node-types",
- "reth-optimism-storage",
+ "reth-optimism-trie",
  "reth-provider",
  "serde",
  "test-case",
@@ -9598,6 +9598,29 @@ dependencies = [
  "reth-prune-types",
  "reth-stages-types",
  "reth-storage-api",
+]
+
+[[package]]
+name = "reth-optimism-trie"
+version = "1.8.2"
+dependencies = [
+ "alloy-primitives",
+ "auto_impl",
+ "bytes",
+ "eyre",
+ "futures",
+ "reth-codecs",
+ "reth-db",
+ "reth-db-api",
+ "reth-primitives-traits",
+ "reth-prune-types",
+ "reth-stages-types",
+ "reth-trie",
+ "serde",
+ "test-case",
+ "thiserror 2.0.16",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

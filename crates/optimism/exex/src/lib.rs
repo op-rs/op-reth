@@ -5,6 +5,7 @@ use futures_util::TryStreamExt;
 use reth_exex::{ExExContext, ExExEvent};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
+use reth_optimism_trie::{BackfillJob, InMemoryProofsStorage};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
 use std::sync::Arc;
 
