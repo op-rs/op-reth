@@ -22,7 +22,7 @@ impl MdbxProofsStorage {
     /// Creates a new `MdbxProofsStorage` instance with the given path.
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())
-            .map_err(|e| OpProofsStorageError::Other(e))?;
+            .map_err(OpProofsStorageError::Other)?;
         Ok(Self { _env: env })
     }
 }
