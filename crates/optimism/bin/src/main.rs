@@ -13,13 +13,13 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 #[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
 enum ProofsHistoryStorage {
     /// MDBX
-    MDBX,
+    Mdbx,
 }
 
 impl std::fmt::Display for ProofsHistoryStorage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MDBX => f.write_str("mdbx"),
+            Self::Mdbx => f.write_str("mdbx"),
         }
     }
 }
@@ -38,7 +38,7 @@ struct Args {
     /// The storage DB for proofs history.
     #[arg(
         long = "proofs-history.storage",
-        default_value_t = ProofsHistoryStorage::MDBX,
+        default_value_t = ProofsHistoryStorage::Mdbx,
         value_name = "PROOFS_HISTORY_STORAGE"
     )]
     pub proofs_history_storage: ProofsHistoryStorage,
