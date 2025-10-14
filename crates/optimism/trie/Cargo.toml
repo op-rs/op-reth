@@ -45,5 +45,5 @@ reth-trie = { workspace = true, features = ["test-utils"] }
 op = [
     "reth-primitives-traits/op",
     "reth-db/op",
-    "reth-codecs/op",
+    "reth-codecs?/op",
 ]
