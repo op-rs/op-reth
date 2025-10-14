@@ -3734,33 +3734,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "external-proofs"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "async-trait",
- "auto_impl",
- "bytes",
- "eyre",
- "futures",
- "futures-util",
- "reth-chainspec",
- "reth-db",
- "reth-db-api",
- "reth-exex",
- "reth-node-api",
- "reth-node-types",
- "reth-primitives-traits",
- "reth-provider",
- "reth-trie",
- "serde",
- "test-case",
- "thiserror 2.0.16",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6215,6 +6188,7 @@ version = "1.8.2"
 dependencies = [
  "clap",
  "reth-cli-util",
+ "reth-exex-external-proofs",
  "reth-optimism-chainspec",
  "reth-optimism-cli",
  "reth-optimism-consensus",
@@ -8585,6 +8559,33 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "reth-exex-external-proofs"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "async-trait",
+ "auto_impl",
+ "bytes",
+ "eyre",
+ "futures",
+ "futures-util",
+ "reth-chainspec",
+ "reth-db",
+ "reth-db-api",
+ "reth-exex",
+ "reth-node-api",
+ "reth-node-types",
+ "reth-primitives-traits",
+ "reth-provider",
+ "reth-trie",
+ "serde",
+ "test-case",
+ "thiserror 2.0.16",
+ "tokio",
  "tracing",
 ]
 
