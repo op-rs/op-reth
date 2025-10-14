@@ -12,6 +12,10 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
+// This is needed for `OpReceipt` to implement `serde`
+#[cfg(feature = "op")]
+use reth_optimism_primitives as _;
+
 pub mod api;
 pub use api::{
     BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
