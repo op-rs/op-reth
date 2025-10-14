@@ -118,18 +118,14 @@ impl<
         target_path: T::Key,
     ) -> OpProofsStorageResult<Option<(T::Key, V)>> {
         // Seek to the next key >= target_path
-        let Some((mut key, _)) =
-            self.cursor.seek(target_path).map_err(|e| OpProofsStorageError::Other(e.into()))?
-        else {
+        let Some((mut key, _)) = self.cursor.seek(target_path)? else {
             // No keys >= target_path exist
             return Ok(None);
         };
 
         loop {
             // Now get the latest value for this key that's <= max_block_number
-            let latest = self
-                .get_latest_key_value(key.clone())
-                .map_err(|e| OpProofsStorageError::Other(e.into()))?;
+            let latest = self.get_latest_key_value(key.clone())?;
 
             if let Some((latest_key, latest_value)) = latest {
                 // if non-deleted, return the latest value (extract from VersionedValue)
@@ -141,12 +137,7 @@ impl<
 
             // No valid value for this key, or value was deleted - move to next key
             // Re-position cursor at current key first (get_latest_key_value may have moved it)
-            if self
-                .cursor
-                .seek_exact(key.clone())
-                .map_err(|e| OpProofsStorageError::Other(e.into()))?
-                .is_none()
-            {
+            if self.cursor.seek_exact(key.clone())?.is_none() {
                 // Key disappeared, shouldn't happen
                 return Ok(None);
             }

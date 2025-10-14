@@ -107,29 +107,13 @@ impl MdbxOpProofsStorage<DatabaseEnv> {
     }
 }
 
-#[async_trait::async_trait]
-impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB> {
-    type AccountTrieCursor = BlockNumberVersionedCursor<
-        tables::ExternalAccountBranches,
-        TX::DupCursor<tables::ExternalAccountBranches>,
-    >;
-    type StorageTrieCursor = MdbxOpProofsStorageTrieCursor<
-        tables::ExternalStorageBranches,
-        TX::DupCursor<tables::ExternalStorageBranches>,
-    >;
-    type AccountHashedCursor = MdbxAccountCursor<TX::DupCursor<tables::ExternalHashedAccounts>>;
-    type StorageCursor = MdbxStorageCursor<TX::DupCursor<tables::ExternalHashedStorages>>;
-
-    async fn store_account_branches(
+impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
+    async fn store_account_branches_inner(
         &self,
+        tx: &TX,
         block_number: u64,
-        mut updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
-        // Sort updates by path for MDBX append operation
-        updates.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-        let tx = self.db.tx_mut()?;
-
         // Store branches using DupSort (key=path, value=VersionedValue with block_number)
         {
             let mut cursor = tx.cursor_dup_write::<tables::ExternalAccountBranches>()?;
@@ -162,22 +146,16 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             }
         }
 
-        tx.commit()?;
-
         Ok(())
     }
 
-    async fn store_storage_branches(
+    async fn store_storage_branches_inner(
         &self,
+        tx: &TX,
         block_number: u64,
         hashed_address: B256,
-        mut items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
-        // Sort items by path for MDBX append operation
-        items.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-        let tx = self.db.tx_mut()?;
-
         // Store branches using DupSort (key=(address, path), value=VersionedValue with block_number)
         {
             let mut cursor = tx.cursor_dup_write::<tables::ExternalStorageBranches>()?;
@@ -197,7 +175,8 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             let mut cursor = tx.cursor_write::<tables::ExternalStorageBranchesIndex>()?;
 
             for (path, _) in items {
-                let key = models::StorageBranchSubKey::new(hashed_address, StoredNibbles(path));
+                let key =
+                    models::StorageBranchSubKey::new(hashed_address, StoredNibbles(path.clone()));
 
                 // Get existing list or create new
                 let mut list =
@@ -211,21 +190,15 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             }
         }
 
-        tx.commit()?;
-
         Ok(())
     }
 
-    async fn store_hashed_accounts(
+    async fn store_hashed_accounts_inner(
         &self,
-        mut accounts: Vec<(B256, Option<Account>)>,
+        tx: &TX,
+        accounts: Vec<(B256, Option<Account>)>,
         block_number: u64,
     ) -> OpProofsStorageResult<()> {
-        // Sort accounts by address for MDBX append operation
-        accounts.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-        let tx = self.db.tx_mut()?;
-
         // Store accounts using DupSort (key=hashed_address, value=VersionedValue with block_number)
         {
             let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedAccounts>()?;
@@ -254,22 +227,16 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             }
         }
 
-        tx.commit()?;
-
         Ok(())
     }
 
-    async fn store_hashed_storages(
+    async fn store_hashed_storages_inner(
         &self,
+        tx: &TX,
         hashed_address: B256,
-        mut storages: Vec<(B256, U256)>,
+        storages: Vec<(B256, U256)>,
         block_number: u64,
     ) -> OpProofsStorageResult<()> {
-        // Sort storages by storage key for MDBX append operation
-        storages.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-        let tx = self.db.tx_mut()?;
-
         // Store storage values using DupSort (key=(address, storage_key), value=VersionedValue with block_number)
         {
             let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedStorages>()?;
@@ -309,6 +276,90 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             }
         }
 
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpProofsStorage
+    for MdbxOpProofsStorage<DB>
+{
+    type AccountTrieCursor = BlockNumberVersionedCursor<
+        tables::ExternalAccountBranches,
+        TX::DupCursor<tables::ExternalAccountBranches>,
+    >;
+    type StorageTrieCursor = MdbxOpProofsStorageTrieCursor<
+        tables::ExternalStorageBranches,
+        TX::DupCursor<tables::ExternalStorageBranches>,
+    >;
+    type AccountHashedCursor = MdbxAccountCursor<TX::DupCursor<tables::ExternalHashedAccounts>>;
+    type StorageCursor = MdbxStorageCursor<TX::DupCursor<tables::ExternalHashedStorages>>;
+
+    async fn store_account_branches(
+        &self,
+        block_number: u64,
+        mut updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+    ) -> OpProofsStorageResult<()> {
+        // Sort updates by path for MDBX append operation
+        updates.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        let tx = self.db.tx_mut()?;
+
+        self.store_account_branches_inner(&tx, block_number, updates).await?;
+
+        tx.commit()?;
+
+        Ok(())
+    }
+
+    async fn store_storage_branches(
+        &self,
+        block_number: u64,
+        hashed_address: B256,
+        mut items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+    ) -> OpProofsStorageResult<()> {
+        // Sort items by path for MDBX append operation
+        items.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        let tx = self.db.tx_mut()?;
+
+        self.store_storage_branches_inner(&tx, block_number, hashed_address, items).await?;
+
+        tx.commit()?;
+
+        Ok(())
+    }
+
+    async fn store_hashed_accounts(
+        &self,
+        mut accounts: Vec<(B256, Option<Account>)>,
+        block_number: u64,
+    ) -> OpProofsStorageResult<()> {
+        // Sort accounts by address for MDBX append operation
+        accounts.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        let tx = self.db.tx_mut()?;
+
+        self.store_hashed_accounts_inner(&tx, accounts, block_number).await?;
+
+        tx.commit()?;
+
+        Ok(())
+    }
+
+    async fn store_hashed_storages(
+        &self,
+        hashed_address: B256,
+        mut storages: Vec<(B256, U256)>,
+        block_number: u64,
+    ) -> OpProofsStorageResult<()> {
+        // Sort storages by storage key for MDBX append operation
+        storages.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        let tx = self.db.tx_mut()?;
+
+        self.store_hashed_storages_inner(&tx, hashed_address, storages, block_number).await?;
+
         tx.commit()?;
 
         Ok(())
@@ -331,27 +382,53 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
         let mut hashed_accounts_written = 0;
         let mut hashed_storages_written = 0;
 
+        let tx = self.db.tx_mut()?;
+
         // Store account trie branches
         if !trie_updates.account_nodes.is_empty() {
-            let updates: Vec<_> = trie_updates
-                .account_nodes
-                .into_iter()
-                .map(|(path, node)| (path, node.into()))
-                .collect();
-            account_trie_updates_written += updates.len();
-            self.store_account_branches(block_number, updates).await?;
+            let mut account_updates = trie_updates
+                .removed_nodes_ref()
+                .iter()
+                .cloned()
+                .filter_map(|n| {
+                    (!trie_updates.account_nodes_ref().contains_key(&n)).then_some((n, None))
+                })
+                .collect::<Vec<_>>();
+            account_updates.extend(
+                trie_updates
+                    .account_nodes_ref()
+                    .iter()
+                    .map(|(nibbles, node)| (*nibbles, Some(node.clone()))),
+            );
+            // Sort trie node updates.
+            account_updates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+            account_trie_updates_written += account_updates.len();
+            self.store_account_branches_inner(&tx, block_number, account_updates).await?;
         }
 
         // Store storage trie branches
         for (address, storage_trie) in trie_updates.storage_tries {
             if !storage_trie.storage_nodes.is_empty() {
-                let updates: Vec<_> = storage_trie
-                    .storage_nodes
-                    .into_iter()
-                    .map(|(path, node)| (path, node.into()))
-                    .collect();
-                storage_trie_updates_written += updates.len();
-                self.store_storage_branches(block_number, address, updates).await?;
+                let mut storage_updates = storage_trie
+                    .removed_nodes_ref()
+                    .iter()
+                    .cloned()
+                    .filter_map(|n| {
+                        (!storage_trie.storage_nodes_ref().contains_key(&n)).then_some((n, None))
+                    })
+                    .collect::<Vec<_>>();
+                storage_updates.extend(
+                    storage_trie
+                        .storage_nodes_ref()
+                        .iter()
+                        .map(|(nibbles, node)| (*nibbles, Some(node.clone()))),
+                );
+
+                storage_updates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+                storage_trie_updates_written += storage_updates.len();
+                self.store_storage_branches_inner(&tx, block_number, address, storage_updates)
+                    .await?;
             }
         }
 
@@ -359,7 +436,7 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
         if !post_state.accounts.is_empty() {
             let accounts: Vec<_> = post_state.accounts.into_iter().collect();
             hashed_accounts_written += accounts.len();
-            self.store_hashed_accounts(accounts, block_number).await?;
+            self.store_hashed_accounts_inner(&tx, accounts, block_number).await?;
         }
 
         // Store hashed storage
@@ -367,28 +444,23 @@ impl<TX: DbTx, DB: Database<TX = TX>> OpProofsStorage for MdbxOpProofsStorage<DB
             if !storage.storage.is_empty() {
                 let storages: Vec<_> = storage.storage.into_iter().collect();
                 hashed_storages_written += storages.len();
-                self.store_hashed_storages(address, storages, block_number).await?;
+                self.store_hashed_storages_inner(&tx, address, storages, block_number).await?;
             }
         }
 
-        // Update block metadata
-        {
-            let tx = self.db.tx_mut()?;
+        let mut cursor = tx.cursor_write::<tables::ExternalBlockMetadata>()?;
 
-            let mut cursor = tx.cursor_write::<tables::ExternalBlockMetadata>()?;
+        // Update latest block
+        let latest_value = codec::BlockNumberHash(block_number, block_hash);
+        cursor.upsert(models::MetadataKey::LatestBlock, &latest_value)?;
 
-            // Update latest block
-            let latest_value = codec::BlockNumberHash(block_number, block_hash);
-            cursor.upsert(models::MetadataKey::LatestBlock, &latest_value)?;
-
-            // Set earliest block if not set
-            if cursor.seek_exact(models::MetadataKey::EarliestBlock)?.is_none() {
-                let earliest_value = codec::BlockNumberHash(block_number, block_hash);
-                cursor.insert(models::MetadataKey::EarliestBlock, &earliest_value)?;
-            }
-
-            tx.commit()?;
+        // Set earliest block if not set
+        if cursor.seek_exact(models::MetadataKey::EarliestBlock)?.is_none() {
+            let earliest_value = codec::BlockNumberHash(block_number, block_hash);
+            cursor.insert(models::MetadataKey::EarliestBlock, &earliest_value)?;
         }
+
+        tx.commit()?;
 
         Ok((
             account_trie_updates_written as u64,
