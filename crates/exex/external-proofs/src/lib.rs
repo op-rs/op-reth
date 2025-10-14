@@ -1,6 +1,6 @@
-//! External Proofs ExEx - processes blocks and tracks state changes
+//! OP Proofs ExEx - processes blocks and tracks state changes
 
-use crate::{backfill::BackfillJob, storage::in_memory::InMemoryExternalStorage};
+use crate::{backfill::BackfillJob, storage::in_memory::InMemoryProofsStorage};
 use futures_util::TryStreamExt;
 use reth_chainspec::ChainInfo;
 use reth_exex::{ExExContext, ExExEvent};
@@ -16,22 +16,22 @@ pub mod storage;
 /// saving the current state, new blocks as they're added, and serving proof RPCs
 /// based on the saved data.
 #[derive(Debug)]
-pub struct ExternalProofExEx<Node>
+pub struct OpProofsExEx<Node>
 where
     Node: FullNodeComponents,
 {
     ctx: ExExContext<Node>,
-    storage: Arc<InMemoryExternalStorage>,
+    storage: Arc<InMemoryProofsStorage>,
 }
 
-impl<Node, Primitives> ExternalProofExEx<Node>
+impl<Node, Primitives> OpProofsExEx<Node>
 where
     Node: FullNodeComponents<Types: NodeTypes<Primitives = Primitives>>,
     Primitives: NodePrimitives,
 {
-    /// Create a new `ExternalProofExEx` instance
+    /// Create a new `OpProofsExEx` instance
     pub fn new(ctx: ExExContext<Node>) -> Self {
-        Self { ctx, storage: Arc::new(InMemoryExternalStorage::new()) }
+        Self { ctx, storage: Arc::new(InMemoryProofsStorage::new()) }
     }
 
     /// Main execution loop for the ExEx

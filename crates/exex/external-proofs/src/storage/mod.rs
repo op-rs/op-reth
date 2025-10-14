@@ -1,8 +1,8 @@
 //! Storage abstractions for external proofs.
 mod traits;
 pub use traits::{
-    BlockStateDiff, ExternalHashedCursor, ExternalStorage, ExternalStorageError,
-    ExternalStorageResult, ExternalTrieCursor,
+    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
+    OpProofsStorageResult, OpProofsTrieCursor,
 };
 
 pub mod in_memory;
