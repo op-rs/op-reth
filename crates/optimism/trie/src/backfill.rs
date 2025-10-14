@@ -2,7 +2,7 @@
 
 use crate::OpProofsStorage;
 use alloy_primitives::B256;
-use reth_db_api::{
+use reth_db::{
     cursor::{DbCursorRO, DbDupCursorRO},
     tables,
     transaction::DbTx,

@@ -1,5 +1,5 @@
 use alloy_primitives::B256;
-use reth_db_api::{
+use reth_db::{
     table::{Decode, Encode},
     DatabaseError,
 };

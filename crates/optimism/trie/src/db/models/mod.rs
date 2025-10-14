@@ -13,7 +13,7 @@ mod storage;
 pub use storage::*;
 
 use alloy_primitives::B256;
-use reth_db_api::{
+use reth_db::{
     table::{DupSort, TableInfo},
     tables, TableSet, TableType, TableViewer,
 };

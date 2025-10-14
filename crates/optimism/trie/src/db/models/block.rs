@@ -1,6 +1,6 @@
 use alloy_primitives::B256;
 use bytes::BufMut;
-use reth_db_api::{
+use reth_db::{
     table::{Compress, Decompress},
     DatabaseError,
 };

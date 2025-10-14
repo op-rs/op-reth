@@ -1,5 +1,5 @@
 use bytes::{Buf, BufMut};
-use reth_db_api::table::{Compress, Decompress};
+use reth_db::table::{Compress, Decompress};
 use serde::{Deserialize, Serialize};
 
 /// Wrapper type for `Option<T>` that implements `Compress` and `Decompress`

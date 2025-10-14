@@ -9611,7 +9611,6 @@ dependencies = [
  "futures",
  "reth-codecs",
  "reth-db",
- "reth-db-api",
  "reth-primitives-traits",
  "reth-prune-types",
  "reth-stages-types",
