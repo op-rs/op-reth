@@ -1,4 +1,4 @@
-//! OP Proofs ExEx - processes blocks and tracks state changes within fault proof window
+//! ExEx unique for OP-Reth. See also [`reth_exex`] for more op-reth execution extensions.
 
 use derive_more::Constructor;
 use futures_util::TryStreamExt;
@@ -10,6 +10,8 @@ use reth_optimism_trie::{BackfillJob, InMemoryProofsStorage};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
 use std::sync::Arc;
 
+/// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
+///
 /// Saves and serves trie nodes to make proofs faster. This handles the process of
 /// saving the current state, new blocks as they're added, and serving proof RPCs
 /// based on the saved data.

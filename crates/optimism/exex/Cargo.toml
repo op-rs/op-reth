@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = "ExEx to save and serve trie nodes to make proofs faster."
+description = "Execution extensions for OP-Reth"
 
 [lints]
 workspace = true
