@@ -16,6 +16,7 @@ workspace = true
 reth-trie.workspace = true
 reth-primitives-traits.workspace = true
 reth-db-api.workspace = true
+reth-db.workspace = true
 
 # ethereum
 alloy-primitives.workspace = true
