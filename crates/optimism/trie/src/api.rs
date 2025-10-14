@@ -2,9 +2,9 @@
 
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
-use core::fmt::Debug;
 use reth_primitives_traits::Account;
 use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
+use std::fmt::Debug;
 use thiserror::Error;
 
 /// Error type for storage operations

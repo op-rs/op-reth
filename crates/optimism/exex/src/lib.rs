@@ -2,6 +2,7 @@
 
 use derive_more::Constructor;
 use futures_util::TryStreamExt;
+use reth_chainspec::ChainInfo;
 use reth_exex::{ExExContext, ExExEvent};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;

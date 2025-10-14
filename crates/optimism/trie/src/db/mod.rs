@@ -1,18 +1,18 @@
-//! MDBX implementation of [`OpProofsStorage`].
+//! MDBX implementation of [`OpProofsStorage`](crate::OpProofsStorage).
 //!
 //! This module provides a complete MDBX implementation of the
-//! [`OpProofsStorage`](crate::OpProofsStorage) trait. It uses the `reth_db` crate for
+//! [`OpProofsStorage`](crate::OpProofsStorage) trait. It uses the [`reth_db_api`] crate for
 //! database interactions and defines the necessary tables and models for storing trie branches,
 //! accounts, and storage leaves.
 
 use alloy_primitives::B256;
-use core::fmt;
 use reth_db_api::{
     table::{DupSort, TableInfo},
     tables, TableSet, TableType, TableViewer,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, StoredNibbles};
+use std::fmt;
 
 mod block;
 pub use block::*;
