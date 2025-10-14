@@ -11,14 +11,16 @@
 
 extern crate alloc;
 
+mod chain;
+pub use chain::OpStorage;
+
+#[cfg(feature = "proofs")]
 pub mod proofs;
+#[cfg(feature = "proofs")]
 pub use proofs::{
     OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
     OpProofsTrieCursor,
 };
-
-mod chain;
-pub use chain::OpStorage;
 
 #[cfg(test)]
 mod tests {

@@ -14,7 +14,7 @@ workspace = true
 # reth
 reth-optimism-primitives = { workspace = true, features = ["serde", "reth-codec"] }
 reth-storage-api = { workspace = true, features = ["db-api"] }
-reth-trie.workspace = true
+reth-trie = { workspace = true, optional = true }
 reth-primitives-traits.workspace = true
 reth-db-api.workspace = true
 
@@ -58,5 +58,10 @@ std = [
 	"bytes/std",
 	"serde/std",
 	"tracing/std"
+]
+proofs = [
+	"std",
+	"dep:reth-trie",
+
 ]
 
