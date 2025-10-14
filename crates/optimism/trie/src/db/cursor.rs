@@ -272,6 +272,10 @@ impl OpProofsHashedCursor for MdbxStorageCursor {
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
         unimplemented!()
     }
+
+    fn is_storage_empty(&mut self) -> OpProofsStorageResult<bool> {
+        unimplemented!()
+    }
 }
 
 /// MDBX implementation of `OpProofsHashedCursor` for account state.
