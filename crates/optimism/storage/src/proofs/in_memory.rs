@@ -1,16 +1,17 @@
+//! In-memory implementation of [`OpProofsStorage`] for testing purposes
+
+use super::BlockStateDiff;
+use crate::{
+    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
+    OpProofsTrieCursor,
+};
+use alloc::{collections::BTreeMap, sync::Arc};
 use alloy_primitives::{map::HashMap, B256, U256};
-use async_trait::async_trait;
 use reth_primitives_traits::Account;
 use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
-use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::storage::{
-    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
-    OpProofsStorageResult, OpProofsTrieCursor,
-};
-
-/// In-memory implementation of `OpProofsStorage` for testing purposes
+/// In-memory implementation of [`OpProofsStorage`] for testing purposes
 #[derive(Debug, Clone)]
 pub struct InMemoryProofsStorage {
     /// Shared state across all instances
@@ -319,7 +320,7 @@ impl OpProofsHashedCursor for InMemoryStorageCursor {
     }
 }
 
-/// In-memory implementation of `OpProofsHashedCursor` for accounts
+/// In-memory implementation of [`OpProofsHashedCursor`] for accounts
 #[derive(Debug)]
 pub struct InMemoryAccountCursor {
     /// Current position in the iteration (-1 means not positioned yet)
@@ -379,7 +380,6 @@ impl OpProofsHashedCursor for InMemoryAccountCursor {
     }
 }
 
-#[async_trait]
 impl OpProofsStorage for InMemoryProofsStorage {
     type TrieCursor = InMemoryTrieCursor;
     type StorageCursor = InMemoryStorageCursor;

@@ -9,14 +9,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
-mod chain;
-pub use chain::OpStorage;
+extern crate alloc;
 
 pub mod proofs;
 pub use proofs::{
-    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
-    OpProofsStorageResult, OpProofsTrieCursor,
+    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
+    OpProofsTrieCursor,
 };
+
+mod chain;
+pub use chain::OpStorage;
 
 #[cfg(test)]
 mod tests {

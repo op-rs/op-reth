@@ -1,12 +1,18 @@
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
 //! Storage API for external storage of intermediary trie nodes.
 //!
 //! Externally storing intermediary trie nodes that are otherwise discarded by pipeline and live
 //! sync upon successful state root update, enables efficient retrieval of inputs to proof
 //! computation for duration of OP fault proof window.
-========
-//! Traits for external storage for trie nodes.
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
+
+pub mod backfill;
+pub use backfill::BackfillJob;
+
+pub mod in_memory;
+pub use in_memory::{
+    InMemoryAccountCursor, InMemoryProofsStorage, InMemoryStorageCursor, InMemoryTrieCursor,
+};
+
+pub mod mdbx;
 
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
@@ -87,21 +93,12 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     type AccountHashedCursor: OpProofsHashedCursor<Value = Account>;
 
     /// Store a batch of account trie branches. Used for saving existing state. For live state
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
-    /// capture, use [store_trie_updates](ExternalStorage::store_trie_updates).
+    /// capture, use [store_trie_updates](OpProofsStorage::store_trie_updates).
     fn store_account_branches(
         &self,
         block_number: u64,
         updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
-========
-    /// capture, use [store_trie_updates](OpProofsStorage::store_trie_updates).
-    async fn store_account_branches(
-        &self,
-        block_number: u64,
-        updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
-    ) -> OpProofsStorageResult<()>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Store a batch of storage trie branches. Used for saving existing state.
     fn store_storage_branches(
@@ -109,22 +106,14 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         block_number: u64,
         hashed_address: B256,
         items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
-========
-    ) -> OpProofsStorageResult<()>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Store a batch of account trie leaf nodes. Used for saving existing state.
     fn store_hashed_accounts(
         &self,
         accounts: Vec<(B256, Option<Account>)>,
         block_number: u64,
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
-========
-    ) -> OpProofsStorageResult<()>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Store a batch of storage trie leaf nodes. Used for saving existing state.
     fn store_hashed_storages(
@@ -132,17 +121,12 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         hashed_address: B256,
         storages: Vec<(B256, U256)>,
         block_number: u64,
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
-========
-    ) -> OpProofsStorageResult<()>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Get the earliest block number and hash that has been stored
     ///
     /// This is used to determine the block number of trie nodes with block number 0.
     /// All earliest block numbers are stored in 0 to reduce updates required to prune trie nodes.
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     fn get_earliest_block_number(
         &self,
     ) -> impl Future<Output = OpProofsStorageResult<Option<(u64, B256)>>> + Send;
@@ -151,12 +135,6 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     fn get_latest_block_number(
         &self,
     ) -> impl Future<Output = OpProofsStorageResult<Option<(u64, B256)>>> + Send;
-========
-    async fn get_earliest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>>;
-
-    /// Get the latest block number and hash that has been stored
-    async fn get_latest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Get a trie cursor for the storage backend
     fn trie_cursor(
@@ -186,7 +164,6 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         &self,
         block_number: u64,
         block_state_diff: BlockStateDiff,
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Fetch all updates for a given block number.
@@ -194,12 +171,6 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         &self,
         block_number: u64,
     ) -> impl Future<Output = OpProofsStorageResult<BlockStateDiff>> + Send;
-========
-    ) -> OpProofsStorageResult<()>;
-
-    /// Fetch all updates for a given block number.
-    async fn fetch_trie_updates(&self, block_number: u64) -> OpProofsStorageResult<BlockStateDiff>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Applies `BlockStateDiff` to the earliest state (updating/deleting nodes) and updates the
     /// earliest block number.
@@ -207,31 +178,19 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         &self,
         new_earliest_block_number: u64,
         diff: BlockStateDiff,
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
-========
-    ) -> OpProofsStorageResult<()>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Deletes all updates > `latest_common_block_number` and replaces them with the new updates.
     fn replace_updates(
         &self,
         latest_common_block_number: u64,
         blocks_to_add: HashMap<u64, BlockStateDiff>,
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
-========
-    ) -> OpProofsStorageResult<()>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 
     /// Set the earliest block number and hash that has been stored
     fn set_earliest_block_number(
         &self,
         block_number: u64,
         hash: B256,
-<<<<<<<< HEAD:crates/optimism/storage/src/proofs.rs
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
-========
-    ) -> OpProofsStorageResult<()>;
->>>>>>>> unstable:crates/exex/external-proofs/src/storage/traits.rs
 }

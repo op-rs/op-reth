@@ -16,20 +16,33 @@ reth-optimism-primitives = { workspace = true, features = ["serde", "reth-codec"
 reth-storage-api = { workspace = true, features = ["db-api"] }
 reth-trie.workspace = true
 reth-primitives-traits.workspace = true
+reth-db-api.workspace = true
 
 # ethereum
 alloy-consensus.workspace = true
 alloy-primitives.workspace = true
 
+# async
+tokio = { workspace = true, features = ["sync"] }
+
+# codec
+bytes.workspace = true
+serde.workspace = true
+
 # misc
 thiserror.workspace = true
 auto_impl.workspace = true
 eyre.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 reth-codecs = { workspace = true, features = ["test-utils"] }
 reth-prune-types.workspace = true
 reth-stages-types.workspace = true
+tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
+test-case.workspace = true
+futures.workspace = true
+reth-db = { workspace = true, features = ["test-utils"] }
 
 [features]
 default = ["std"]
@@ -41,6 +54,9 @@ std = [
 	"reth-optimism-primitives/std",
 	"alloy-primitives/std",
 	"reth-primitives-traits/std",
-	"thiserror/std"
+	"thiserror/std",
+	"bytes/std",
+	"serde/std",
+	"tracing/std"
 ]
 

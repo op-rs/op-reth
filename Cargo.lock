@@ -9340,14 +9340,18 @@ dependencies = [
  "alloy-primitives",
  "derive_more",
  "eyre",
+ "futures",
  "futures-util",
+ "reth-db",
  "reth-exex",
  "reth-node-api",
  "reth-node-types",
  "reth-optimism-storage",
  "reth-provider",
  "serde",
+ "test-case",
  "thiserror 2.0.16",
+ "tokio",
 ]
 
 [[package]]
@@ -9591,15 +9595,23 @@ dependencies = [
  "alloy-consensus",
  "alloy-primitives",
  "auto_impl",
+ "bytes",
  "eyre",
+ "futures",
  "reth-codecs",
+ "reth-db",
+ "reth-db-api",
  "reth-optimism-primitives",
  "reth-primitives-traits",
  "reth-prune-types",
  "reth-stages-types",
  "reth-storage-api",
  "reth-trie",
+ "serde",
+ "test-case",
  "thiserror 2.0.16",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

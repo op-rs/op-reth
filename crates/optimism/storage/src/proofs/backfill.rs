@@ -1,6 +1,6 @@
 //! Backfill job for proofs storage. Handles storing the existing state into the proofs storage.
 
-use super::storage::OpProofsStorage;
+use crate::OpProofsStorage;
 use alloy_primitives::B256;
 use reth_db_api::{
     cursor::{DbCursorRO, DbDupCursorRO},
@@ -350,9 +350,7 @@ impl<'a, Tx: DbTx, S: OpProofsStorage + Send> BackfillJob<'a, Tx, S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{
-        in_memory::InMemoryProofsStorage, OpProofsHashedCursor, OpProofsTrieCursor,
-    };
+    use crate::{proofs::InMemoryProofsStorage, OpProofsHashedCursor, OpProofsTrieCursor};
     use alloy_primitives::{keccak256, Address, U256};
     use reth_db::{test_utils::create_test_rw_db, Database};
     use reth_db_api::{cursor::DbCursorRW, transaction::DbTxMut};
