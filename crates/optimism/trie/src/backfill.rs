@@ -352,8 +352,9 @@ mod tests {
     use super::*;
     use crate::{InMemoryProofsStorage, OpProofsHashedCursor, OpProofsTrieCursor};
     use alloy_primitives::{keccak256, Address, U256};
-    use reth_db::{test_utils::create_test_rw_db, Database};
-    use reth_db_api::{cursor::DbCursorRW, transaction::DbTxMut};
+    use reth_db::{
+        cursor::DbCursorRW, test_utils::create_test_rw_db, transaction::DbTxMut, Database,
+    };
     use reth_primitives_traits::Account;
     use reth_trie::{BranchNodeCompact, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey};
     use std::sync::Arc;

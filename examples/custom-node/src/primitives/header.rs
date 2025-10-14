@@ -173,7 +173,7 @@ impl reth_db_api::table::Compress for CustomHeader {
 }
 
 impl reth_db_api::table::Decompress for CustomHeader {
-    fn decompress(value: &[u8]) -> Result<Self, reth_db_api::DatabaseError> {
+    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
         let (obj, _) = Compact::from_compact(value, value.len());
         Ok(obj)
     }
