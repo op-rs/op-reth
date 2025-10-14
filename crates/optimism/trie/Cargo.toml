@@ -14,7 +14,6 @@ workspace = true
 [dependencies]
 # reth
 reth-db = { workspace = true, features = ["mdbx"] }
-<<<<<<< HEAD
 reth-evm.workspace = true
 reth-execution-errors.workspace = true
 reth-node-api.workspace = true
@@ -26,16 +25,6 @@ reth-trie = { workspace = true, features = ["serde"] }
 # metrics
 metrics.workspace = true
 reth-metrics = { workspace = true, features = ["common"] }
-=======
-reth-db-api = { workspace = true }
-reth-evm = { workspace = true }
-reth-execution-errors = { workspace = true }
-reth-node-api = { workspace = true }
-reth-primitives-traits = { workspace = true }
-reth-provider = { workspace = true }
-reth-revm = { workspace = true }
-reth-trie = { workspace = true, features = ["serde"] }
->>>>>>> a7ac239794 (feat: add live trie collector)
 
 # ethereum
 alloy-primitives.workspace = true
@@ -58,16 +47,12 @@ itertools.workspace = true
 
 [dev-dependencies]
 reth-codecs = { workspace = true, features = ["test-utils"] }
-<<<<<<< HEAD
-tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 tempfile.workspace = true
-=======
 tokio = { workspace = true, features = [
     "test-util",
     "rt-multi-thread",
     "macros",
 ] }
->>>>>>> a7ac239794 (feat: add live trie collector)
 test-case.workspace = true
 reth-db = { workspace = true, features = ["test-utils"] }
 # workaround for failing doc test <https://github.com/op-rs/op-reth/pull/234>

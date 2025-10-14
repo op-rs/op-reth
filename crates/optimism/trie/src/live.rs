@@ -1,11 +1,7 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-<<<<<<< HEAD
     api::{BlockStateDiff, OpProofsStorage, OpProofsStorageError},
-=======
-    api::{BlockStateDiff, OpProofsStorage},
->>>>>>> a7ac239794 (feat: add live trie collector)
     provider::OpProofsStateProviderRef,
 };
 use reth_evm::{execute::Executor, ConfigureEvm};
@@ -21,18 +17,13 @@ use tracing::debug;
 
 /// Live trie collector for external proofs storage.
 #[derive(Debug)]
-<<<<<<< HEAD
 pub struct LiveTrieCollector<'tx, Node, PreimageStore>
-=======
-pub struct LiveTrieCollector<Node, PreimageStore>
->>>>>>> a7ac239794 (feat: add live trie collector)
 where
     Node: FullNodeComponents,
     Node::Provider: StateReader + DatabaseProviderFactory + StateProviderFactory,
 {
     evm_config: Node::Evm,
     provider: Node::Provider,
-<<<<<<< HEAD
     storage: &'tx PreimageStore,
 }
 
@@ -44,19 +35,6 @@ where
 {
     /// Create a new `LiveTrieCollector` instance
     pub const fn new(evm_config: Node::Evm, provider: Node::Provider, storage: &'tx Store) -> Self {
-=======
-    storage: PreimageStore,
-}
-
-impl<Node, Store, Primitives> LiveTrieCollector<Node, Store>
-where
-    Node: FullNodeComponents<Types: NodeTypes<Primitives = Primitives>>,
-    Primitives: NodePrimitives,
-    Store: OpProofsStorage + Clone + 'static,
-{
-    /// Create a new `LiveTrieCollector` instance
-    pub const fn new(evm_config: Node::Evm, provider: Node::Provider, storage: Store) -> Self {
->>>>>>> a7ac239794 (feat: add live trie collector)
         Self { evm_config, provider, storage }
     }
 
@@ -71,18 +49,13 @@ where
             self.storage.get_earliest_block_number().await?,
             self.storage.get_latest_block_number().await?,
         ) else {
-<<<<<<< HEAD
             return Err(OpProofsStorageError::NoBlocksFound.into());
-=======
-            return Err(eyre::eyre!("No blocks stored"));
->>>>>>> a7ac239794 (feat: add live trie collector)
         };
 
         let fetch_block_duration = start.elapsed();
 
         let parent_block_number = block.number() - 1;
         if parent_block_number < earliest {
-<<<<<<< HEAD
             return Err(OpProofsStorageError::UnknownParent.into());
         }
 
@@ -93,20 +66,6 @@ where
                 latest,
             )
             .into());
-=======
-            return Err(eyre::eyre!(
-                "Parent block number is less than earliest stored block number"
-            ));
-        }
-
-        if parent_block_number > latest {
-            return Err(eyre::eyre!(
-                "Cannot execute block updates for block {} without parent state {} (latest stored block number: {})",
-                block.number(),
-                parent_block_number,
-                latest
-            ));
->>>>>>> a7ac239794 (feat: add live trie collector)
         }
 
         let block_number = block.number();
@@ -115,11 +74,7 @@ where
 
         let state_provider = OpProofsStateProviderRef::new(
             self.provider.state_by_block_hash(block.parent_hash())?,
-<<<<<<< HEAD
             self.storage,
-=======
-            self.storage.clone(),
->>>>>>> a7ac239794 (feat: add live trie collector)
             parent_block_number,
         );
 
@@ -140,21 +95,12 @@ where
         let calculate_state_root_duration = start.elapsed() - execute_block_duration;
 
         if state_root != block.state_root() {
-<<<<<<< HEAD
             return Err(OpProofsStorageError::StateRootMismatch(
                 block.number(),
                 state_root,
                 block.state_root(),
             )
             .into());
-=======
-            return Err(eyre::eyre!(
-                "State root mismatch for block {} (have: {}, expected: {})",
-                block.number(),
-                state_root,
-                block.state_root()
-            ));
->>>>>>> a7ac239794 (feat: add live trie collector)
         }
 
         self.storage
