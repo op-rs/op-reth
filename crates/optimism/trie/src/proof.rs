@@ -518,7 +518,6 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStorageRoot<Storage>
             ),
             address,
             prefix_set,
-            // #[cfg(feature = "metrics")]
             TrieRootMetrics::new(reth_trie::TrieType::Storage),
         )
         .root()
