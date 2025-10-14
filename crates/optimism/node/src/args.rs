@@ -74,10 +74,6 @@ pub struct RollupArgs {
     /// block tag will use the pending state based on flashblocks.
     #[arg(long)]
     pub flashblocks_url: Option<Url>,
-
-    /// If true, initialize external-proofs exex to save and serve trie nodes to provide proofs faster.
-    #[arg(long = "rollup.proofs-history")]
-    pub proofs_history: bool,
 }
 
 impl Default for RollupArgs {
@@ -94,7 +90,6 @@ impl Default for RollupArgs {
             historical_rpc: None,
             min_suggested_priority_fee: 1_000_000,
             flashblocks_url: None,
-            proofs_history: false,
         }
     }
 }

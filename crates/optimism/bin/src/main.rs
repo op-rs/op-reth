@@ -31,21 +31,25 @@ struct Args {
     pub rollup_args: RollupArgs,
 
     /// If true, initialize external-proofs exex to save and serve trie nodes to provide proofs faster.
-    #[arg(long = "proofs-history")]
+    #[arg(long = "proofs-history", value_name = "PROOFS_HISTORY")]
     pub proofs_history: bool,
 
     /// The storage DB for proofs history.
-    #[arg(long = "proofs-history.storage", default_value_t = ProofsHistoryStorage::Sqlite)]
+    #[arg(
+        long = "proofs-history.storage",
+        default_value_t = ProofsHistoryStorage::Sqlite,
+        value_name = "PROOFS_HISTORY_STORAGE"
+    )]
     pub proofs_history_storage: ProofsHistoryStorage,
 
     /// The path to the storage DB for proofs history.
-    #[arg(long = "proofs-history.storage-path")]
+    #[arg(long = "proofs-history.storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH")]
     pub proofs_history_storage_path: Option<String>,
 
     /// The window to span blocks for proofs history. Value is the number of blocks.
     /// Default is 1 month of blocks based on 2 seconds block time.
     /// 30 * 24 * 60 * 60 / 2 = 1_296_000
-    #[arg(long = "proofs-history.window", default_value_t = 1_296_000)]
+    #[arg(long = "proofs-history.window", default_value_t = 1_296_000, value_name = "PROOFS_HISTORY_WINDOW")]
     pub proofs_history_window: u64,
 }
 
