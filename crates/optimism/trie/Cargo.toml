@@ -13,9 +13,9 @@ workspace = true
 
 [dependencies]
 # reth
-reth-trie.workspace = true
+reth-trie = { workspace = true, features = ["serde"] }
 reth-primitives-traits = { workspace = true, features = ["op"] }
-reth-db = { workspace = true, features = ["mdbx", "op", "serde"] }
+reth-db = { workspace = true, features = ["mdbx", "op"] }
 
 # ethereum
 alloy-primitives.workspace = true
