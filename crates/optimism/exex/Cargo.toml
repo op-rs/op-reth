@@ -40,7 +40,7 @@ reth-db = { workspace = true, features = ["test-utils"] }
 
 [features]
 test-utils = [
-	"reth-provider/test-utils",
-	"reth-db/test-utils",
-	"reth-chainspec/test-utils"
+    "reth-provider/test-utils",
+    "reth-db/test-utils",
+    "reth-chainspec/test-utils",
 ]
