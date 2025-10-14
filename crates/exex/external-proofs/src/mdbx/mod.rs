@@ -57,15 +57,6 @@ impl MdbxOpProofsStorage<DatabaseEnv> {
     /// * `path` - Path to the external storage database directory
     ///            (e.g., `/path/to/datadir/external-proofs/`)
     ///
-    /// # Example
-    /// ```no_run
-    /// use std::path::Path;
-    /// use external_proofs::mdbx::MdbxOpProofsStorage;
-    ///
-    /// let datadir = Path::new("/path/to/reth/data");
-    /// let storage_path = datadir.join("external-proofs");
-    /// let storage = MdbxOpProofsStorage::new(storage_path).unwrap();
-    /// ```
     pub fn new(db: DatabaseEnv) -> OpProofsStorageResult<Self> {
         Ok(Self { db })
     }
@@ -385,22 +376,23 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
         let tx = self.db.tx_mut()?;
 
         // Store account trie branches
-        if !trie_updates.account_nodes.is_empty() {
-            let mut account_updates = trie_updates
-                .removed_nodes_ref()
-                .iter()
-                .cloned()
-                .filter_map(|n| {
-                    (!trie_updates.account_nodes_ref().contains_key(&n)).then_some((n, None))
-                })
-                .collect::<Vec<_>>();
-            account_updates.extend(
-                trie_updates
-                    .account_nodes_ref()
-                    .iter()
-                    .map(|(nibbles, node)| (*nibbles, Some(node.clone()))),
-            );
-            // Sort trie node updates.
+        // Build HashMap: first add removals as None, then apply updates (which take precedence)
+        if !trie_updates.removed_nodes_ref().is_empty() || !trie_updates.account_nodes.is_empty() {
+            let mut account_updates_map: HashMap<Nibbles, Option<BranchNodeCompact>> =
+                HashMap::default();
+
+            // First, add all removed nodes as deletions
+            for removed_path in trie_updates.removed_nodes_ref() {
+                account_updates_map.insert(*removed_path, None);
+            }
+
+            // Then, apply updates (these take precedence over removals)
+            for (path, node) in trie_updates.account_nodes_ref() {
+                account_updates_map.insert(*path, Some(node.clone()));
+            }
+
+            // Convert to sorted vec for MDBX append operation
+            let mut account_updates: Vec<_> = account_updates_map.into_iter().collect();
             account_updates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
             account_trie_updates_written += account_updates.len();
             self.store_account_branches_inner(&tx, block_number, account_updates).await?;
@@ -408,22 +400,25 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
 
         // Store storage trie branches
         for (address, storage_trie) in trie_updates.storage_tries {
-            if !storage_trie.storage_nodes.is_empty() {
-                let mut storage_updates = storage_trie
-                    .removed_nodes_ref()
-                    .iter()
-                    .cloned()
-                    .filter_map(|n| {
-                        (!storage_trie.storage_nodes_ref().contains_key(&n)).then_some((n, None))
-                    })
-                    .collect::<Vec<_>>();
-                storage_updates.extend(
-                    storage_trie
-                        .storage_nodes_ref()
-                        .iter()
-                        .map(|(nibbles, node)| (*nibbles, Some(node.clone()))),
-                );
+            // Build HashMap: first add removals as None, then apply updates (which take precedence)
+            if !storage_trie.removed_nodes_ref().is_empty()
+                || !storage_trie.storage_nodes.is_empty()
+            {
+                let mut storage_updates_map: HashMap<Nibbles, Option<BranchNodeCompact>> =
+                    HashMap::default();
 
+                // First, add all removed nodes as deletions
+                for removed_path in storage_trie.removed_nodes_ref() {
+                    storage_updates_map.insert(*removed_path, None);
+                }
+
+                // Then, apply updates (these take precedence over removals)
+                for (path, node) in storage_trie.storage_nodes_ref() {
+                    storage_updates_map.insert(*path, Some(node.clone()));
+                }
+
+                // Convert to sorted vec for MDBX append operation
+                let mut storage_updates: Vec<_> = storage_updates_map.into_iter().collect();
                 storage_updates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
                 storage_trie_updates_written += storage_updates.len();
