@@ -19,7 +19,7 @@ enum ProofsHistoryStorage {
 impl std::fmt::Display for ProofsHistoryStorage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProofsHistoryStorage::Sqlite => f.write_str("sqlite"),
+            Self::Sqlite => f.write_str("sqlite"),
         }
     }
 }
@@ -48,7 +48,7 @@ struct Args {
 
     /// The window to span blocks for proofs history. Value is the number of blocks.
     /// Default is 1 month of blocks based on 2 seconds block time.
-    /// 30 * 24 * 60 * 60 / 2 = 1_296_000
+    /// 30 * 24 * 60 * 60 / 2 = `1_296_000`
     #[arg(long = "proofs-history.window", default_value_t = 1_296_000, value_name = "PROOFS_HISTORY_WINDOW")]
     pub proofs_history_window: u64,
 }
