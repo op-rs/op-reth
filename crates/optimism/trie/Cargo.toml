@@ -1,5 +1,5 @@
 [package]
-name = "reth-optimism-storage"
+name = "reth-optimism-trie-storage"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -43,25 +43,4 @@ tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"
 test-case.workspace = true
 futures.workspace = true
 reth-db = { workspace = true, features = ["test-utils"] }
-
-[features]
-default = ["std"]
-std = [
-	"reth-storage-api/std",
-	"reth-prune-types/std",
-	"reth-stages-types/std",
-	"alloy-consensus/std",
-	"reth-optimism-primitives/std",
-	"alloy-primitives/std",
-	"reth-primitives-traits/std",
-	"thiserror/std",
-	"bytes/std",
-	"serde/std",
-	"tracing/std"
-]
-proofs = [
-	"std",
-	"dep:reth-trie",
-
-]
 

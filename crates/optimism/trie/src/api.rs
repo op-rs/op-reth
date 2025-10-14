@@ -1,18 +1,4 @@
 //! Storage API for external storage of intermediary trie nodes.
-//!
-//! Externally storing intermediary trie nodes that are otherwise discarded by pipeline and live
-//! sync upon successful state root update, enables efficient retrieval of inputs to proof
-//! computation for duration of OP fault proof window.
-
-pub mod backfill;
-pub use backfill::BackfillJob;
-
-pub mod in_memory;
-pub use in_memory::{
-    InMemoryAccountCursor, InMemoryProofsStorage, InMemoryStorageCursor, InMemoryTrieCursor,
-};
-
-pub mod mdbx;
 
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;

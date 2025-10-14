@@ -22,7 +22,7 @@ reth-provider.workspace = true
 alloy-primitives = { workspace = true }
 
 # op-reth
-reth-optimism-storage.workspace = true
+reth-optimism-trie.workspace = true
 
 # misc
 eyre.workspace = true

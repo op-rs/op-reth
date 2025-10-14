@@ -9593,25 +9593,11 @@ name = "reth-optimism-storage"
 version = "1.8.2"
 dependencies = [
  "alloy-consensus",
- "alloy-primitives",
- "auto_impl",
- "bytes",
- "eyre",
- "futures",
  "reth-codecs",
- "reth-db",
- "reth-db-api",
  "reth-optimism-primitives",
- "reth-primitives-traits",
  "reth-prune-types",
  "reth-stages-types",
  "reth-storage-api",
- "reth-trie",
- "serde",
- "test-case",
- "thiserror 2.0.16",
- "tokio",
- "tracing",
 ]
 
 [[package]]
