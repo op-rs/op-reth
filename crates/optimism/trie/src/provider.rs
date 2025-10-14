@@ -32,12 +32,17 @@ pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
     latest: Box<dyn StateProvider + 'a>,
 
     /// Storage provider for state lookups.
+<<<<<<< HEAD
     storage: &'a Storage,
+=======
+    storage: Storage,
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
 
     /// Max block number that can be used for state lookups.
     block_number: BlockNumber,
 }
 
+<<<<<<< HEAD
 impl<'a, Storage: OpProofsStorage> OpProofsStateProviderRef<'a, Storage> {
     /// Initializes new `OpProofsStateProviderRef`
     pub fn new(
@@ -53,6 +58,9 @@ impl<'a, Storage> Debug for OpProofsStateProviderRef<'a, Storage>
 where
     Storage: OpProofsStorage + 'a + Debug,
 {
+=======
+impl<'a, Storage: OpProofsStorage + Debug> Debug for OpProofsStateProviderRef<'a, Storage> {
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpProofsStateProviderRef")
             .field("storage", &self.storage)
@@ -61,6 +69,20 @@ where
     }
 }
 
+<<<<<<< HEAD
+=======
+impl<'a, Storage: OpProofsStorage> OpProofsStateProviderRef<'a, Storage> {
+    /// Creates a new `OpProofsStateProviderRef` instance.
+    pub fn new(
+        latest: Box<dyn StateProvider + 'a>,
+        storage: Storage,
+        block_number: BlockNumber,
+    ) -> Self {
+        Self { latest, storage, block_number }
+    }
+}
+
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
 impl From<OpProofsStorageError> for ProviderError {
     fn from(error: OpProofsStorageError) -> Self {
         Self::other(error)
@@ -85,12 +107,20 @@ impl<'a, Storage: OpProofsStorage + Clone> StateRootProvider
     for OpProofsStateProviderRef<'a, Storage>
 {
     fn state_root(&self, state: HashedPostState) -> ProviderResult<B256> {
+<<<<<<< HEAD
         StateRoot::overlay_root(self.storage, self.block_number, state)
+=======
+        StateRoot::overlay_root(self.storage.clone(), self.block_number, state)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
+<<<<<<< HEAD
         StateRoot::overlay_root_from_nodes(self.storage, self.block_number, input)
+=======
+        StateRoot::overlay_root_from_nodes(self.storage.clone(), self.block_number, input)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
@@ -98,7 +128,11 @@ impl<'a, Storage: OpProofsStorage + Clone> StateRootProvider
         &self,
         state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
+<<<<<<< HEAD
         StateRoot::overlay_root_with_updates(self.storage, self.block_number, state)
+=======
+        StateRoot::overlay_root_with_updates(self.storage.clone(), self.block_number, state)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
@@ -106,8 +140,17 @@ impl<'a, Storage: OpProofsStorage + Clone> StateRootProvider
         &self,
         input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
+<<<<<<< HEAD
         StateRoot::overlay_root_from_nodes_with_updates(self.storage, self.block_number, input)
             .map_err(|err| ProviderError::Database(err.into()))
+=======
+        StateRoot::overlay_root_from_nodes_with_updates(
+            self.storage.clone(),
+            self.block_number,
+            input,
+        )
+        .map_err(|err| ProviderError::Database(err.into()))
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
     }
 }
 
@@ -115,7 +158,11 @@ impl<'a, Storage: OpProofsStorage + Clone> StorageRootProvider
     for OpProofsStateProviderRef<'a, Storage>
 {
     fn storage_root(&self, address: Address, storage: HashedStorage) -> ProviderResult<B256> {
+<<<<<<< HEAD
         StorageRoot::overlay_root(self.storage, self.block_number, address, storage)
+=======
+        StorageRoot::overlay_root(self.storage.clone(), self.block_number, address, storage)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
@@ -125,8 +172,19 @@ impl<'a, Storage: OpProofsStorage + Clone> StorageRootProvider
         slot: B256,
         storage: HashedStorage,
     ) -> ProviderResult<reth_trie::StorageProof> {
+<<<<<<< HEAD
         StorageProof::overlay_storage_proof(self.storage, self.block_number, address, slot, storage)
             .map_err(ProviderError::from)
+=======
+        StorageProof::overlay_storage_proof(
+            self.storage.clone(),
+            self.block_number,
+            address,
+            slot,
+            storage,
+        )
+        .map_err(ProviderError::from)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
     }
 
     fn storage_multiproof(
@@ -136,7 +194,11 @@ impl<'a, Storage: OpProofsStorage + Clone> StorageRootProvider
         storage: HashedStorage,
     ) -> ProviderResult<StorageMultiProof> {
         StorageProof::overlay_storage_multiproof(
+<<<<<<< HEAD
             self.storage,
+=======
+            self.storage.clone(),
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             self.block_number,
             address,
             slots,
@@ -155,7 +217,11 @@ impl<'a, Storage: OpProofsStorage + Clone> StateProofProvider
         address: Address,
         slots: &[B256],
     ) -> ProviderResult<AccountProof> {
+<<<<<<< HEAD
         Proof::overlay_account_proof(self.storage, self.block_number, input, address, slots)
+=======
+        Proof::overlay_account_proof(self.storage.clone(), self.block_number, input, address, slots)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             .map_err(ProviderError::from)
     }
 
@@ -164,12 +230,20 @@ impl<'a, Storage: OpProofsStorage + Clone> StateProofProvider
         input: TrieInput,
         targets: MultiProofTargets,
     ) -> ProviderResult<MultiProof> {
+<<<<<<< HEAD
         Proof::overlay_multiproof(self.storage, self.block_number, input, targets)
+=======
+        Proof::overlay_multiproof(self.storage.clone(), self.block_number, input, targets)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             .map_err(ProviderError::from)
     }
 
     fn witness(&self, input: TrieInput, target: HashedPostState) -> ProviderResult<Vec<Bytes>> {
+<<<<<<< HEAD
         TrieWitness::overlay_witness(self.storage, self.block_number, input, target)
+=======
+        TrieWitness::overlay_witness(self.storage.clone(), self.block_number, input, target)
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
             .map_err(ProviderError::from)
             .map(|hm| hm.into_values().collect())
     }
@@ -196,10 +270,14 @@ impl<'a, Storage: OpProofsStorage> AccountReader for OpProofsStateProviderRef<'a
     }
 }
 
+<<<<<<< HEAD
 impl<'a, Storage> StateProvider for OpProofsStateProviderRef<'a, Storage>
 where
     Storage: OpProofsStorage + Clone,
 {
+=======
+impl<'a, Storage: OpProofsStorage + Clone> StateProvider for OpProofsStateProviderRef<'a, Storage> {
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
     fn storage(&self, address: Address, storage_key: B256) -> ProviderResult<Option<StorageValue>> {
         let hashed_key = keccak256(storage_key);
         Ok(self

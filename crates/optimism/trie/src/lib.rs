@@ -34,5 +34,8 @@ pub use metrics::OpProofsStorageWithMetrics;
 pub mod proof;
 
 pub mod provider;
+<<<<<<< HEAD
 
 pub mod live;
+=======
+>>>>>>> 904e81d33b (feat: add provider to `reth-optimism-trie`)
