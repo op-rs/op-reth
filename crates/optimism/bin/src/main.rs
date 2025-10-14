@@ -30,7 +30,8 @@ struct Args {
     #[command(flatten)]
     pub rollup_args: RollupArgs,
 
-    /// If true, initialize external-proofs exex to save and serve trie nodes to provide proofs faster.
+    /// If true, initialize external-proofs exex to save and serve trie nodes to provide proofs
+    /// faster.
     #[arg(long = "proofs-history", value_name = "PROOFS_HISTORY")]
     pub proofs_history: bool,
 
@@ -49,7 +50,11 @@ struct Args {
     /// The window to span blocks for proofs history. Value is the number of blocks.
     /// Default is 1 month of blocks based on 2 seconds block time.
     /// 30 * 24 * 60 * 60 / 2 = `1_296_000`
-    #[arg(long = "proofs-history.window", default_value_t = 1_296_000, value_name = "PROOFS_HISTORY_WINDOW")]
+    #[arg(
+        long = "proofs-history.window",
+        default_value_t = 1_296_000,
+        value_name = "PROOFS_HISTORY_WINDOW"
+    )]
     pub proofs_history_window: u64,
 }
 
@@ -63,23 +68,21 @@ fn main() {
         }
     }
 
-    if let Err(err) =
-        Cli::<OpChainSpecParser, Args>::parse().run(async move |builder, args| {
-            info!(target: "reth::cli", "Launching node");
+    if let Err(err) = Cli::<OpChainSpecParser, Args>::parse().run(async move |builder, args| {
+        info!(target: "reth::cli", "Launching node");
 
-            let rollup_args = args.rollup_args;
+        let rollup_args = args.rollup_args;
 
-            let handle =
-                builder
-                    .node(OpNode::new(rollup_args))
-                    .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
-                        let proofs_helper = OpProofsExEx::new(exex_context);
-                        Ok(proofs_helper.run())
-                    })
-                    .launch_with_debug_capabilities().await?;
-            handle.node_exit_future.await
-        })
-    {
+        let handle =
+            builder
+                .node(OpNode::new(rollup_args))
+                .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
+                    let proofs_helper = OpProofsExEx::new(exex_context);
+                    Ok(proofs_helper.run())
+                })
+                .launch_with_debug_capabilities().await?;
+        handle.node_exit_future.await
+    }) {
         eprintln!("Error: {err:?}");
         std::process::exit(1);
     }
