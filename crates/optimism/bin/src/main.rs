@@ -1,6 +1,6 @@
 #![allow(missing_docs, rustdoc::missing_crate_level_docs)]
 
-use clap::Parser;
+use clap::{builder::ArgPredicate, Parser};
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
 use reth_optimism_exex::OpProofsExEx;
 use reth_optimism_node::{args::RollupArgs, OpNode};
@@ -17,7 +17,14 @@ struct Args {
 
     /// If true, initialize external-proofs exex to save and serve trie nodes to provide proofs
     /// faster.
-    #[arg(long = "proofs-history", value_name = "PROOFS_HISTORY")]
+    #[arg(
+        long = "proofs-history",
+        value_name = "PROOFS_HISTORY",
+        default_value_ifs([
+            ("proofs-history.in_mem", ArgPredicate::IsPresent, "true"),
+            ("proofs-history.storage-path", ArgPredicate::IsPresent, "true")
+        ])
+    )]
     pub proofs_history: bool,
 
     /// The storage DB for proofs history.
@@ -25,12 +32,16 @@ struct Args {
         long = "proofs-history.in_mem",
         value_name = "PROOFS_HISTORY_STORAGE_IN_MEM",
         conflicts_with = "proofs-history.storage-path",
-        default_value_t = true
+        default_value_if("proofs-history", "true", Some("false"))
     )]
     pub proofs_history_storage_in_mem: bool,
 
     /// The path to the storage DB for proofs history.
-    #[arg(long = "proofs-history.storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH")]
+    #[arg(
+        long = "proofs-history.storage-path",
+        value_name = "PROOFS_HISTORY_STORAGE_PATH",
+        required_if_eq("proofs-history.in_mem", "false")
+    )]
     pub proofs_history_storage_path: Option<String>,
 
     /// The window to span blocks for proofs history. Value is the number of blocks.
