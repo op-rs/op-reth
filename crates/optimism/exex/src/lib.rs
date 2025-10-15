@@ -26,6 +26,10 @@ where
     ctx: ExExContext<Node>,
     /// The type of storage DB.
     storage: Arc<S>,
+    /// The window to span blocks for proofs history. Value is the number of blocks, received as
+    /// cli arg.
+    #[expect(dead_code)]
+    proofs_history_window: u64,
 }
 
 impl<Node, S, Primitives> OpProofsExEx<Node, S>

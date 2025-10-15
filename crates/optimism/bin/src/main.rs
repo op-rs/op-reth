@@ -82,7 +82,13 @@ fn main() {
                     info!(target: "reth::cli", "Using in-memory storage for proofs history");
 
                     let storage = InMemoryProofsStorage::new();
-                    Ok(OpProofsExEx::new(exex_context, Arc::new(storage)).run().boxed())
+                    Ok(OpProofsExEx::new(
+                        exex_context,
+                        Arc::new(storage),
+                        args.proofs_history_window,
+                    )
+                    .run()
+                    .boxed())
                 } else {
                     let path = args
                         .proofs_history_storage_path
@@ -91,7 +97,13 @@ fn main() {
 
                     let storage = MdbxProofsStorage::new(&path)
                         .map_err(|e| eyre::eyre!("Failed to create MdbxProofsStorage: {e}"))?;
-                    Ok(OpProofsExEx::new(exex_context, Arc::new(storage)).run().boxed())
+                    Ok(OpProofsExEx::new(
+                        exex_context,
+                        Arc::new(storage),
+                        args.proofs_history_window,
+                    )
+                    .run()
+                    .boxed())
                 }
             })
             .launch_with_debug_capabilities()
