@@ -1,10 +1,15 @@
 //! Provides proof operation implementations for [`OpProofsStorage`].
 
+use crate::api::{
+    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
+    OpProofsTrieCursor as OpProofsDBTrieCursor,
+};
 use alloy_primitives::{
     keccak256,
     map::{B256Map, HashMap},
     Address, Bytes, B256, U256,
 };
+use derive_more::Constructor;
 use reth_db_api::DatabaseError;
 use reth_execution_errors::{StateProofError, StateRootError, StorageRootError, TrieWitnessError};
 use reth_primitives_traits::Account;
@@ -19,11 +24,7 @@ use reth_trie::{
     witness::TrieWitness,
     AccountProof, BranchNodeCompact, HashedPostState, HashedPostStateSorted, HashedStorage,
     MultiProof, MultiProofTargets, Nibbles, StateRoot, StorageMultiProof, StorageRoot, TrieInput,
-};
-
-use crate::api::{
-    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
-    OpProofsTrieCursor as OpProofsDBTrieCursor,
+    TrieType,
 };
 
 /// Manages reading storage or account trie nodes from [`OpProofsDBTrieCursor`].
@@ -43,42 +44,38 @@ impl From<OpProofsStorageError> for DatabaseError {
     }
 }
 
-impl<C: OpProofsDBTrieCursor + Send + Sync> TrieCursor for OpProofsTrieCursor<C> {
+impl<C> TrieCursor for OpProofsTrieCursor<C>
+where
+    C: OpProofsDBTrieCursor + Send + Sync,
+{
     fn seek_exact(
         &mut self,
         key: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.0.seek_exact(key).map_err(Into::into)
+        Ok(self.0.seek_exact(key)?)
     }
 
     fn seek(
         &mut self,
         key: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.0.seek(key).map_err(Into::into)
+        Ok(self.0.seek(key)?)
     }
 
     fn next(&mut self) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.0.next().map_err(Into::into)
+        Ok(self.0.next()?)
     }
 
     fn current(&mut self) -> Result<Option<Nibbles>, DatabaseError> {
-        self.0.current().map_err(Into::into)
+        Ok(self.0.current()?)
     }
 }
 
 /// Factory for creating trie cursors for [`OpProofsStorage`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Constructor)]
 pub struct OpProofsTrieCursorFactory<Storage: OpProofsStorage> {
     storage: Storage,
     block_number: u64,
-}
-
-impl<Storage: OpProofsStorage> OpProofsTrieCursorFactory<Storage> {
-    /// Creates a new `OpProofsTrieCursorFactory` instance.
-    pub const fn new(storage: Storage, block_number: u64) -> Self {
-        Self { storage, block_number }
-    }
 }
 
 impl<Storage: OpProofsStorage> TrieCursorFactory for OpProofsTrieCursorFactory<Storage> {
@@ -122,11 +119,11 @@ impl<C: OpProofsHashedCursor<Value = Account> + Send + Sync> HashedCursor
     type Value = Account;
 
     fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
-        self.0.seek(key).map_err(Into::into)
+        Ok(self.0.seek(key)?)
     }
 
     fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
-        self.0.next().map_err(Into::into)
+        Ok(self.0.next()?)
     }
 }
 
@@ -147,11 +144,11 @@ impl<C: OpProofsHashedCursor<Value = U256> + Send + Sync> HashedCursor
     type Value = U256;
 
     fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
-        self.0.seek(key).map_err(Into::into)
+        Ok(self.0.seek(key)?)
     }
 
     fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
-        self.0.next().map_err(Into::into)
+        Ok(self.0.next()?)
     }
 }
 
@@ -159,7 +156,7 @@ impl<C: OpProofsHashedCursor<Value = U256> + Send + Sync> HashedStorageCursor
     for OpProofsHashedStorageCursor<C>
 {
     fn is_storage_empty(&mut self) -> Result<bool, DatabaseError> {
-        self.0.is_storage_empty().map_err(Into::into)
+        Ok(self.0.is_storage_empty()?)
     }
 }
 
@@ -182,11 +179,7 @@ impl<Storage: OpProofsStorage> HashedCursorFactory for OpProofsHashedAccountCurs
     type StorageCursor = OpProofsHashedStorageCursor<Storage::StorageCursor>;
 
     fn hashed_account_cursor(&self) -> Result<Self::AccountCursor, DatabaseError> {
-        Ok(OpProofsHashedAccountCursor::new(
-            self.storage
-                .account_hashed_cursor(self.block_number)
-                .map_err(Into::<DatabaseError>::into)?,
-        ))
+        Ok(OpProofsHashedAccountCursor::new(self.storage.account_hashed_cursor(self.block_number)?))
     }
 
     fn hashed_storage_cursor(
@@ -194,9 +187,7 @@ impl<Storage: OpProofsStorage> HashedCursorFactory for OpProofsHashedAccountCurs
         hashed_address: B256,
     ) -> Result<Self::StorageCursor, DatabaseError> {
         Ok(OpProofsHashedStorageCursor::new(
-            self.storage
-                .storage_hashed_cursor(hashed_address, self.block_number)
-                .map_err(Into::<DatabaseError>::into)?,
+            self.storage.storage_hashed_cursor(hashed_address, self.block_number)?,
         ))
     }
 }
@@ -227,7 +218,7 @@ pub trait DatabaseProof<Storage> {
 impl<Storage: OpProofsStorage + Clone> DatabaseProof<Storage>
     for Proof<OpProofsTrieCursorFactory<Storage>, OpProofsHashedAccountCursorFactory<Storage>>
 {
-    /// Create a new [Proof] instance from [`OpProofsStorage`].
+    /// Create a new [`Proof`] instance from [`OpProofsStorage`].
     fn from_tx(storage: Storage, block_number: u64) -> Self {
         Self::new(
             OpProofsTrieCursorFactory::new(storage.clone(), block_number),
@@ -518,7 +509,7 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStorageRoot<Storage>
             ),
             address,
             prefix_set,
-            TrieRootMetrics::new(reth_trie::TrieType::Storage),
+            TrieRootMetrics::new(TrieType::Storage),
         )
         .root()
     }

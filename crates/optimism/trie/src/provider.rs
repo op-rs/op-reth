@@ -8,6 +8,7 @@ use crate::{
     },
 };
 use alloy_primitives::keccak256;
+use derive_more::Constructor;
 use reth_primitives_traits::{Account, Bytecode};
 use reth_provider::{
     AccountReader, BlockHashReader, BytecodeReader, HashedPostStateProvider, ProviderError,
@@ -27,6 +28,7 @@ use reth_trie::{
 use std::fmt::Debug;
 
 /// State provider for external proofs storage.
+#[derive(Constructor)]
 pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
     /// Historical state provider for non-state related tasks.
     latest: Box<dyn StateProvider + 'a>,
@@ -38,23 +40,15 @@ pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
     block_number: BlockNumber,
 }
 
-impl<'a, Storage: OpProofsStorage + Debug> Debug for OpProofsStateProviderRef<'a, Storage> {
+impl<'a, Storage> Debug for OpProofsStateProviderRef<'a, Storage>
+where
+    Storage: OpProofsStorage + Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpProofsStateProviderRef")
             .field("storage", &self.storage)
             .field("block_number", &self.block_number)
             .finish()
-    }
-}
-
-impl<'a, Storage: OpProofsStorage> OpProofsStateProviderRef<'a, Storage> {
-    /// Creates a new `OpProofsStateProviderRef` instance.
-    pub fn new(
-        latest: Box<dyn StateProvider + 'a>,
-        storage: Storage,
-        block_number: BlockNumber,
-    ) -> Self {
-        Self { latest, storage, block_number }
     }
 }
 
@@ -203,7 +197,10 @@ impl<'a, Storage: OpProofsStorage> AccountReader for OpProofsStateProviderRef<'a
     }
 }
 
-impl<'a, Storage: OpProofsStorage + Clone> StateProvider for OpProofsStateProviderRef<'a, Storage> {
+impl<'a, Storage> StateProvider for OpProofsStateProviderRef<'a, Storage>
+where
+    Storage: OpProofsStorage + Clone,
+{
     fn storage(&self, address: Address, storage_key: B256) -> ProviderResult<Option<StorageValue>> {
         let hashed_key = keccak256(storage_key);
         Ok(self
