@@ -197,8 +197,8 @@ impl OperationMetrics {
     }
 
     fn record_duration_per_item(&self, duration: Duration, count_usize: usize) {
-        if count_usize > 0
-            && let Some(count) = u32::try_from(count_usize).ok()
+        if count_usize > 0 &&
+            let Some(count) = u32::try_from(count_usize).ok()
         {
             self.duration_seconds.record_many(duration / count, count as usize);
         }
