@@ -27,3 +27,6 @@ pub use in_memory::{
 };
 
 pub mod db;
+
+pub mod metrics;
+pub use metrics::OpProofsStorageWithMetrics;
