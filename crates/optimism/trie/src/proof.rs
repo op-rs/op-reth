@@ -79,8 +79,8 @@ pub struct OpProofsTrieCursorFactory<Storage: OpProofsStorage> {
 }
 
 impl<Storage: OpProofsStorage> TrieCursorFactory for OpProofsTrieCursorFactory<Storage> {
-    type AccountTrieCursor = OpProofsTrieCursor<Storage::TrieCursor>;
-    type StorageTrieCursor = OpProofsTrieCursor<Storage::TrieCursor>;
+    type AccountTrieCursor = OpProofsTrieCursor<Storage::AccountTrieCursor>;
+    type StorageTrieCursor = OpProofsTrieCursor<Storage::StorageTrieCursor>;
 
     fn account_trie_cursor(&self) -> Result<Self::AccountTrieCursor, DatabaseError> {
         Ok(OpProofsTrieCursor::new(
