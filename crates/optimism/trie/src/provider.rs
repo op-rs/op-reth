@@ -8,6 +8,7 @@ use crate::{
     },
 };
 use alloy_primitives::keccak256;
+use derive_more::Constructor;
 use reth_primitives_traits::{Account, Bytecode};
 use reth_provider::{
     AccountReader, BlockHashReader, BytecodeReader, HashedPostStateProvider, ProviderError,
@@ -27,6 +28,7 @@ use reth_trie::{
 use std::fmt::Debug;
 
 /// State provider for external proofs storage.
+#[derive(Constructor)]
 pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
     /// Historical state provider for non-state related tasks.
     latest: Box<dyn StateProvider + 'a>,
