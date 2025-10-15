@@ -64,8 +64,6 @@ pub enum StorageOperation {
     HashedCursorSeek,
     /// Hashed cursor next
     HashedCursorNext,
-    /// Hashed cursor is_storage_empty
-    HashedCursorIsStorageEmpty,
 }
 
 impl StorageOperation {
@@ -82,7 +80,6 @@ impl StorageOperation {
             Self::TrieCursorCurrent => "trie_cursor_current",
             Self::HashedCursorSeek => "hashed_cursor_seek",
             Self::HashedCursorNext => "hashed_cursor_next",
-            Self::HashedCursorIsStorageEmpty => "hashed_cursor_is_storage_empty",
         }
     }
 }
@@ -227,7 +224,7 @@ pub struct BlockMetrics {
     pub hashed_storages_written_total: Counter,
 }
 
-/// Wrapper around OpProofsStorage that records metrics for all operations.
+/// Wrapper around [`OpProofsStorage`] that records metrics for all operations.
 #[derive(Debug, Clone)]
 pub struct OpProofsStorageWithMetrics<S> {
     storage: S,
@@ -236,7 +233,7 @@ pub struct OpProofsStorageWithMetrics<S> {
 
 impl<S> OpProofsStorageWithMetrics<S> {
     /// Create a new storage wrapper with metrics.
-    pub fn new(storage: S, metrics: Arc<StorageMetrics>) -> Self {
+    pub const fn new(storage: S, metrics: Arc<StorageMetrics>) -> Self {
         Self { storage, metrics }
     }
 
@@ -251,7 +248,7 @@ impl<S> OpProofsStorageWithMetrics<S> {
     }
 }
 
-/// Wrapper for OpProofsTrieCursor that records metrics.
+/// Wrapper for [`OpProofsTrieCursor`] that records metrics.
 #[derive(Debug)]
 pub struct TrieCursorWithMetrics<C> {
     cursor: C,
@@ -291,7 +288,7 @@ impl<C: OpProofsTrieCursor> OpProofsTrieCursor for TrieCursorWithMetrics<C> {
     }
 }
 
-/// Wrapper for OpProofsHashedCursor that records metrics.
+/// Wrapper for [`OpProofsHashedCursor`] that records metrics.
 #[derive(Debug)]
 pub struct HashedCursorWithMetrics<C> {
     cursor: C,
