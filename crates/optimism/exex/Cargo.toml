@@ -18,6 +18,7 @@ reth-node-types.workspace = true
 reth-node-api.workspace = true
 reth-provider.workspace = true
 reth-chainspec.workspace = true
+reth-optimism-primitives = { workspace = true, features = ["reth-codec", "serde-bincode-compat", "serde"] }
 
 # ethereum
 alloy-primitives.workspace = true
