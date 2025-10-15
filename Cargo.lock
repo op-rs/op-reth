@@ -9342,7 +9342,6 @@ name = "reth-optimism-exex"
 version = "1.8.2"
 dependencies = [
  "alloy-primitives",
- "clap",
  "derive_more",
  "eyre",
  "futures",

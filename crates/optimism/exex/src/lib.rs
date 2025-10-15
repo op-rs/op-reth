@@ -25,7 +25,7 @@ where
     ctx: ExExContext<Node>,
     /// The type of storage DB.
     #[expect(dead_code)]
-    db: ProofsStorage,
+    db_in_mem: bool,
     /// The path to the storage DB for proofs history.
     #[expect(dead_code)]
     db_path: Option<String>,
@@ -63,20 +63,5 @@ where
         }
 
         Ok(())
-    }
-}
-
-/// The type of storage DB for proofs history.
-#[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
-pub enum ProofsStorage {
-    /// MDBX
-    Mdbx,
-}
-
-impl std::fmt::Display for ProofsStorage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Mdbx => f.write_str("mdbx"),
-        }
     }
 }

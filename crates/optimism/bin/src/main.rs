@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
-use reth_optimism_exex::{OpProofsExEx, ProofsStorage};
+use reth_optimism_exex::OpProofsExEx;
 use reth_optimism_node::{args::RollupArgs, OpNode};
 use tracing::info;
 
@@ -22,11 +22,12 @@ struct Args {
 
     /// The storage DB for proofs history.
     #[arg(
-        long = "proofs-history.storage",
-        default_value_t = ProofsStorage::Mdbx,
-        value_name = "PROOFS_HISTORY_STORAGE"
+        long = "proofs-history.in_mem",
+        value_name = "PROOFS_HISTORY_STORAGE_IN_MEM",
+        conflicts_with = "proofs-history.storage-path",
+        default_value_t = true
     )]
-    pub proofs_history_storage: ProofsStorage,
+    pub proofs_history_storage_in_mem: bool,
 
     /// The path to the storage DB for proofs history.
     #[arg(long = "proofs-history.storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH")]
@@ -63,7 +64,7 @@ fn main() {
             .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
                 let proofs_helper = OpProofsExEx::new(
                     exex_context,
-                    args.proofs_history_storage,
+                    args.proofs_history_storage_in_mem,
                     args.proofs_history_storage_path,
                     args.proofs_history_window,
                 );
