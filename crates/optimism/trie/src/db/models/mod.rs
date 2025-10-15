@@ -12,7 +12,7 @@ pub use version::*;
 mod storage;
 pub use storage::*;
 
-use alloy_primitives::B256;
+use alloy_primitives::{B256, U256};
 use reth_db::{
     table::{DupSort, TableInfo},
     tables, TableSet, TableType, TableViewer,
@@ -37,7 +37,7 @@ tables! {
     /// Each entry is identified by a composite key combining the account’s hashed address and the
     /// compact-encoded trie path. Versions are tracked using block numbers as subkeys.
     table StorageTrieHistory {
-        type Key = StorageTrieSubKey;
+        type Key = StorageTrieKey;
         type Value = VersionedValue<BranchNodeCompact>;
         type SubKey = u64; // block number
     }
@@ -48,7 +48,7 @@ tables! {
     /// code hash, storage root).
     table HashedAccountHistory {
         type Key = B256;
-        type Value = VersionedValue<MaybeDeleted<Account>>;
+        type Value = VersionedValue<Account>;
         type SubKey = u64; // block number
     }
 
@@ -57,8 +57,8 @@ tables! {
     /// Each entry maps a composite key of (hashed address, storage key) to its stored value.
     /// Used for reconstructing contract storage at any historical block height.
     table HashedStorageHistory {
-        type Key = HashedStorageSubKey;
-        type Value = VersionedValue<B256>;
+        type Key = HashedStorageKey;
+        type Value = VersionedValue<StorageValue>;
         type SubKey = u64; // block number
     }
 
