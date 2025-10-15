@@ -9610,6 +9610,7 @@ dependencies = [
  "metrics",
  "reth-codecs",
  "reth-db",
+ "reth-db-api",
  "reth-evm",
  "reth-execution-errors",
  "reth-metrics",
