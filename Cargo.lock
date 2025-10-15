@@ -9614,6 +9614,7 @@ dependencies = [
  "eyre",
  "reth-codecs",
  "reth-db",
+ "reth-db-api",
  "reth-primitives-traits",
  "reth-trie",
  "serde",
