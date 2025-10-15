@@ -1,9 +1,9 @@
 use alloy_primitives::{B256, U256};
+use derive_more::{Constructor, From, Into};
 use reth_db::{
-    table::{Decode, Encode, Compress, Decompress},
+    table::{Compress, Decode, Decompress, Encode},
     DatabaseError,
 };
-use derive_more::{Constructor, From, Into};
 use reth_trie::StoredNibbles;
 use serde::{Deserialize, Serialize};
 
@@ -102,7 +102,7 @@ impl Decode for HashedStorageKey {
 
 /// Storage value wrapper for U256 values
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, From, Into, Constructor)]
-pub struct StorageValue (pub U256);
+pub struct StorageValue(pub U256);
 
 impl Compress for StorageValue {
     type Compressed = Vec<u8>;
