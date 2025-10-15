@@ -1,10 +1,15 @@
 //! Provides proof operation implementations for [`OpProofsStorage`].
 
+use crate::api::{
+    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
+    OpProofsTrieCursor as OpProofsDBTrieCursor,
+};
 use alloy_primitives::{
     keccak256,
     map::{B256Map, HashMap},
     Address, Bytes, B256, U256,
 };
+use derive_more::Constructor;
 use reth_db_api::DatabaseError;
 use reth_execution_errors::{StateProofError, StateRootError, StorageRootError, TrieWitnessError};
 use reth_primitives_traits::Account;
@@ -19,11 +24,6 @@ use reth_trie::{
     witness::TrieWitness,
     AccountProof, BranchNodeCompact, HashedPostState, HashedPostStateSorted, HashedStorage,
     MultiProof, MultiProofTargets, Nibbles, StateRoot, StorageMultiProof, StorageRoot, TrieInput,
-};
-
-use crate::api::{
-    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
-    OpProofsTrieCursor as OpProofsDBTrieCursor,
 };
 
 /// Manages reading storage or account trie nodes from [`OpProofsDBTrieCursor`].
@@ -43,7 +43,10 @@ impl From<OpProofsStorageError> for DatabaseError {
     }
 }
 
-impl<C: OpProofsDBTrieCursor + Send + Sync> TrieCursor for OpProofsTrieCursor<C> {
+impl<C> TrieCursor for OpProofsTrieCursor<C>
+where
+    C: OpProofsDBTrieCursor + Send + Sync,
+{
     fn seek_exact(
         &mut self,
         key: Nibbles,
@@ -68,17 +71,10 @@ impl<C: OpProofsDBTrieCursor + Send + Sync> TrieCursor for OpProofsTrieCursor<C>
 }
 
 /// Factory for creating trie cursors for [`OpProofsStorage`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Constructor)]
 pub struct OpProofsTrieCursorFactory<Storage: OpProofsStorage> {
     storage: Storage,
     block_number: u64,
-}
-
-impl<Storage: OpProofsStorage> OpProofsTrieCursorFactory<Storage> {
-    /// Creates a new `OpProofsTrieCursorFactory` instance.
-    pub const fn new(storage: Storage, block_number: u64) -> Self {
-        Self { storage, block_number }
-    }
 }
 
 impl<Storage: OpProofsStorage> TrieCursorFactory for OpProofsTrieCursorFactory<Storage> {
@@ -227,7 +223,7 @@ pub trait DatabaseProof<Storage> {
 impl<Storage: OpProofsStorage + Clone> DatabaseProof<Storage>
     for Proof<OpProofsTrieCursorFactory<Storage>, OpProofsHashedAccountCursorFactory<Storage>>
 {
-    /// Create a new [Proof] instance from [`OpProofsStorage`].
+    /// Create a new [`Proof`] instance from [`OpProofsStorage`].
     fn from_tx(storage: Storage, block_number: u64) -> Self {
         Self::new(
             OpProofsTrieCursorFactory::new(storage.clone(), block_number),
