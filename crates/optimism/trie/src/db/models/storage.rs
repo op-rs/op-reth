@@ -100,6 +100,7 @@ impl Decode for HashedStorageKey {
     }
 }
 
+/// Storage value wrapper for U256 values
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, From, Into, Constructor)]
 pub struct StorageValue (pub U256);
 

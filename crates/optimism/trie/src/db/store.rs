@@ -194,20 +194,19 @@ mod tests {
 
         let block_number = 0;
         let addr = B256::from([0xAA; 32]);
-        // Write a deletion (None) and ensure it’s persisted as MaybeDeleted(None)
+        let account = Account::default();
         store
-            .store_hashed_accounts(vec![(addr, None)], block_number)
+            .store_hashed_accounts(vec![(addr, Some(account))], block_number)
             .await
             .expect("write accounts");
 
-        // Read back via RO dup cursor
         let tx = store.env.tx().expect("ro tx");
         let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
         let vv = cur.seek_by_key_subkey(addr, block_number).expect("seek");
         let vv = vv.expect("entry exists");
 
         assert_eq!(vv.block_number, block_number);
-        assert!(vv.value.0.is_none(), "expected MaybeDeleted(None)");
+        assert_eq!(vv.value.0, Some(account));
     }
 
     #[tokio::test]
