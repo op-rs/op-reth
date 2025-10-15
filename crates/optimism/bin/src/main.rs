@@ -1,10 +1,14 @@
 #![allow(missing_docs, rustdoc::missing_crate_level_docs)]
 
 use clap::{builder::ArgPredicate, Parser};
+use futures_util::FutureExt;
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
 use reth_optimism_exex::OpProofsExEx;
 use reth_optimism_node::{args::RollupArgs, OpNode};
+use reth_optimism_trie::{db::MdbxProofsStorage, InMemoryProofsStorage};
 use tracing::info;
+
+use std::{path::PathBuf, sync::Arc};
 
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
@@ -42,11 +46,12 @@ struct Args {
         value_name = "PROOFS_HISTORY_STORAGE_PATH",
         required_if_eq("proofs-history.in_mem", "false")
     )]
-    pub proofs_history_storage_path: Option<String>,
+    pub proofs_history_storage_path: Option<PathBuf>,
 
     /// The window to span blocks for proofs history. Value is the number of blocks.
     /// Default is 1 month of blocks based on 2 seconds block time.
     /// 30 * 24 * 60 * 60 / 2 = `1_296_000`
+    // TODO: Pass this arg to the ExEx or remove it if not needed.
     #[arg(
         long = "proofs-history.window",
         default_value_t = 1_296_000,
@@ -73,13 +78,21 @@ fn main() {
         let handle = builder
             .node(OpNode::new(rollup_args))
             .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
-                let proofs_helper = OpProofsExEx::new(
-                    exex_context,
-                    args.proofs_history_storage_in_mem,
-                    args.proofs_history_storage_path,
-                    args.proofs_history_window,
-                );
-                Ok(proofs_helper.run())
+                if args.proofs_history_storage_in_mem {
+                    info!(target: "reth::cli", "Using in-memory storage for proofs history");
+
+                    let storage = InMemoryProofsStorage::new();
+                    Ok(OpProofsExEx::new(exex_context, Arc::new(storage)).run().boxed())
+                } else {
+                    let path = args
+                        .proofs_history_storage_path
+                        .expect("Path must be provided if not using in-memory storage");
+                    info!(target: "reth::cli", "Using on-disk storage for proofs history");
+
+                    let storage = MdbxProofsStorage::new(&path)
+                        .map_err(|e| eyre::eyre!("Failed to create MdbxProofsStorage: {e}"))?;
+                    Ok(OpProofsExEx::new(exex_context, Arc::new(storage)).run().boxed())
+                }
             })
             .launch_with_debug_capabilities()
             .await?;
