@@ -11,6 +11,7 @@ use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles};
 use std::{
     fmt::Debug,
+    future::Future,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -127,7 +128,7 @@ impl StorageMetrics {
     /// Record a storage operation with timing (async version).
     pub async fn record_operation_async<F, R>(&self, operation: StorageOperation, f: F) -> R
     where
-        F: std::future::Future<Output = R>,
+        F: Future<Output = R>,
     {
         let start = Instant::now();
         let result = f.await;
@@ -329,7 +330,7 @@ where
         updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
         let count = updates.len();
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let result = self.storage.store_account_branches(block_number, updates).await;
         let duration = start.elapsed();
 
@@ -352,7 +353,7 @@ where
         items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
         let count = items.len();
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let result = self.storage.store_storage_branches(block_number, hashed_address, items).await;
         let duration = start.elapsed();
 
@@ -374,7 +375,7 @@ where
         block_number: u64,
     ) -> OpProofsStorageResult<()> {
         let count = accounts.len();
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let result = self.storage.store_hashed_accounts(accounts, block_number).await;
         let duration = start.elapsed();
 
@@ -397,7 +398,7 @@ where
         block_number: u64,
     ) -> OpProofsStorageResult<()> {
         let count = storages.len();
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         let result =
             self.storage.store_hashed_storages(hashed_address, storages, block_number).await;
         let duration = start.elapsed();
