@@ -6188,11 +6188,11 @@ version = "1.8.2"
 dependencies = [
  "clap",
  "reth-cli-util",
- "reth-exex-external-proofs",
  "reth-optimism-chainspec",
  "reth-optimism-cli",
  "reth-optimism-consensus",
  "reth-optimism-evm",
+ "reth-optimism-exex",
  "reth-optimism-forks",
  "reth-optimism-node",
  "reth-optimism-payload-builder",
@@ -8559,33 +8559,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reth-exex-external-proofs"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "async-trait",
- "auto_impl",
- "bytes",
- "eyre",
- "futures",
- "futures-util",
- "reth-chainspec",
- "reth-db",
- "reth-db-api",
- "reth-exex",
- "reth-node-api",
- "reth-node-types",
- "reth-primitives-traits",
- "reth-provider",
- "reth-trie",
- "serde",
- "test-case",
- "thiserror 2.0.16",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "reth-exex-test-utils"
 version = "1.8.2"
 dependencies = [
@@ -9369,6 +9342,7 @@ name = "reth-optimism-exex"
 version = "1.8.2"
 dependencies = [
  "alloy-primitives",
+ "clap",
  "derive_more",
  "eyre",
  "futures",

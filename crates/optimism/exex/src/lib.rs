@@ -20,8 +20,18 @@ pub struct OpProofsExEx<Node>
 where
     Node: FullNodeComponents,
 {
+    /// The ExEx context containing the node related utilities e.g. provider, notifications,
+    /// events.
     ctx: ExExContext<Node>,
-    storage: Arc<InMemoryProofsStorage>,
+    /// The type of storage DB.
+    #[expect(dead_code)]
+    db: ProofsStorage,
+    /// The path to the storage DB for proofs history.
+    #[expect(dead_code)]
+    db_path: Option<String>,
+    /// The window to span past blocks for proofs history. Value is the number of blocks.
+    #[expect(dead_code)]
+    proofs_window: u64,
 }
 
 impl<Node, Primitives> OpProofsExEx<Node>
@@ -31,11 +41,14 @@ where
 {
     /// Main execution loop for the ExEx
     pub async fn run(mut self) -> eyre::Result<()> {
+        // TODO: support different storage types
+        let storage = Arc::new(InMemoryProofsStorage::new());
+
         let db_provider =
             self.ctx.provider().database_provider_ro()?.disable_long_read_transaction_safety();
         let db_tx = db_provider.into_tx();
         let ChainInfo { best_number, best_hash } = self.ctx.provider().chain_info()?;
-        BackfillJob::new(self.storage.clone(), &db_tx).run(best_number, best_hash).await?;
+        BackfillJob::new(storage.clone(), &db_tx).run(best_number, best_hash).await?;
 
         while let Some(notification) = self.ctx.notifications.try_next().await? {
             // match &notification {
@@ -50,5 +63,20 @@ where
         }
 
         Ok(())
+    }
+}
+
+/// The type of storage DB for proofs history.
+#[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
+pub enum ProofsStorage {
+    /// MDBX
+    Mdbx,
+}
+
+impl std::fmt::Display for ProofsStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Mdbx => f.write_str("mdbx"),
+        }
     }
 }

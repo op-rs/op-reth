@@ -1,28 +1,13 @@
 #![allow(missing_docs, rustdoc::missing_crate_level_docs)]
 
 use clap::Parser;
-use reth_exex_external_proofs::OpProofsExEx;
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
+use reth_optimism_exex::{OpProofsExEx, ProofsStorage};
 use reth_optimism_node::{args::RollupArgs, OpNode};
 use tracing::info;
 
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
-
-/// The storage DB for proofs history.
-#[derive(Debug, Clone, PartialEq, Eq, clap::ValueEnum)]
-enum ProofsHistoryStorage {
-    /// MDBX
-    Mdbx,
-}
-
-impl std::fmt::Display for ProofsHistoryStorage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Mdbx => f.write_str("mdbx"),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, clap::Args)]
 #[command(next_help_heading = "Proofs History")]
@@ -38,10 +23,10 @@ struct Args {
     /// The storage DB for proofs history.
     #[arg(
         long = "proofs-history.storage",
-        default_value_t = ProofsHistoryStorage::Mdbx,
+        default_value_t = ProofsStorage::Mdbx,
         value_name = "PROOFS_HISTORY_STORAGE"
     )]
-    pub proofs_history_storage: ProofsHistoryStorage,
+    pub proofs_history_storage: ProofsStorage,
 
     /// The path to the storage DB for proofs history.
     #[arg(long = "proofs-history.storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH")]
@@ -76,7 +61,12 @@ fn main() {
         let handle = builder
             .node(OpNode::new(rollup_args))
             .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
-                let proofs_helper = OpProofsExEx::new(exex_context);
+                let proofs_helper = OpProofsExEx::new(
+                    exex_context,
+                    args.proofs_history_storage,
+                    args.proofs_history_storage_path,
+                    args.proofs_history_window,
+                );
                 Ok(proofs_helper.run())
             })
             .launch_with_debug_capabilities()

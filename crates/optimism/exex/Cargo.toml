@@ -31,6 +31,7 @@ futures-util.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 derive_more.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
