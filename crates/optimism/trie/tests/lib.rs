@@ -1596,8 +1596,7 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStorage>(
     Ok(())
 }
 
-
-/// Test that pure deletions (nodes only in removed_nodes) are properly stored
+/// Test that pure deletions (nodes only in `removed_nodes`) are properly stored
 ///
 /// This test verifies that when a node appears only in `removed_nodes` (not in updates),
 /// it is properly stored as a deletion and subsequent queries return None for that path.
