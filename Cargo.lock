@@ -3748,6 +3748,7 @@ dependencies = [
  "metrics",
  "op-reth",
  "proptest",
+ "rand 0.9.2",
  "reth-chainspec",
  "reth-db",
  "reth-db-api",

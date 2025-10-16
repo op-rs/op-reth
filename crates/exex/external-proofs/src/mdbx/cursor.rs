@@ -2,20 +2,19 @@
 //!
 //! This module provides efficient cursors that merge versioned data from multiple blocks.
 //! The cursors use a streaming merge approach that processes data in a single pass.
-//!
-use std::fmt::Debug;
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
 use alloy_primitives::{B256, U256};
-use reth_db_api::cursor::{DbCursorRO, DbDupCursorRO};
-use reth_db_api::table::{DupSort, Table};
+use reth_db_api::{
+    cursor::{DbCursorRO, DbDupCursorRO},
+    table::{DupSort, Table},
+};
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
 
 use super::tables;
-use crate::mdbx::{HashedStorageSubKey, StorageBranchSubKey};
 use crate::{
-    mdbx::VersionedValue,
+    mdbx::{HashedStorageSubKey, StorageBranchSubKey, VersionedValue},
     storage::{
         OpProofsHashedCursor, OpProofsStorageError, OpProofsStorageResult, OpProofsTrieCursor,
     },
@@ -53,7 +52,8 @@ impl<
             .map_err(|e| OpProofsStorageError::Other(e.into()))?;
 
         if let Some(value) = seek_result {
-            // Found a value >= max_block_number, go back one to get the latest value <= max_block_number if value > max_block_number
+            // Found a value >= max_block_number, go back one to get the latest value <=
+            // max_block_number if value > max_block_number
             if value.block_number > self.max_block_number {
                 let res = Ok(self
                     .cursor
@@ -82,7 +82,8 @@ impl<
             return Ok(None);
         }
 
-        // Key exists, find the last dup entry (which will have the highest block_number < max_block_number)
+        // Key exists, find the last dup entry (which will have the highest block_number <
+        // max_block_number)
         let mut last = None;
         while let Some((key, value)) =
             self.cursor.next_dup().map_err(|e| OpProofsStorageError::Other(e.into()))?
@@ -92,7 +93,8 @@ impl<
                 break;
             }
 
-            // If the block number is greater than the max block number, we've found the last dup entry
+            // If the block number is greater than the max block number, we've found the last dup
+            // entry
             if value.block_number > self.max_block_number {
                 break;
             }
@@ -118,7 +120,7 @@ impl<
         target_path: T::Key,
     ) -> OpProofsStorageResult<Option<(T::Key, V)>> {
         // Seek to the next key >= target_path
-        let Some((mut key, _)) = self.cursor.seek(target_path)? else {
+        let Some((mut key, _)) = self.cursor.seek(target_path.clone())? else {
             // No keys >= target_path exist
             return Ok(None);
         };
@@ -167,8 +169,8 @@ impl<
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         Ok(self.get_latest_key_value(StoredNibbles(target_path))?.and_then(|entry| {
-            if let Some(val) = entry.1.value.0
-                && entry.0 .0 == target_path
+            if let Some(val) = entry.1.value.0 &&
+                entry.0 .0 == target_path
             {
                 Some((entry.0 .0, val))
             } else {
@@ -242,8 +244,8 @@ impl<
         let subkey = StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path));
 
         Ok(self.cursor.get_latest_key_value(subkey.clone())?.and_then(|entry| {
-            if let Some(val) = entry.1.value.0
-                && entry.0 == subkey
+            if let Some(val) = entry.1.value.0 &&
+                entry.0 == subkey
             {
                 Some((entry.0.path.0.clone(), val))
             } else {
@@ -378,7 +380,8 @@ impl<
             hashed_storage_key: target_path,
         };
 
-        // Find first entry >= target_path for this address (get_next_key_value returns non-deleted values)
+        // Find first entry >= target_path for this address (get_next_key_value returns non-deleted
+        // values)
         Ok(self.cursor.get_next_key_value(subkey)?.and_then(|(key, val)| {
             if key.hashed_address == self.hashed_address {
                 Some((key.hashed_storage_key, U256::from_be_slice(val.as_slice())))

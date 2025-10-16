@@ -1,7 +1,7 @@
 //! Backfill job for proofs storage. Handles storing the existing state into the proofs storage.
 
 use super::storage::OpProofsStorage;
-use alloy_primitives::{B256, U256};
+use alloy_primitives::{b256, B256, U256};
 use reth_db_api::{
     cursor::{DbCursorRO, DbDupCursorRO},
     tables,
@@ -11,7 +11,7 @@ use reth_db_api::{
 use reth_primitives_traits::{Account, StorageEntry};
 use reth_provider::DBProvider;
 use reth_trie::{BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey};
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, fmt::Debug, time::Instant};
 use tracing::info;
 
 /// Batch size threshold for storing entries during backfill
@@ -52,49 +52,16 @@ macro_rules! define_simple_cursor_iter {
     };
 }
 
-/// Macro to generate duplicate cursor iterators for tables with custom logic
-macro_rules! define_dup_cursor_iter {
-    ($iter_name:ident, $table:ty, $key_type:ty, $value_type:ty) => {
-        struct $iter_name<C>(C);
-
-        impl<C> $iter_name<C> {
-            const fn new(cursor: C) -> Self {
-                Self(cursor)
-            }
-        }
-
-        impl<C: DbDupCursorRO<$table> + DbCursorRO<$table>> Iterator for $iter_name<C> {
-            type Item = Result<($key_type, $value_type), DatabaseError>;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                // First try to get the next duplicate value
-                if let Some(res) = self.0.next_dup().transpose() {
-                    return Some(res);
-                }
-
-                // If no more duplicates, find the next key with values
-                let Some(Ok((next_key, _))) = self.0.next_no_dup().transpose() else {
-                    // If no more entries, return None
-                    return None;
-                };
-
-                // If found, seek to the first duplicate for this key
-                return self.0.seek(next_key).transpose();
-            }
-        }
-    };
-}
-
 // Generate iterators for all 4 table types
 define_simple_cursor_iter!(HashedAccountsIter, tables::HashedAccounts, B256, Account);
-define_dup_cursor_iter!(HashedStoragesIter, tables::HashedStorages, B256, StorageEntry);
+define_simple_cursor_iter!(HashedStoragesIter, tables::HashedStorages, B256, StorageEntry);
 define_simple_cursor_iter!(
     AccountsTrieIter,
     tables::AccountsTrie,
     StoredNibbles,
     BranchNodeCompact
 );
-define_dup_cursor_iter!(StoragesTrieIter, tables::StoragesTrie, B256, StorageTrieEntry);
+define_simple_cursor_iter!(StoragesTrieIter, tables::StoragesTrie, B256, StorageTrieEntry);
 
 // Create an iterator for HashedStorages that also returns the storage key
 struct HashedStoragesIterWithStorageKey<C>(HashedStoragesIter<C>);
@@ -182,8 +149,8 @@ impl<T> CompletionEstimatable for (B256, T) {
 async fn backfill<
     S: Iterator<Item = Result<(Key, Value), DatabaseError>>,
     F: Future<Output = eyre::Result<()>> + Send,
-    Key: CompletionEstimatable + Clone + 'static,
-    Value: Clone + 'static,
+    Key: CompletionEstimatable + Clone + Debug + 'static,
+    Value: Clone + Debug + 'static,
 >(
     name: &str,
     source: S,
@@ -239,14 +206,12 @@ async fn backfill<
             );
         }
 
-        if entries.len() >= storage_threshold {
-            // info!("Storing {} entries, total entries: {}", name, total_entries);
-            save_fn(entries).await?;
-            entries = Vec::new();
-        }
-
         // Signal cursor recreation needed
         if entries_since_cursor_recreation >= cursor_recreation_threshold {
+            println!(
+                "{} backfill: processed {} entries, cursor recreation suggested",
+                name, total_entries
+            );
             // info!(
             //     "{} backfill: processed {} entries, cursor recreation suggested",
             //     name, total_entries
@@ -256,6 +221,12 @@ async fn backfill<
                 save_fn(entries).await?;
                 return Ok((total_entries, Some(last_key.clone())));
             }
+        }
+
+        if entries.len() >= storage_threshold {
+            println!("Storing {} entries, total entries: {}", name, total_entries);
+            save_fn(entries).await?;
+            entries = Vec::new();
         }
     }
 
@@ -293,7 +264,6 @@ where
         // Seek to last processed key if resuming
         if let Some(ref key) = last_key {
             cursor.seek(*key)?;
-            cursor.next()?; // Skip the last processed entry
         }
 
         loop {
@@ -337,7 +307,6 @@ where
                     .cursor_read::<tables::HashedAccounts>()?;
 
                 cursor.seek(key)?;
-                cursor.next()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -363,7 +332,6 @@ where
         if let Some(ref key) = last_key {
             info!("Seeking to last processed key for hashed storage: {:?}", key);
             cursor.seek_by_key_subkey(key.0, key.1)?;
-            cursor.next_dup()?; // Skip the last processed entry
         }
 
         loop {
@@ -396,11 +364,16 @@ where
             )
             .await?;
 
+            println!("Processed {} entries for hashed storage", processed);
+
             total_processed += processed;
 
             // If we got a last key, we need to recreate cursor and continue
             if let Some(key) = new_last_key {
-                info!("Recreating cursor for hashed storage, total processed: {}", total_processed);
+                println!(
+                    "Recreating cursor for hashed storage, total processed: {}",
+                    total_processed
+                );
 
                 cursor = self
                     .provider
@@ -409,7 +382,6 @@ where
                     .cursor_dup_read::<tables::HashedStorages>()?;
 
                 cursor.seek_by_key_subkey(key.0, key.1)?;
-                cursor.next_dup()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -430,7 +402,6 @@ where
 
         if let Some(ref key) = last_key {
             cursor.seek(StoredNibbles(key.clone()))?;
-            cursor.next()?; // Skip the last processed entry
         }
 
         loop {
@@ -472,7 +443,6 @@ where
                     .cursor_read::<tables::AccountsTrie>()?;
 
                 cursor.seek(StoredNibbles(key.0.clone()))?;
-                cursor.next()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -498,7 +468,6 @@ where
         // Seek to last processed key if resuming
         if let Some(ref key) = last_key {
             cursor.seek_by_key_subkey(key.0, StoredNibblesSubKey(key.1))?;
-            cursor.next_dup()?; // Skip the last processed entry
         }
         loop {
             let source = StoragesTrieIter::new(cursor);
@@ -545,7 +514,6 @@ where
                     .cursor_dup_read::<tables::StoragesTrie>()?;
 
                 cursor.seek_by_key_subkey(key.0, StoredNibblesSubKey(key.1))?;
-                cursor.next_dup()?; // Skip the last processed entry
             } else {
                 // No more entries, we're done
                 break;
@@ -558,10 +526,13 @@ where
 
     /// Run complete backfill of all preimage data
     async fn backfill_trie(&self) -> eyre::Result<()> {
+        // 0xfa20ab5b5127e4d3eff33dfa7aef06cd9c821eccf7307445e6df385a8a7e99fa, storage key =
+        // b05289c3e8a3470d3ec787e451bc5dca755037715bf1d8bd0f667fc6fc381cf5
+
+        self.backfill_accounts_trie().await?;
+        self.backfill_storages_trie().await?;
         self.backfill_hashed_accounts().await?;
         self.backfill_hashed_storages().await?;
-        self.backfill_storages_trie().await?;
-        self.backfill_accounts_trie().await?;
 
         Ok(())
     }
@@ -588,7 +559,7 @@ mod tests {
     use reth_db::Database;
     use reth_db_api::{cursor::DbCursorRW, transaction::DbTxMut};
     use reth_primitives_traits::Account;
-    use reth_provider::test_utils::create_test_provider_factory;
+    use reth_provider::{test_utils::create_test_provider_factory, DatabaseProviderFactory};
     use reth_trie::{BranchNodeCompact, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey};
     use std::sync::Arc;
 

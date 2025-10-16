@@ -13,8 +13,7 @@ use crate::{
     mdbx::cursor::{MdbxAccountCursor, MdbxStorageCursor},
     storage::{BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult},
 };
-use alloy_primitives::map::HashMap;
-use alloy_primitives::{B256, U256};
+use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::{
     cursor::DbDupCursorRW,
     mdbx::{init_db_for, DatabaseArguments},
@@ -54,9 +53,8 @@ impl MdbxOpProofsStorage<DatabaseEnv> {
     /// Open or create external storage database at the specified path
     ///
     /// # Arguments
-    /// * `path` - Path to the external storage database directory
-    ///            (e.g., `/path/to/datadir/external-proofs/`)
-    ///
+    /// * `path` - Path to the external storage database directory (e.g.,
+    ///   `/path/to/datadir/external-proofs/`)
     pub fn new(db: DatabaseEnv) -> OpProofsStorageResult<Self> {
         Ok(Self { db })
     }
@@ -104,6 +102,7 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         tx: &TX,
         block_number: u64,
         updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        append: bool,
     ) -> OpProofsStorageResult<()> {
         // Store branches using DupSort (key=path, value=VersionedValue with block_number)
         {
@@ -114,7 +113,15 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
 
                 let maybe_deleted = codec::MaybeDeleted::from(branch.clone());
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.append_dup(key, value)?;
+
+                if append {
+                    cursor.append_dup(key, value)?;
+                } else {
+                    // For DupSort tables, seek first to position cursor at the primary key
+                    // This allows upsert to insert the duplicate value in sorted order by
+                    // block_number
+                    cursor.upsert(key, &value)?;
+                }
             }
         }
 
@@ -146,8 +153,10 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         block_number: u64,
         hashed_address: B256,
         items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        append: bool,
     ) -> OpProofsStorageResult<()> {
-        // Store branches using DupSort (key=(address, path), value=VersionedValue with block_number)
+        // Store branches using DupSort (key=(address, path), value=VersionedValue with
+        // block_number)
         {
             let mut cursor = tx.cursor_dup_write::<tables::ExternalStorageBranches>()?;
 
@@ -157,7 +166,15 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
 
                 let maybe_deleted = codec::MaybeDeleted::from(branch.clone());
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.append_dup(key, value)?;
+
+                if append {
+                    cursor.append_dup(key, value)?;
+                } else {
+                    // For DupSort tables, seek first to position cursor at the primary key
+                    // This allows upsert to insert the duplicate value in sorted order by
+                    // block_number
+                    cursor.upsert(key, &value)?;
+                }
             }
         }
 
@@ -189,6 +206,7 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         tx: &TX,
         accounts: Vec<(B256, Option<Account>)>,
         block_number: u64,
+        append: bool,
     ) -> OpProofsStorageResult<()> {
         // Store accounts using DupSort (key=hashed_address, value=VersionedValue with block_number)
         {
@@ -197,7 +215,14 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
             for (address, account) in &accounts {
                 let maybe_deleted = codec::MaybeDeleted::from(account.clone());
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.append_dup(*address, value)?;
+                if append {
+                    cursor.append_dup(*address, value)?;
+                } else {
+                    // For DupSort tables, seek first to position cursor at the primary key
+                    // This allows upsert to insert the duplicate value in sorted order by
+                    // block_number
+                    cursor.upsert(*address, &value)?;
+                }
             }
         }
 
@@ -227,8 +252,10 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         hashed_address: B256,
         storages: Vec<(B256, U256)>,
         block_number: u64,
+        append: bool,
     ) -> OpProofsStorageResult<()> {
-        // Store storage values using DupSort (key=(address, storage_key), value=VersionedValue with block_number)
+        // Store storage values using DupSort (key=(address, storage_key), value=VersionedValue with
+        // block_number)
         {
             let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedStorages>()?;
 
@@ -244,7 +271,14 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
                     codec::MaybeDeleted::from(Some(value_b256))
                 };
                 let value = codec::VersionedValue::new(block_number, maybe_deleted);
-                cursor.append_dup(key, value)?;
+                if append {
+                    cursor.append_dup(key, value)?;
+                } else {
+                    // For DupSort tables, seek first to position cursor at the primary key
+                    // This allows upsert to insert the duplicate value in sorted order by
+                    // block_number
+                    cursor.upsert(key, &value)?;
+                }
             }
         }
 
@@ -296,7 +330,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
 
         let tx = self.db.tx_mut()?;
 
-        self.store_account_branches_inner(&tx, block_number, updates).await?;
+        self.store_account_branches_inner(&tx, block_number, updates, true).await?;
 
         tx.commit()?;
 
@@ -314,7 +348,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
 
         let tx = self.db.tx_mut()?;
 
-        self.store_storage_branches_inner(&tx, block_number, hashed_address, items).await?;
+        self.store_storage_branches_inner(&tx, block_number, hashed_address, items, true).await?;
 
         tx.commit()?;
 
@@ -331,7 +365,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
 
         let tx = self.db.tx_mut()?;
 
-        self.store_hashed_accounts_inner(&tx, accounts, block_number).await?;
+        self.store_hashed_accounts_inner(&tx, accounts, block_number, true).await?;
 
         tx.commit()?;
 
@@ -349,7 +383,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
 
         let tx = self.db.tx_mut()?;
 
-        self.store_hashed_storages_inner(&tx, hashed_address, storages, block_number).await?;
+        self.store_hashed_storages_inner(&tx, hashed_address, storages, block_number, true).await?;
 
         tx.commit()?;
 
@@ -391,18 +425,18 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
                 account_updates_map.insert(*path, Some(node.clone()));
             }
 
-            // Convert to sorted vec for MDBX append operation
+            // Convert to sorted vec
             let mut account_updates: Vec<_> = account_updates_map.into_iter().collect();
             account_updates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
             account_trie_updates_written += account_updates.len();
-            self.store_account_branches_inner(&tx, block_number, account_updates).await?;
+            self.store_account_branches_inner(&tx, block_number, account_updates, false).await?;
         }
 
         // Store storage trie branches
         for (address, storage_trie) in trie_updates.storage_tries {
             // Build HashMap: first add removals as None, then apply updates (which take precedence)
-            if !storage_trie.removed_nodes_ref().is_empty()
-                || !storage_trie.storage_nodes.is_empty()
+            if !storage_trie.removed_nodes_ref().is_empty() ||
+                !storage_trie.storage_nodes.is_empty()
             {
                 let mut storage_updates_map: HashMap<Nibbles, Option<BranchNodeCompact>> =
                     HashMap::default();
@@ -417,13 +451,19 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
                     storage_updates_map.insert(*path, Some(node.clone()));
                 }
 
-                // Convert to sorted vec for MDBX append operation
+                // Convert to sorted vec
                 let mut storage_updates: Vec<_> = storage_updates_map.into_iter().collect();
                 storage_updates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
                 storage_trie_updates_written += storage_updates.len();
-                self.store_storage_branches_inner(&tx, block_number, address, storage_updates)
-                    .await?;
+                self.store_storage_branches_inner(
+                    &tx,
+                    block_number,
+                    address,
+                    storage_updates,
+                    false,
+                )
+                .await?;
             }
         }
 
@@ -431,7 +471,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
         if !post_state.accounts.is_empty() {
             let accounts: Vec<_> = post_state.accounts.into_iter().collect();
             hashed_accounts_written += accounts.len();
-            self.store_hashed_accounts_inner(&tx, accounts, block_number).await?;
+            self.store_hashed_accounts_inner(&tx, accounts, block_number, false).await?;
         }
 
         // Store hashed storage
@@ -439,7 +479,8 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
             if !storage.storage.is_empty() {
                 let storages: Vec<_> = storage.storage.into_iter().collect();
                 hashed_storages_written += storages.len();
-                self.store_hashed_storages_inner(&tx, address, storages, block_number).await?;
+                self.store_hashed_storages_inner(&tx, address, storages, block_number, false)
+                    .await?;
             }
         }
 

@@ -53,11 +53,16 @@ tracing.workspace = true
 [dev-dependencies]
 reth-db = { workspace = true, features = ["test-utils"] }
 reth-provider = { workspace = true, features = ["test-utils"] }
-tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = [
+    "test-util",
+    "rt-multi-thread",
+    "macros",
+] }
 test-case.workspace = true
 futures.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 proptest.workspace = true
+rand.workspace = true
 
 [features]
 test-utils = [

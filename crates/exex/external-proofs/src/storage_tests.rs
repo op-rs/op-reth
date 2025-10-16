@@ -996,6 +996,52 @@ mod tests {
         Ok(())
     }
 
+    /// Test storage trie zero value deletion
+    #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+    #[test_case(MdbxOpProofsStorage::new_test().unwrap(); "MDBX")]
+    #[tokio::test]
+    async fn test_storage_trie_zero_value_deletion<S: OpProofsStorage>(
+        storage: S,
+    ) -> Result<(), OpProofsStorageError> {
+        let hashed_address = B256::repeat_byte(0x01);
+        let prev_storage_key = nibbles_from(vec![0x02]);
+        let storage_key = nibbles_from(vec![0x03]);
+
+        let branch = create_test_branch();
+
+        // Store non-zero value
+        storage
+            .store_storage_branches(
+                50,
+                hashed_address,
+                vec![(prev_storage_key, Some(branch.clone())), (storage_key, Some(branch.clone()))],
+            )
+            .await?;
+
+        // "Delete" by storing zero value
+        storage.store_storage_branches(100, hashed_address, vec![(storage_key, None)]).await?;
+
+        // Cursor before deletion should see the value
+        let mut cursor75 = storage.storage_trie_cursor(hashed_address, 75)?;
+        let result75 = cursor75.seek(storage_key)?.unwrap();
+        assert_eq!(result75.1, branch);
+
+        // Cursor after deletion should NOT see the entry (zero values are skipped)
+        let mut cursor150 = storage.storage_trie_cursor(hashed_address, 150)?;
+        let result150 = cursor150.seek(storage_key)?;
+        assert!(result150.is_none(), "Zero values should be skipped/deleted");
+
+        // next() should skip the zero value
+        let mut cursor150_iter = storage.storage_trie_cursor(hashed_address, 150)?;
+        let mut count = 0;
+        while cursor150_iter.next()?.is_some() {
+            count += 1;
+        }
+        assert_eq!(count, 1); // Should only see one entry
+
+        Ok(())
+    }
+
     /// Test storage zero value deletion
     #[test_case(InMemoryProofsStorage::new(); "InMemory")]
     #[test_case(MdbxOpProofsStorage::new_test().unwrap(); "MDBX")]
@@ -1004,11 +1050,16 @@ mod tests {
         storage: S,
     ) -> Result<(), OpProofsStorageError> {
         let hashed_address = B256::repeat_byte(0x01);
+        let prev_storage_key = B256::repeat_byte(0x02);
         let storage_key = B256::repeat_byte(0x10);
 
         // Store non-zero value
         storage
-            .store_hashed_storages(hashed_address, vec![(storage_key, U256::from(100))], 50)
+            .store_hashed_storages(
+                hashed_address,
+                vec![(prev_storage_key, U256::from(100)), (storage_key, U256::from(100))],
+                50,
+            )
             .await?;
 
         // "Delete" by storing zero value
@@ -1023,6 +1074,15 @@ mod tests {
         let mut cursor150 = storage.storage_hashed_cursor(hashed_address, 150)?;
         let result150 = cursor150.seek(storage_key)?;
         assert!(result150.is_none(), "Zero values should be skipped/deleted");
+
+        // next() should skip the zero value
+        let mut cursor150_iter = storage.storage_hashed_cursor(hashed_address, 150)?;
+
+        let mut count = 0;
+        while cursor150_iter.next()?.is_some() {
+            count += 1;
+        }
+        assert_eq!(count, 1); // Should only see one entry
 
         Ok(())
     }
@@ -1905,6 +1965,485 @@ mod tests {
             fetched_101.post_state.accounts.contains_key(&new_account_addr),
             "New account should be in post_state"
         );
+
+        Ok(())
+    }
+
+    /// Test block number ordering with many random updates using store_trie_updates
+    ///
+    /// This test creates many branch nodes via store_trie_updates, stores them OUT OF ORDER,
+    /// and verifies that queries at different block numbers return the correct version.
+    /// This is designed to catch bugs where `append_dup` is used instead of `upsert` in
+    /// store_trie_updates, which would fail when blocks aren't stored in strict ascending order.
+    #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+    #[test_case(MdbxOpProofsStorage::new_test().unwrap(); "MDBX")]
+    #[tokio::test]
+    async fn test_block_number_ordering_stress<S: OpProofsStorage>(
+        storage: S,
+    ) -> Result<(), OpProofsStorageError> {
+        use rand::{Rng, SeedableRng};
+
+        // Use a fixed seed for reproducibility
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Create a set of paths to work with
+        let num_paths = 50;
+        let num_blocks = 100;
+        let mut paths = Vec::new();
+        for i in 0..num_paths {
+            paths.push(nibbles_from(vec![
+                (i % 16) as u8,
+                ((i / 16) % 16) as u8,
+                ((i / 256) % 16) as u8,
+            ]));
+        }
+
+        // Track the expected state at each block for each path
+        // None means deleted, Some(branch_variant) means present with that variant
+        let mut block_updates: HashMap<u64, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
+            HashMap::default();
+
+        // Initialize all paths at block 10
+        let initial_branch = create_test_branch();
+        for path in &paths {
+            block_updates.entry(10).or_default().push((*path, Some(initial_branch.clone())));
+        }
+
+        // For each subsequent block, randomly update/delete some paths
+        for block in 11..=num_blocks {
+            // Randomly select which paths to update in this block
+            let num_updates = rng.random_range(5..=20);
+            let mut selected_indices = std::collections::HashSet::new();
+            while selected_indices.len() < num_updates {
+                let idx = rng.random_range(0..num_paths);
+                selected_indices.insert(idx);
+            }
+
+            for idx in selected_indices {
+                let path = paths[idx];
+                let operation = rng.random_range(0..10);
+                if operation < 3 {
+                    // 30% chance: Delete the path
+                    block_updates.entry(block).or_default().push((path, None));
+                } else if operation < 7 {
+                    // 40% chance: Update with variant branch
+                    let variant_branch = create_test_branch_variant();
+                    block_updates.entry(block).or_default().push((path, Some(variant_branch)));
+                } else {
+                    // 30% chance: Update with initial branch
+                    let initial_branch = create_test_branch();
+                    block_updates.entry(block).or_default().push((path, Some(initial_branch)));
+                }
+            }
+        }
+
+        // Store blocks in RANDOM ORDER to expose append_dup bug
+        let mut block_numbers: Vec<u64> = (10..=num_blocks).collect();
+        for i in (1..block_numbers.len()).rev() {
+            let j = rng.random_range(0..=i);
+            block_numbers.swap(i, j);
+        }
+
+        // Store using store_trie_updates (not store_account_branches)
+        for block_number in &block_numbers {
+            if let Some(updates) = block_updates.get(block_number) {
+                let mut trie_updates = TrieUpdates::default();
+                for (path, branch_opt) in updates {
+                    if let Some(branch) = branch_opt {
+                        trie_updates.account_nodes.insert(*path, branch.clone());
+                    } else {
+                        trie_updates.removed_nodes.insert(*path);
+                    }
+                }
+
+                let block_state_diff =
+                    BlockStateDiff { trie_updates, post_state: HashedPostState::default() };
+
+                storage.store_trie_updates(*block_number, block_state_diff).await?;
+            }
+        }
+
+        // Build the cumulative state at each block (applying updates in chronological order)
+        let mut cumulative_state: HashMap<u64, HashMap<Nibbles, Option<u8>>> = HashMap::default();
+        for block in 10..=num_blocks {
+            let mut state = if block == 10 {
+                HashMap::default()
+            } else {
+                cumulative_state.get(&(block - 1)).cloned().unwrap_or_default()
+            };
+
+            // Apply changes at this block
+            if let Some(updates) = block_updates.get(&block) {
+                for (path, branch_opt) in updates {
+                    let variant = if let Some(branch) = branch_opt {
+                        // Determine which variant it is
+                        if branch.state_mask == create_test_branch().state_mask {
+                            Some(0) // initial
+                        } else {
+                            Some(1) // variant
+                        }
+                    } else {
+                        None // deleted
+                    };
+                    state.insert(*path, variant);
+                }
+            }
+
+            cumulative_state.insert(block, state);
+        }
+
+        // Now verify that querying at each block returns the correct state
+        for query_block in 10..=num_blocks {
+            let mut cursor = storage.account_trie_cursor(query_block)?;
+            let expected = cumulative_state.get(&query_block).unwrap();
+
+            // Check each path individually
+            for path in &paths {
+                let result = cursor.seek_exact(*path)?;
+                let expected_value = expected.get(path);
+
+                match expected_value {
+                    Some(Some(variant)) => {
+                        assert!(
+                            result.is_some(),
+                            "Block {}: Path {:?} should exist but was not found",
+                            query_block,
+                            path
+                        );
+                        let (found_path, found_branch) = result.unwrap();
+                        assert_eq!(found_path, *path);
+
+                        // Verify it's the correct variant
+                        let expected_branch = if *variant == 0 {
+                            create_test_branch()
+                        } else {
+                            create_test_branch_variant()
+                        };
+                        assert_eq!(
+                            found_branch.state_mask, expected_branch.state_mask,
+                            "Block {}: Path {:?} has wrong variant (expected {}, found mask {:?})",
+                            query_block, path, variant, found_branch.state_mask
+                        );
+                    }
+                    Some(None) => {
+                        assert!(
+                            result.is_none(),
+                            "Block {}: Path {:?} should be deleted but was found with value {:?}",
+                            query_block,
+                            path,
+                            result
+                        );
+                    }
+                    None => {
+                        // Path has never been set at this block, should not exist
+                        assert!(
+                            result.is_none(),
+                            "Block {}: Path {:?} should not exist but was found with value {:?}",
+                            query_block,
+                            path,
+                            result
+                        );
+                    }
+                }
+            }
+
+            // Verify iteration returns all non-deleted paths
+            let mut cursor_iter = storage.account_trie_cursor(query_block)?;
+            let mut found_paths = Vec::new();
+            while let Some((path, _)) = cursor_iter.next()? {
+                found_paths.push(path);
+            }
+
+            let expected_paths: Vec<_> = expected
+                .iter()
+                .filter_map(
+                    |(path, value)| {
+                        if matches!(value, Some(_)) {
+                            Some(*path)
+                        } else {
+                            None
+                        }
+                    },
+                )
+                .collect();
+
+            assert_eq!(
+                found_paths.len(),
+                expected_paths.len(),
+                "Block {}: Iteration found {} paths but expected {}",
+                query_block,
+                found_paths.len(),
+                expected_paths.len()
+            );
+
+            // Verify all expected paths are in found_paths
+            for expected_path in &expected_paths {
+                assert!(
+                    found_paths.contains(expected_path),
+                    "Block {}: Expected path {:?} not found in iteration",
+                    query_block,
+                    expected_path
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Test block number ordering with storage branches
+    ///
+    /// Similar to the account branch test, but for storage branches which have both
+    /// an address and a path component in the key.
+    #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+    #[test_case(MdbxOpProofsStorage::new_test().unwrap(); "MDBX")]
+    #[tokio::test]
+    async fn test_storage_block_number_ordering_stress<S: OpProofsStorage>(
+        storage: S,
+    ) -> Result<(), OpProofsStorageError> {
+        use rand::{Rng, SeedableRng};
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(123);
+
+        // Create multiple addresses
+        let addresses =
+            vec![B256::repeat_byte(0x01), B256::repeat_byte(0x02), B256::repeat_byte(0x03)];
+
+        // Create paths for each address
+        let num_paths = 20;
+        let num_blocks = 50;
+        let mut paths = Vec::new();
+        for i in 0..num_paths {
+            paths.push(nibbles_from(vec![(i % 16) as u8, ((i / 16) % 16) as u8]));
+        }
+
+        // Track expected state: (address, path) -> block -> Option<variant>
+        let mut expected_state: HashMap<(B256, Nibbles), HashMap<u64, Option<u8>>> =
+            HashMap::default();
+
+        // Initialize all combinations at block 10
+        let initial_branch = create_test_branch();
+        for addr in &addresses {
+            for path in &paths {
+                storage
+                    .store_storage_branches(10, *addr, vec![(*path, Some(initial_branch.clone()))])
+                    .await?;
+                expected_state.entry((*addr, *path)).or_default().insert(10, Some(0));
+            }
+        }
+
+        // Randomly update storage branches across blocks
+        for block in 11..=num_blocks {
+            // For each address, randomly update some paths
+            for addr in &addresses {
+                let num_updates = rng.random_range(3..=8);
+                let mut selected_indices = std::collections::HashSet::new();
+                while selected_indices.len() < num_updates {
+                    let idx = rng.random_range(0..num_paths);
+                    selected_indices.insert(idx);
+                }
+
+                let mut updates = Vec::new();
+                for idx in selected_indices {
+                    let path = paths[idx];
+                    let operation = rng.random_range(0..10);
+                    if operation < 2 {
+                        // 20% chance: Delete
+                        updates.push((path, None));
+                        expected_state.entry((*addr, path)).or_default().insert(block, None);
+                    } else if operation < 6 {
+                        // 40% chance: Variant
+                        let variant_branch = create_test_branch_variant();
+                        updates.push((path, Some(variant_branch)));
+                        expected_state.entry((*addr, path)).or_default().insert(block, Some(1));
+                    } else {
+                        // 40% chance: Initial
+                        let initial_branch = create_test_branch();
+                        updates.push((path, Some(initial_branch)));
+                        expected_state.entry((*addr, path)).or_default().insert(block, Some(0));
+                    }
+                }
+
+                if !updates.is_empty() {
+                    storage.store_storage_branches(block, *addr, updates).await?;
+                }
+            }
+        }
+
+        // Verify results at each block
+        for query_block in 10..=num_blocks {
+            for addr in &addresses {
+                let mut cursor = storage.storage_trie_cursor(*addr, query_block)?;
+
+                for path in &paths {
+                    // Find the latest value up to query_block
+                    let mut latest_value = None;
+                    if let Some(block_values) = expected_state.get(&(*addr, *path)) {
+                        for block in 10..=query_block {
+                            if let Some(value) = block_values.get(&block) {
+                                latest_value = Some(*value);
+                            }
+                        }
+                    }
+
+                    let result = cursor.seek_exact(*path)?;
+
+                    match latest_value {
+                        Some(Some(variant)) => {
+                            assert!(
+                                result.is_some(),
+                                "Block {}, Addr {:?}, Path {:?}: Expected variant {} but not found",
+                                query_block,
+                                addr,
+                                path,
+                                variant
+                            );
+                            let (found_path, found_branch) = result.unwrap();
+                            assert_eq!(found_path, *path);
+
+                            let expected_branch = if variant == 0 {
+                                create_test_branch()
+                            } else {
+                                create_test_branch_variant()
+                            };
+                            assert_eq!(
+                                found_branch.state_mask, expected_branch.state_mask,
+                                "Block {}, Addr {:?}, Path {:?}: Wrong variant",
+                                query_block, addr, path
+                            );
+                        }
+                        Some(None) | None => {
+                            assert!(
+                                result.is_none(),
+                                "Block {}, Addr {:?}, Path {:?}: Should be deleted",
+                                query_block,
+                                addr,
+                                path
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Test hashed account block number ordering with many updates
+    ///
+    /// Tests that hashed accounts are correctly versioned across blocks even when
+    /// the same address is updated multiple times.
+    #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+    #[test_case(MdbxOpProofsStorage::new_test().unwrap(); "MDBX")]
+    #[tokio::test]
+    async fn test_hashed_account_block_ordering_stress<S: OpProofsStorage>(
+        storage: S,
+    ) -> Result<(), OpProofsStorageError> {
+        use rand::{Rng, SeedableRng};
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(456);
+
+        // Create a set of account addresses
+        let num_accounts = 30;
+        let num_blocks = 50;
+        let mut addresses = Vec::new();
+        for i in 0..num_accounts {
+            addresses.push(B256::from([i as u8; 32]));
+        }
+
+        // Track expected state: address -> block -> Option<(nonce, balance)>
+        let mut expected_state: HashMap<B256, HashMap<u64, Option<(u64, u64)>>> =
+            HashMap::default();
+
+        // Initialize all accounts at block 10
+        for (i, addr) in addresses.iter().enumerate() {
+            let account = create_test_account_with_values(i as u64, i as u64 * 100, 0xAA);
+            storage.store_hashed_accounts(vec![(*addr, Some(account))], 10).await?;
+            expected_state.entry(*addr).or_default().insert(10, Some((i as u64, i as u64 * 100)));
+        }
+
+        // Randomly update accounts across blocks
+        for block in 11..=num_blocks {
+            let num_updates = rng.random_range(8..=15);
+            let mut selected_indices = std::collections::HashSet::new();
+            while selected_indices.len() < num_updates {
+                let idx = rng.random_range(0..num_accounts);
+                selected_indices.insert(idx);
+            }
+
+            let mut updates = Vec::new();
+            for idx in selected_indices {
+                let addr = addresses[idx];
+                let operation = rng.random_range(0..10);
+                if operation < 2 {
+                    // 20% chance: Delete account
+                    updates.push((addr, None));
+                    expected_state.entry(addr).or_default().insert(block, None);
+                } else {
+                    // 80% chance: Update account with new values
+                    let nonce = block * 10 + rng.random_range(0..10);
+                    let balance = block * 1000 + rng.random_range(0..1000);
+                    let account = create_test_account_with_values(nonce, balance, 0xBB);
+                    updates.push((addr, Some(account)));
+                    expected_state.entry(addr).or_default().insert(block, Some((nonce, balance)));
+                }
+            }
+
+            storage.store_hashed_accounts(updates, block).await?;
+        }
+
+        // Verify results at each block
+        for query_block in 10..=num_blocks {
+            let mut cursor = storage.account_hashed_cursor(query_block)?;
+
+            for addr in &addresses {
+                // Find the latest value up to query_block
+                let mut latest_value = None;
+                if let Some(block_values) = expected_state.get(addr) {
+                    for block in 10..=query_block {
+                        if let Some(value) = block_values.get(&block) {
+                            latest_value = Some(*value);
+                        }
+                    }
+                }
+
+                let result = cursor.seek(*addr)?;
+
+                match latest_value {
+                    Some(Some((expected_nonce, expected_balance))) => {
+                        assert!(
+                            result.is_some(),
+                            "Block {}, Addr {:?}: Account should exist",
+                            query_block,
+                            addr
+                        );
+                        let (found_addr, found_account) = result.unwrap();
+                        assert_eq!(found_addr, *addr);
+                        assert_eq!(
+                            found_account.nonce, expected_nonce,
+                            "Block {}, Addr {:?}: Wrong nonce",
+                            query_block, addr
+                        );
+                        assert_eq!(
+                            found_account.balance,
+                            U256::from(expected_balance),
+                            "Block {}, Addr {:?}: Wrong balance",
+                            query_block,
+                            addr
+                        );
+                    }
+                    Some(None) | None => {
+                        // Account should be deleted or not exist
+                        if let Some((found_addr, _)) = result {
+                            assert_ne!(
+                                found_addr, *addr,
+                                "Block {}, Addr {:?}: Account should be deleted",
+                                query_block, addr
+                            );
+                        }
+                    }
+                }
+            }
+        }
 
         Ok(())
     }

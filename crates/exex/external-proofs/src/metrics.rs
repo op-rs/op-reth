@@ -1,39 +1,10 @@
 //! Metrics for external proofs storage operations.
 
-use metrics::{describe_histogram, Counter, Histogram};
+use alloy_primitives::map::HashMap;
+use metrics::{Counter, Histogram};
 use reth_metrics::Metrics;
-use rustc_hash::FxHashMap;
 use std::time::{Duration, Instant};
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
-
-/// Describe external proofs metrics for Prometheus
-pub fn describe_external_proofs_metrics() {
-    describe_histogram!(
-        "external_proofs.storage.operation.duration_seconds",
-        metrics::Unit::Seconds,
-        "Duration of storage operations"
-    );
-    describe_histogram!(
-        "external_proofs.block.total_duration_seconds",
-        metrics::Unit::Seconds,
-        "Total time to process a block"
-    );
-    describe_histogram!(
-        "external_proofs.block.execution_duration_seconds",
-        metrics::Unit::Seconds,
-        "Time spent executing block in EVM"
-    );
-    describe_histogram!(
-        "external_proofs.block.state_root_duration_seconds",
-        metrics::Unit::Seconds,
-        "Time spent calculating state root"
-    );
-    describe_histogram!(
-        "external_proofs.block.write_duration_seconds",
-        metrics::Unit::Seconds,
-        "Time spent writing trie updates"
-    );
-}
 
 /// Context in which a storage operation is performed.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, EnumCount, EnumIter)]
@@ -46,8 +17,6 @@ pub enum OperationContext {
     Write,
     /// Storage operations for metadata (block number queries, etc.)
     Metadata,
-    /// Storage operations without specific context
-    None,
 }
 
 impl OperationContext {
@@ -58,7 +27,6 @@ impl OperationContext {
             Self::StateRoot => "state_root",
             Self::Write => "write",
             Self::Metadata => "metadata",
-            Self::None => "none",
         }
     }
 }
@@ -66,49 +34,27 @@ impl OperationContext {
 /// Types of storage operations that can be tracked.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, EnumCount, EnumIter)]
 pub enum StorageOperation {
-    /// Store account trie branches
-    StoreAccountBranches,
-    /// Store storage trie branches
-    StoreStorageBranches,
-    /// Store hashed accounts
-    StoreHashedAccounts,
-    /// Store hashed storages
-    StoreHashedStorages,
-    /// Get earliest block number
-    GetEarliestBlockNumber,
-    /// Get latest block number
-    GetLatestBlockNumber,
-    /// Get storage trie cursor
-    StorageTrieCursor,
-    /// Get account trie cursor
-    AccountTrieCursor,
-    /// Get storage hashed cursor
-    StorageHashedCursor,
-    /// Get account hashed cursor
-    AccountHashedCursor,
-    /// Store trie updates
-    StoreTrieUpdates,
-    /// Fetch trie updates
-    FetchTrieUpdates,
-    /// Prune earliest state
-    PruneEarliestState,
-    /// Replace updates
-    ReplaceUpdates,
-    /// Set earliest block number
-    SetEarliestBlockNumber,
+    /// Store account trie branch
+    StoreAccountBranch,
+    /// Store storage trie branch
+    StoreStorageBranch,
+    /// Store hashed account
+    StoreHashedAccount,
+    /// Store hashed storage
+    StoreHashedStorage,
     /// Trie cursor seek exact operation
     TrieCursorSeekExact,
-    /// Trie cursor seek operation
+    /// Trie cursor seek
     TrieCursorSeek,
-    /// Trie cursor next operation
+    /// Trie cursor next
     TrieCursorNext,
-    /// Trie cursor current operation
+    /// Trie cursor current
     TrieCursorCurrent,
-    /// Hashed cursor seek operation
+    /// Hashed cursor seek
     HashedCursorSeek,
-    /// Hashed cursor next operation
+    /// Hashed cursor next
     HashedCursorNext,
-    /// Hashed cursor is_storage_empty operation
+    /// Hashed cursor is_storage_empty
     HashedCursorIsStorageEmpty,
 }
 
@@ -116,21 +62,10 @@ impl StorageOperation {
     /// Returns the operation as a string for metrics labels.
     pub const fn as_str(&self) -> &'static str {
         match self {
-            Self::StoreAccountBranches => "store_account_branches",
-            Self::StoreStorageBranches => "store_storage_branches",
-            Self::StoreHashedAccounts => "store_hashed_accounts",
-            Self::StoreHashedStorages => "store_hashed_storages",
-            Self::GetEarliestBlockNumber => "get_earliest_block_number",
-            Self::GetLatestBlockNumber => "get_latest_block_number",
-            Self::StorageTrieCursor => "storage_trie_cursor",
-            Self::AccountTrieCursor => "account_trie_cursor",
-            Self::StorageHashedCursor => "storage_hashed_cursor",
-            Self::AccountHashedCursor => "account_hashed_cursor",
-            Self::StoreTrieUpdates => "store_trie_updates",
-            Self::FetchTrieUpdates => "fetch_trie_updates",
-            Self::PruneEarliestState => "prune_earliest_state",
-            Self::ReplaceUpdates => "replace_updates",
-            Self::SetEarliestBlockNumber => "set_earliest_block_number",
+            Self::StoreAccountBranch => "store_account_branch",
+            Self::StoreStorageBranch => "store_storage_branch",
+            Self::StoreHashedAccount => "store_hashed_account",
+            Self::StoreHashedStorage => "store_hashed_storage",
             Self::TrieCursorSeekExact => "trie_cursor_seek_exact",
             Self::TrieCursorSeek => "trie_cursor_seek",
             Self::TrieCursorNext => "trie_cursor_next",
@@ -164,7 +99,7 @@ impl Labels {
 #[derive(Debug)]
 pub struct StorageMetrics {
     /// Cache of operation metrics handles, keyed by (operation, context)
-    operations: FxHashMap<(StorageOperation, OperationContext), OperationMetrics>,
+    operations: HashMap<StorageOperation, OperationMetrics>,
     /// Block-level metrics
     block_metrics: BlockMetrics,
 }
@@ -179,34 +114,24 @@ impl StorageMetrics {
     }
 
     /// Generate metric handles for all operation and context combinations.
-    fn generate_operation_handles(
-    ) -> FxHashMap<(StorageOperation, OperationContext), OperationMetrics> {
-        let mut operations = FxHashMap::with_capacity_and_hasher(
-            StorageOperation::COUNT * OperationContext::COUNT,
-            Default::default(),
-        );
+    fn generate_operation_handles() -> HashMap<StorageOperation, OperationMetrics> {
+        let mut operations =
+            HashMap::with_capacity_and_hasher(StorageOperation::COUNT, Default::default());
         for operation in StorageOperation::iter() {
-            for context in OperationContext::iter() {
-                operations.insert(
-                    (operation, context),
-                    OperationMetrics::new_with_labels(&[
-                        (Labels::Operation.as_str(), operation.as_str()),
-                        (Labels::Context.as_str(), context.as_str()),
-                    ]),
-                );
-            }
+            operations.insert(
+                operation,
+                OperationMetrics::new_with_labels(&[(
+                    Labels::Operation.as_str(),
+                    operation.as_str(),
+                )]),
+            );
         }
         operations
     }
 
     /// Record a storage operation with timing.
-    pub fn record_operation<R>(
-        &self,
-        operation: StorageOperation,
-        context: OperationContext,
-        f: impl FnOnce() -> R,
-    ) -> R {
-        if let Some(metrics) = self.operations.get(&(operation, context)) {
+    pub fn record_operation<R>(&self, operation: StorageOperation, f: impl FnOnce() -> R) -> R {
+        if let Some(metrics) = self.operations.get(&operation) {
             metrics.record(f)
         } else {
             f()
@@ -214,12 +139,7 @@ impl StorageMetrics {
     }
 
     /// Record a storage operation with timing (async version).
-    pub async fn record_operation_async<F, R>(
-        &self,
-        operation: StorageOperation,
-        context: OperationContext,
-        f: F,
-    ) -> R
+    pub async fn record_operation_async<F, R>(&self, operation: StorageOperation, f: F) -> R
     where
         F: std::future::Future<Output = R>,
     {
@@ -227,7 +147,7 @@ impl StorageMetrics {
         let result = f.await;
         let duration = start.elapsed();
 
-        if let Some(metrics) = self.operations.get(&(operation, context)) {
+        if let Some(metrics) = self.operations.get(&operation) {
             metrics.record_duration(duration);
         }
 
@@ -246,8 +166,20 @@ impl StorageMetrics {
         context: OperationContext,
         duration: Duration,
     ) {
-        if let Some(metrics) = self.operations.get(&(operation, context)) {
+        if let Some(metrics) = self.operations.get(&operation) {
             metrics.record_duration(duration);
+        }
+    }
+
+    pub fn record_duration_per_item(
+        &self,
+        operation: StorageOperation,
+        context: OperationContext,
+        duration: Duration,
+        count: usize,
+    ) {
+        if let Some(metrics) = self.operations.get(&operation) {
+            metrics.record_duration_per_item(duration, count);
         }
     }
 }
@@ -278,6 +210,14 @@ impl OperationMetrics {
     /// Record a pre-measured duration.
     fn record_duration(&self, duration: Duration) {
         self.duration_seconds.record(duration);
+    }
+
+    fn record_duration_per_item(&self, duration: Duration, count_usize: usize) {
+        if count_usize > 0
+            && let Some(count) = u32::try_from(count_usize).ok()
+        {
+            self.duration_seconds.record_many(duration / count, count as usize);
+        }
     }
 }
 
