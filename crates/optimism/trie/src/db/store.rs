@@ -1,20 +1,24 @@
 use crate::{
-    db::{MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor},
+    db::{
+        models::{AccountTrieHistory, MaybeDeleted, VersionedValue},
+        MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
+    },
     BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::{
+    cursor::DbDupCursorRW,
     mdbx::{init_db_for, DatabaseArguments},
-    DatabaseEnv,
+    Database, DatabaseEnv,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{BranchNodeCompact, Nibbles};
+use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
 use std::path::Path;
 
 /// MDBX implementation of `OpProofsStorage`.
 #[derive(Debug)]
 pub struct MdbxProofsStorage {
-    _env: DatabaseEnv,
+    env: DatabaseEnv,
 }
 
 impl MdbxProofsStorage {
@@ -22,7 +26,7 @@ impl MdbxProofsStorage {
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())
             .map_err(OpProofsStorageError::Other)?;
-        Ok(Self { _env: env })
+        Ok(Self { env })
     }
 }
 
@@ -34,19 +38,45 @@ impl OpProofsStorage for MdbxProofsStorage {
 
     async fn store_account_branches(
         &self,
-        _block_number: u64,
-        _updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        block_number: u64,
+        updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!()
+        if updates.is_empty() {
+            return Ok(());
+        }
+
+        self.env.update(|tx| {
+            let mut cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            for (nibble, branch_node) in updates {
+                let vv = VersionedValue { block_number, value: MaybeDeleted(branch_node) };
+                cursor.append_dup(StoredNibbles::from(nibble), vv)?;
+            }
+            Ok(())
+        })?
     }
 
     async fn store_storage_branches(
         &self,
-        _block_number: u64,
-        _hashed_address: B256,
-        _items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        block_number: u64,
+        hashed_address: B256,
+        items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!()
+        if items.is_empty() {
+            return Ok(());
+        }
+
+        self.env.update(|tx| {
+            let mut cursor = tx.new_cursor::<super::models::StorageTrieHistory>()?;
+            for (nibble, branch_node) in items {
+                let key = super::models::StorageTrieSubKey::new(
+                    hashed_address,
+                    StoredNibbles::from(nibble),
+                );
+                let vv = VersionedValue { block_number, value: MaybeDeleted(branch_node) };
+                cursor.append_dup(key, vv)?;
+            }
+            Ok(())
+        })?
     }
 
     async fn store_hashed_accounts(
