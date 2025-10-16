@@ -15,7 +15,7 @@ workspace = true
 # reth
 reth-evm = { workspace = true, features = ["op"] }
 reth-primitives-traits = { workspace = true, features = ["op", "serde-bincode-compat"] }
-reth-storage-api.workspace = true
+reth-storage-api = { workspace = true, features = ["serde-bincode-compat"] }
 reth-rpc-eth-api = { workspace = true, features = ["op"] }
 reth-rpc-eth-types.workspace = true
 reth-rpc-server-types.workspace = true
@@ -40,21 +40,21 @@ reth-optimism-primitives = { workspace = true, features = ["op", "serde-bincode-
 reth-optimism-forks.workspace = true
 
 # ethereum
-alloy-eips.workspace = true
+alloy-eips = { workspace = true, features = ["serde-bincode-compat"] }
 alloy-json-rpc.workspace = true
 alloy-primitives.workspace = true
 alloy-rpc-client.workspace = true
-alloy-rpc-types-eth.workspace = true
+alloy-rpc-types-eth = { workspace = true, features = ["serde-bincode-compat"] }
 alloy-rpc-types-debug.workspace = true
 alloy-transport.workspace = true
 alloy-transport-http.workspace = true
-alloy-consensus.workspace = true
+alloy-consensus = { workspace = true, features = ["serde-bincode-compat"] }
 alloy-rpc-types-engine.workspace = true
 op-alloy-network.workspace = true
 op-alloy-rpc-types.workspace = true
 op-alloy-rpc-types-engine.workspace = true
 op-alloy-rpc-jsonrpsee.workspace = true
-op-alloy-consensus.workspace = true
+op-alloy-consensus = { workspace = true, features = ["serde-bincode-compat"] }
 revm.workspace = true
 op-revm.workspace = true
 

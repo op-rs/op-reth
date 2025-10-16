@@ -23,7 +23,8 @@ reth-chainspec.workspace = true
 alloy-primitives.workspace = true
 
 # op-reth
-reth-optimism-primitives = { workspace = true, features = ["reth-codec", "serde"] }
+# serde-bincode-compat is enabled in for reth-exex-types in reth-exex
+reth-optimism-primitives = { workspace = true, features = ["reth-codec", "serde-bincode-compat"] }
 reth-optimism-trie.workspace = true
 
 # misc
