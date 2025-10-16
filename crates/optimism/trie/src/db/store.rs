@@ -68,20 +68,14 @@ impl OpProofsStorage for MdbxProofsStorage {
         // sort the accounts by key to ensure insertion is efficient
         accounts.sort_by_key(|(key, _)| *key);
 
-        self.env
-            .update(|tx| {
-                let mut cursor = tx
-                    .new_cursor::<HashedAccountHistory>()
-                    .map_err(|err| OpProofsStorageError::Other(err.into()))?;
-                for (key, account) in accounts {
-                    let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
-                    cursor
-                        .append_dup(key, vv)
-                        .map_err(|err| OpProofsStorageError::Other(err.into()))?;
-                }
-                Ok(())
-            })
-            .map_err(|err| OpProofsStorageError::Other(err.into()))?
+        self.env.update(|tx| {
+            let mut cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            for (key, account) in accounts {
+                let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
+                cursor.append_dup(key, vv)?;
+            }
+            Ok(())
+        })?
     }
 
     async fn store_hashed_storages(
@@ -98,24 +92,16 @@ impl OpProofsStorage for MdbxProofsStorage {
         // sort the storages by key to ensure insertion is efficient
         storages.sort_by_key(|(key, _)| *key);
 
-        self.env
-            .update(|tx| {
-                let mut cursor = tx
-                    .new_cursor::<HashedStorageHistory>()
-                    .map_err(|err| OpProofsStorageError::Other(err.into()))?;
-                for (key, value) in storages {
-                    let vv = VersionedValue {
-                        block_number,
-                        value: MaybeDeleted(Some(StorageValue(value))),
-                    };
-                    let storage_key = HashedStorageKey::new(hashed_address, key);
-                    cursor
-                        .append_dup(storage_key, vv)
-                        .map_err(|err| OpProofsStorageError::Other(err.into()))?;
-                }
-                Ok(())
-            })
-            .map_err(|err| OpProofsStorageError::Other(err.into()))?
+        self.env.update(|tx| {
+            let mut cursor = tx.new_cursor::<HashedStorageHistory>()?;
+            for (key, value) in storages {
+                let vv =
+                    VersionedValue { block_number, value: MaybeDeleted(Some(StorageValue(value))) };
+                let storage_key = HashedStorageKey::new(hashed_address, key);
+                cursor.append_dup(storage_key, vv)?;
+            }
+            Ok(())
+        })?
     }
 
     async fn get_earliest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
