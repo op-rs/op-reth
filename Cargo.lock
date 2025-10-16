@@ -6477,16 +6477,20 @@ name = "op-reth"
 version = "1.9.3"
 dependencies = [
  "clap",
+ "eyre",
+ "futures-util",
  "reth-cli-util",
  "reth-optimism-chainspec",
  "reth-optimism-cli",
  "reth-optimism-consensus",
  "reth-optimism-evm",
+ "reth-optimism-exex",
  "reth-optimism-forks",
  "reth-optimism-node",
  "reth-optimism-payload-builder",
  "reth-optimism-primitives",
  "reth-optimism-rpc",
+ "reth-optimism-trie",
  "tracing",
 ]
 
@@ -9764,7 +9768,7 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-exex"
-version = "1.8.2"
+version = "1.9.3"
 dependencies = [
  "alloy-primitives",
  "derive_more",
@@ -9780,7 +9784,7 @@ dependencies = [
  "reth-optimism-trie",
  "reth-provider",
  "serde",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -10034,7 +10038,7 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-trie"
-version = "1.8.2"
+version = "1.9.3"
 dependencies = [
  "alloy-primitives",
  "auto_impl",
@@ -10053,7 +10057,7 @@ dependencies = [
  "reth-trie",
  "serde",
  "test-case",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
