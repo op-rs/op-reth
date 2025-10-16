@@ -14,7 +14,13 @@ workspace = true
 # reth
 reth-chainspec.workspace = true
 ## ensure secp256k1 recovery with rayon support is activated
-reth-primitives-traits = { workspace = true, features = ["op", "secp256k1", "rayon", "serde-bincode-compat"] }
+reth-primitives-traits = { workspace = true, features = [
+    "op",
+    "secp256k1",
+    "rayon",
+    "reth-codec",
+    "serde-bincode-compat"
+] }
 reth-payload-builder.workspace = true
 reth-consensus.workspace = true
 reth-node-api.workspace = true
@@ -41,7 +47,7 @@ reth-optimism-txpool.workspace = true
 reth-optimism-chainspec.workspace = true
 reth-optimism-consensus = { workspace = true, features = ["std"] }
 reth-optimism-forks.workspace = true
-reth-optimism-primitives = { workspace = true, features = ["op", "serde-bincode-compat"] }
+reth-optimism-primitives = { workspace = true, features = ["op", "reth-codec", "serde-bincode-compat"] }
 
 # revm with required optimism features
 # Note: this must be kept to ensure all features are properly enabled/forwarded
