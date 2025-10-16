@@ -1,14 +1,13 @@
 use crate::{
     db::{
-        cursor::Dup, AccountTrieHistory, MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
-        StorageTrieHistory,
+        AccountTrieHistory, MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
+        StorageTrieHistory, cursor::Dup, MdbxStorageTrieCursorBox, MdbxAccountTrieCursorBox,
     },
     BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::{
-    mdbx::{init_db_for, DatabaseArguments},
-    DatabaseEnv,
+    mdbx::{init_db_for, DatabaseArguments}, Database, DatabaseEnv
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles};
@@ -30,14 +29,8 @@ impl MdbxProofsStorage {
 }
 
 impl OpProofsStorage for MdbxProofsStorage {
-    type StorageTrieCursor<'tx>
-        = MdbxTrieCursor<StorageTrieHistory, Dup<'tx, StorageTrieHistory>>
-    where
-        Self: 'tx;
-    type AccountTrieCursor<'tx>
-        = MdbxTrieCursor<AccountTrieHistory, Dup<'tx, AccountTrieHistory>>
-    where
-        Self: 'tx;
+    type StorageTrieCursor = MdbxStorageTrieCursorBox;
+    type AccountTrieCursor = MdbxAccountTrieCursorBox;
     type StorageCursor = MdbxStorageCursor;
     type AccountHashedCursor = MdbxAccountCursor;
 
@@ -85,16 +78,23 @@ impl OpProofsStorage for MdbxProofsStorage {
 
     fn storage_trie_cursor(
         &self,
-        _hashed_address: B256,
-        _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'_>> {
-        unimplemented!()
+        hashed_address: B256,
+        max_block_number: u64,
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor> {
+        let tx = self._env.tx().unwrap();
+        let cursor = tx.new_cursor::<StorageTrieHistory>().unwrap();
+        let trie_cursor = MdbxTrieCursor::<StorageTrieHistory, _>::new(
+            cursor,
+            max_block_number,
+            Some(hashed_address)
+        );
+        Ok(MdbxStorageTrieCursorBox::new(Box::new(trie_cursor)))
     }
 
     fn account_trie_cursor(
         &self,
         _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>> {
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor> {
         unimplemented!()
     }
 

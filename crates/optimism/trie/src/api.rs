@@ -70,14 +70,10 @@ pub struct BlockStateDiff {
 #[auto_impl(Arc)]
 pub trait OpProofsStorage: Send + Sync + Debug {
     /// Cursor for iterating over trie branches.
-    type StorageTrieCursor<'tx>: OpProofsTrieCursor + 'tx
-    where
-        Self: 'tx;
+    type StorageTrieCursor: OpProofsTrieCursor;
 
     /// Cursor for iterating over account trie branches.
-    type AccountTrieCursor<'tx>: OpProofsTrieCursor + 'tx
-    where
-        Self: 'tx;
+    type AccountTrieCursor: OpProofsTrieCursor;
 
     /// Cursor for iterating over storage leaves.
     type StorageCursor: OpProofsHashedCursor<Value = U256>;
@@ -134,13 +130,13 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         &self,
         hashed_address: B256,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'_>>;
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor>;
 
     /// Get a trie cursor for the account backend
     fn account_trie_cursor(
         &self,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>>;
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor>;
 
     /// Get a storage cursor for the storage backend
     fn storage_hashed_cursor(

@@ -5,6 +5,7 @@ use crate::{
     OpProofsHashedCursor, OpProofsStorageError, OpProofsStorageResult, OpProofsTrieCursor,
 };
 use alloy_primitives::{B256, U256};
+use derive_more::Constructor;
 use reth_db::DatabaseEnv;
 use reth_db_api::{
     cursor::{DbCursorRO, DbDupCursorRO},
@@ -256,6 +257,50 @@ where
             .current()
             .map_err(|e| OpProofsStorageError::Other(e.into()))
             .map(|opt| opt.map(|(k, _)| k.path.0))
+    }
+}
+
+// Lifetime-erased wrappers using trait objects
+#[derive(Constructor)]
+pub struct MdbxStorageTrieCursorBox {
+    // Box a trait object that implements the cursor trait
+    inner: Box<dyn OpProofsTrieCursor + Send + 'static>,
+}
+
+// Implement the trait for each wrapper by delegating to inner
+impl OpProofsTrieCursor for MdbxStorageTrieCursorBox {
+    fn seek_exact(&mut self, path: Nibbles) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        self.inner.seek_exact(path)
+    }
+    fn seek(&mut self, path: Nibbles) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        self.inner.seek(path) 
+    }
+    fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        self.inner.next()
+    }
+    fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
+        self.inner.current()
+    }
+}
+
+#[derive(Constructor)]
+pub struct MdbxAccountTrieCursorBox {
+    inner: Box<dyn OpProofsTrieCursor + Send + 'static>,
+}
+
+// Implement the trait for each wrapper by delegating to inner
+impl OpProofsTrieCursor for MdbxAccountTrieCursorBox {
+    fn seek_exact(&mut self, path: Nibbles) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        self.inner.seek_exact(path)
+    }
+    fn seek(&mut self, path: Nibbles) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        self.inner.seek(path) 
+    }
+    fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        self.inner.next()
+    }
+    fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
+        self.inner.current()
     }
 }
 
