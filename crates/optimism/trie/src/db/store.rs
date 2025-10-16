@@ -4,7 +4,7 @@ use crate::{
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::{
-    cursor::DbCursorRO,
+    cursor::{DbCursorRO, DbCursorRW},
     mdbx::{init_db_for, DatabaseArguments},
     transaction::DbTx,
     Database, DatabaseEnv,
@@ -13,7 +13,7 @@ use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles};
 use std::path::Path;
 
-use super::{ProofWindow, ProofWindowKey};
+use super::{BlockNumberHash, ProofWindow, ProofWindowKey};
 
 /// MDBX implementation of `OpProofsStorage`.
 #[derive(Debug)]
@@ -39,6 +39,23 @@ impl MdbxProofsStorage {
             value.map(|(_, val)| (val.0, val.1))
         });
         Ok(result?)
+    }
+
+    async fn set_earliest_block_number_hash(
+        &self,
+        block_number: u64,
+        hash: B256,
+    ) -> OpProofsStorageResult<()> {
+        self.env.update(|tx| {
+            let mut cursor = tx
+                .new_cursor::<ProofWindow>()
+                .map_err(|err| OpProofsStorageError::DatabaseError(err))?;
+
+            cursor
+                .append(ProofWindowKey::EarliestBlock, &BlockNumberHash(block_number, hash))
+                .map_err(OpProofsStorageError::DatabaseError)?;
+            Ok(())
+        })?
     }
 }
 
@@ -153,9 +170,9 @@ impl OpProofsStorage for MdbxProofsStorage {
 
     async fn set_earliest_block_number(
         &self,
-        _block_number: u64,
-        _hash: B256,
+        block_number: u64,
+        hash: B256,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!()
+        self.set_earliest_block_number_hash(block_number, hash).await
     }
 }
