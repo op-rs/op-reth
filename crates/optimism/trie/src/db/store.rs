@@ -1,7 +1,8 @@
 use crate::{
     db::{
         models::{
-            HashedAccountHistory, HashedStorageHistory, HashedStorageKey, MaybeDeleted,
+            AccountTrieHistory, StorageTrieHistory, HashedAccountHistory, 
+            HashedStorageHistory, StorageTrieKey, HashedStorageKey, MaybeDeleted,
             StorageValue, VersionedValue,
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
@@ -14,7 +15,7 @@ use reth_db::{
     mdbx::{init_db_for, DatabaseArguments},
     Database, DatabaseEnv,
 };
-use reth_primitives_traits::Account;
+use reth_primitives_traits::{Account};
 use reth_trie::{BranchNodeCompact, Nibbles};
 use std::path::Path;
 
@@ -148,10 +149,7 @@ impl OpProofsStorage for MdbxProofsStorage {
         block_number: u64,
         block_state_diff: BlockStateDiff,
     ) -> OpProofsStorageResult<()> {
-
-        // Todo: save trie updates
-        let mut trie_updates = block_state_diff.trie_updates;
-        let sorted_trie_updates = trie_updates.into_sorted();
+        let sorted_trie_updates = block_state_diff.trie_updates.into_sorted();
         let sorted_account_nodes = sorted_trie_updates.account_nodes;
 
         let mut sorted_storage_nodes = Vec::new();
@@ -174,6 +172,22 @@ impl OpProofsStorage for MdbxProofsStorage {
         sorted_storage.sort_by_key(|(hashed_address, _)| *hashed_address);
 
         self.env.update(|tx| {
+            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            for (path, node) in sorted_account_nodes {
+                let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+                account_trie_cursor.append_dup(path.into(), vv)?;
+            }
+
+            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+            for (hashed_address, nodes) in sorted_storage_nodes {
+                // todo: handle is_deleted scenario
+                for (path, node) in nodes.storage_nodes {
+                    let key = StorageTrieKey::new(hashed_address, path.into());
+                    let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+                    storage_trie_cursor.append_dup(key, vv)?;
+                }
+            }
+
             let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
             for (hashed_address, account) in sorted_accounts {
                 let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
