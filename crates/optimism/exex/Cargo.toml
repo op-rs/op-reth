@@ -39,13 +39,6 @@ derive_more.workspace = true
 tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 futures.workspace = true
 reth-db = { workspace = true, features = ["test-utils"] }
-alloy-consensus.workspace = true
-alloy-genesis.workspace = true
-reth-db-common.workspace = true
-reth-ethereum-primitives.workspace = true
-reth-evm-ethereum.workspace = true
-reth-testing-utils.workspace = true
-secp256k1.workspace = true
 
 [features]
 test-utils = [

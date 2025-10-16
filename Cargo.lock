@@ -9333,8 +9333,6 @@ dependencies = [
 name = "reth-optimism-exex"
 version = "1.8.2"
 dependencies = [
- "alloy-consensus",
- "alloy-genesis",
  "alloy-primitives",
  "derive_more",
  "eyre",
@@ -9342,17 +9340,12 @@ dependencies = [
  "futures-util",
  "reth-chainspec",
  "reth-db",
- "reth-db-common",
- "reth-ethereum-primitives",
- "reth-evm-ethereum",
  "reth-exex",
  "reth-node-api",
  "reth-node-types",
  "reth-optimism-primitives",
  "reth-optimism-trie",
  "reth-provider",
- "reth-testing-utils",
- "secp256k1 0.30.0",
  "serde",
  "thiserror 2.0.17",
  "tokio",
