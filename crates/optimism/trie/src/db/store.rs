@@ -34,7 +34,8 @@ impl MdbxProofsStorage {
 }
 
 impl OpProofsStorage for MdbxProofsStorage {
-    type TrieCursor = MdbxTrieCursor;
+    type StorageTrieCursor = MdbxTrieCursor;
+    type AccountTrieCursor = MdbxTrieCursor;
     type StorageCursor = MdbxStorageCursor;
     type AccountHashedCursor = MdbxAccountCursor;
 
@@ -112,11 +113,18 @@ impl OpProofsStorage for MdbxProofsStorage {
         unimplemented!()
     }
 
-    fn trie_cursor(
+    fn storage_trie_cursor(
         &self,
-        _hashed_address: Option<B256>,
+        _hashed_address: B256,
         _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::TrieCursor> {
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor> {
+        unimplemented!()
+    }
+
+    fn account_trie_cursor(
+        &self,
+        _max_block_number: u64,
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor> {
         unimplemented!()
     }
 
