@@ -112,4 +112,5 @@ arbitrary = [
 op = [
     "reth-primitives-traits/op",
     "reth-codecs?/op",
+    "serde-bincode-compat",
 ]
