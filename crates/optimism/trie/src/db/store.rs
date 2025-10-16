@@ -1,8 +1,8 @@
 use crate::{
     db::{
         models::{
-            AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey, MaybeDeleted,
-            StorageValue, VersionedValue,
+            AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
+            MaybeDeleted, StorageValue, VersionedValue,
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
@@ -71,10 +71,8 @@ impl OpProofsStorage for MdbxProofsStorage {
         self.env.update(|tx| {
             let mut cursor = tx.new_cursor::<super::models::StorageTrieHistory>()?;
             for (nibble, branch_node) in items {
-                let key = super::models::StorageTrieKey::new(
-                    hashed_address,
-                    StoredNibbles::from(nibble),
-                );
+                let key =
+                    super::models::StorageTrieKey::new(hashed_address, StoredNibbles::from(nibble));
                 let vv = VersionedValue { block_number, value: MaybeDeleted(branch_node) };
                 cursor.append_dup(key, vv)?;
             }
