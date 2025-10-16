@@ -1,5 +1,8 @@
 use crate::{
-    db::{MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor},
+    db::{
+        cursor::Dup, AccountTrieHistory, MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
+        StorageTrieHistory,
+    },
     BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
 };
 use alloy_primitives::{map::HashMap, B256, U256};
@@ -27,8 +30,14 @@ impl MdbxProofsStorage {
 }
 
 impl OpProofsStorage for MdbxProofsStorage {
-    type StorageTrieCursor = MdbxTrieCursor;
-    type AccountTrieCursor = MdbxTrieCursor;
+    type StorageTrieCursor<'tx>
+        = MdbxTrieCursor<StorageTrieHistory, Dup<'tx, StorageTrieHistory>>
+    where
+        Self: 'tx;
+    type AccountTrieCursor<'tx>
+        = MdbxTrieCursor<AccountTrieHistory, Dup<'tx, AccountTrieHistory>>
+    where
+        Self: 'tx;
     type StorageCursor = MdbxStorageCursor;
     type AccountHashedCursor = MdbxAccountCursor;
 
@@ -78,14 +87,14 @@ impl OpProofsStorage for MdbxProofsStorage {
         &self,
         _hashed_address: B256,
         _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageTrieCursor> {
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'_>> {
         unimplemented!()
     }
 
     fn account_trie_cursor(
         &self,
         _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor> {
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>> {
         unimplemented!()
     }
 

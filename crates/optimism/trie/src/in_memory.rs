@@ -380,8 +380,8 @@ impl OpProofsHashedCursor for InMemoryAccountCursor {
 }
 
 impl OpProofsStorage for InMemoryProofsStorage {
-    type StorageTrieCursor = InMemoryTrieCursor;
-    type AccountTrieCursor = InMemoryTrieCursor;
+    type StorageTrieCursor<'tx> = InMemoryTrieCursor;
+    type AccountTrieCursor<'tx> = InMemoryTrieCursor;
     type StorageCursor = InMemoryStorageCursor;
     type AccountHashedCursor = InMemoryAccountCursor;
 
@@ -464,7 +464,7 @@ impl OpProofsStorage for InMemoryProofsStorage {
         &self,
         hashed_address: B256,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageTrieCursor> {
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'_>> {
         // For synchronous methods, we need to try_read() and handle potential blocking
         let inner = self
             .inner
@@ -476,7 +476,7 @@ impl OpProofsStorage for InMemoryProofsStorage {
     fn account_trie_cursor(
         &self,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor> {
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>> {
         let inner = self
             .inner
             .try_read()
