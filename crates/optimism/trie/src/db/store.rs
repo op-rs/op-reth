@@ -33,7 +33,6 @@ impl OpProofsStorage for MdbxProofsStorage {
 
     async fn store_account_branches(
         &self,
-        _block_number: u64,
         _updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
         unimplemented!()
@@ -41,7 +40,6 @@ impl OpProofsStorage for MdbxProofsStorage {
 
     async fn store_storage_branches(
         &self,
-        _block_number: u64,
         _hashed_address: B256,
         _items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
@@ -51,7 +49,6 @@ impl OpProofsStorage for MdbxProofsStorage {
     async fn store_hashed_accounts(
         &self,
         _accounts: Vec<(B256, Option<Account>)>,
-        _block_number: u64,
     ) -> OpProofsStorageResult<()> {
         unimplemented!()
     }
@@ -60,7 +57,6 @@ impl OpProofsStorage for MdbxProofsStorage {
         &self,
         _hashed_address: B256,
         _storages: Vec<(B256, U256)>,
-        _block_number: u64,
     ) -> OpProofsStorageResult<()> {
         unimplemented!()
     }
