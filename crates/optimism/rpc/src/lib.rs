@@ -12,6 +12,7 @@ pub mod engine;
 pub mod error;
 pub mod eth;
 pub mod historical;
+pub mod historical_proofs;
 pub mod metrics;
 pub mod miner;
 pub mod sequencer;
