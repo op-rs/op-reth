@@ -5,7 +5,7 @@ use crate::{
         DatabaseProof, DatabaseStateRoot, DatabaseStorageProof, DatabaseStorageRoot,
         DatabaseTrieWitness,
     },
-    storage::{OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError},
+    storage::{BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError},
 };
 use alloy_primitives::keccak256;
 use reth_primitives_traits::{Account, Bytecode};
@@ -19,10 +19,10 @@ use reth_revm::{
 };
 use reth_trie::{
     proof::{Proof, StorageProof},
-    updates::TrieUpdates,
+    updates::{TrieUpdates, TrieUpdatesSorted},
     witness::TrieWitness,
-    AccountProof, HashedPostState, HashedStorage, KeccakKeyHasher, MultiProof, MultiProofTargets,
-    StateRoot, StorageMultiProof, StorageRoot, TrieInput,
+    AccountProof, HashedPostState, HashedPostStateSorted, HashedStorage, KeccakKeyHasher,
+    MultiProof, MultiProofTargets, StateRoot, StorageMultiProof, StorageRoot, TrieInput,
 };
 use std::fmt::Debug;
 
@@ -30,6 +30,9 @@ use std::fmt::Debug;
 pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
     /// Historical state provider for non-state related tasks.
     latest: Box<dyn StateProvider + 'a>,
+
+    /// Pending updates on top of the historical state provider.
+    pending: Option<BlockStateDiff>,
 
     /// Storage provider for state lookups.
     storage: Storage,
@@ -53,8 +56,9 @@ impl<'a, Storage: OpProofsStorage> OpProofsStateProviderRef<'a, Storage> {
         latest: Box<dyn StateProvider + 'a>,
         storage: Storage,
         block_number: BlockNumber,
+        pending: Option<BlockStateDiff>,
     ) -> Self {
-        Self { latest, storage, block_number }
+        Self { latest, storage, block_number, pending }
     }
 }
 
@@ -82,21 +86,31 @@ impl<'a, Storage: OpProofsStorage + Clone> StateRootProvider
     for OpProofsStateProviderRef<'a, Storage>
 {
     fn state_root(&self, state: HashedPostState) -> ProviderResult<B256> {
-        StateRoot::overlay_root(self.storage.clone(), self.block_number, state)
+        StateRoot::overlay_root(self.storage.clone(), self.block_number, state, self.pending)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
-        StateRoot::overlay_root_from_nodes(self.storage.clone(), self.block_number, input)
-            .map_err(|err| ProviderError::Database(err.into()))
+        StateRoot::overlay_root_from_nodes(
+            self.storage.clone(),
+            self.block_number,
+            input,
+            self.pending,
+        )
+        .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn state_root_with_updates(
         &self,
         state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        StateRoot::overlay_root_with_updates(self.storage.clone(), self.block_number, state)
-            .map_err(|err| ProviderError::Database(err.into()))
+        StateRoot::overlay_root_with_updates(
+            self.storage.clone(),
+            self.block_number,
+            state,
+            self.pending,
+        )
+        .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn state_root_from_nodes_with_updates(
@@ -107,6 +121,7 @@ impl<'a, Storage: OpProofsStorage + Clone> StateRootProvider
             self.storage.clone(),
             self.block_number,
             input,
+            self.pending,
         )
         .map_err(|err| ProviderError::Database(err.into()))
     }
@@ -116,8 +131,14 @@ impl<'a, Storage: OpProofsStorage + Clone> StorageRootProvider
     for OpProofsStateProviderRef<'a, Storage>
 {
     fn storage_root(&self, address: Address, storage: HashedStorage) -> ProviderResult<B256> {
-        StorageRoot::overlay_root(self.storage.clone(), self.block_number, address, storage)
-            .map_err(|err| ProviderError::Database(err.into()))
+        StorageRoot::overlay_root(
+            self.storage.clone(),
+            self.block_number,
+            address,
+            storage,
+            self.pending,
+        )
+        .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn storage_proof(
@@ -132,6 +153,7 @@ impl<'a, Storage: OpProofsStorage + Clone> StorageRootProvider
             address,
             slot,
             storage,
+            self.pending,
         )
         .map_err(ProviderError::from)
     }
@@ -148,6 +170,7 @@ impl<'a, Storage: OpProofsStorage + Clone> StorageRootProvider
             address,
             slots,
             storage,
+            self.pending,
         )
         .map_err(ProviderError::from)
     }
@@ -162,8 +185,15 @@ impl<'a, Storage: OpProofsStorage + Clone> StateProofProvider
         address: Address,
         slots: &[B256],
     ) -> ProviderResult<AccountProof> {
-        Proof::overlay_account_proof(self.storage.clone(), self.block_number, input, address, slots)
-            .map_err(ProviderError::from)
+        Proof::overlay_account_proof(
+            self.storage.clone(),
+            self.block_number,
+            input,
+            address,
+            slots,
+            self.pending,
+        )
+        .map_err(ProviderError::from)
     }
 
     fn multiproof(
@@ -171,14 +201,26 @@ impl<'a, Storage: OpProofsStorage + Clone> StateProofProvider
         input: TrieInput,
         targets: MultiProofTargets,
     ) -> ProviderResult<MultiProof> {
-        Proof::overlay_multiproof(self.storage.clone(), self.block_number, input, targets)
-            .map_err(ProviderError::from)
+        Proof::overlay_multiproof(
+            self.storage.clone(),
+            self.block_number,
+            input,
+            targets,
+            self.pending,
+        )
+        .map_err(ProviderError::from)
     }
 
     fn witness(&self, input: TrieInput, target: HashedPostState) -> ProviderResult<Vec<Bytes>> {
-        TrieWitness::overlay_witness(self.storage.clone(), self.block_number, input, target)
-            .map_err(ProviderError::from)
-            .map(|hm| hm.into_values().collect())
+        TrieWitness::overlay_witness(
+            self.storage.clone(),
+            self.block_number,
+            input,
+            target,
+            self.pending,
+        )
+        .map_err(ProviderError::from)
+        .map(|hm| hm.into_values().collect())
     }
 }
 
@@ -193,6 +235,15 @@ impl<'a, Storage: OpProofsStorage> HashedPostStateProvider
 impl<'a, Storage: OpProofsStorage> AccountReader for OpProofsStateProviderRef<'a, Storage> {
     fn basic_account(&self, address: &Address) -> ProviderResult<Option<Account>> {
         let hashed_key = keccak256(address.0);
+
+        // first check if the account is in the pending state
+        if let Some(state_diff) = &self.pending {
+            if state_diff.post_state.accounts.contains_key(&hashed_key) {
+                let res = state_diff.post_state.accounts.get(&hashed_key).unwrap();
+                return Ok(res.clone());
+            }
+        }
+
         let result = self
             .storage
             .account_hashed_cursor(self.block_number)
@@ -207,10 +258,21 @@ impl<'a, Storage: OpProofsStorage> AccountReader for OpProofsStateProviderRef<'a
 
 impl<'a, Storage: OpProofsStorage + Clone> StateProvider for OpProofsStateProviderRef<'a, Storage> {
     fn storage(&self, address: Address, storage_key: B256) -> ProviderResult<Option<StorageValue>> {
+        let hashed_address = keccak256(address.0);
         let hashed_key = keccak256(storage_key);
+
+        // first check if the storage is in the pending state
+        if let Some(state_diff) = &self.pending {
+            if let Some(storage) = state_diff.post_state.storages.get(&hashed_address) {
+                if storage.storage.contains_key(&hashed_key) {
+                    return Ok(Some(storage.storage.get(&hashed_key).unwrap().clone()));
+                }
+            }
+        }
+
         Ok(self
             .storage
-            .storage_hashed_cursor(keccak256(address.0), self.block_number)
+            .storage_hashed_cursor(hashed_address, self.block_number)
             .map_err(Into::<ProviderError>::into)?
             .seek(hashed_key)
             .map_err(Into::<ProviderError>::into)?

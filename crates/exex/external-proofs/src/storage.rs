@@ -71,6 +71,22 @@ pub struct BlockStateDiff {
     pub post_state: HashedPostState,
 }
 
+impl BlockStateDiff {
+    /// Extend the block state diff with another block state diff. Entries in the other block state
+    /// diff take precedence.
+    pub fn extend_ref(&mut self, other: &BlockStateDiff) {
+        self.trie_updates.extend_ref(&other.trie_updates);
+        self.post_state.extend_ref(&other.post_state);
+    }
+
+    /// Extend the block state diff with another block state diff. Entries in the other block state
+    /// diff take precedence.
+    pub fn extend(&mut self, other: BlockStateDiff) {
+        self.trie_updates.extend(other.trie_updates);
+        self.post_state.extend(other.post_state);
+    }
+}
+
 /// Trait for reading trie nodes from the database.
 ///
 /// Only leaf nodes and some branch nodes are stored. The bottom layer of branch nodes

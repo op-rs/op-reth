@@ -15,14 +15,14 @@ use reth_trie::{
     metrics::TrieRootMetrics,
     proof::{Proof, StorageProof},
     trie_cursor::{InMemoryTrieCursorFactory, TrieCursor, TrieCursorFactory},
-    updates::TrieUpdates,
+    updates::{TrieUpdates, TrieUpdatesSorted},
     witness::TrieWitness,
     AccountProof, BranchNodeCompact, HashedPostState, HashedPostStateSorted, HashedStorage,
     MultiProof, MultiProofTargets, Nibbles, StateRoot, StorageMultiProof, StorageRoot, TrieInput,
 };
 
 use crate::storage::{
-    OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
+    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
     OpProofsTrieCursor as OpProofsDBTrieCursor,
 };
 
@@ -213,6 +213,7 @@ pub trait DatabaseProof<Storage> {
         input: TrieInput,
         address: Address,
         slots: &[B256],
+        pending: Option<BlockStateDiff>,
     ) -> Result<AccountProof, StateProofError>;
 
     /// Generates the state [`MultiProof`] for target hashed account and storage keys.
@@ -221,6 +222,7 @@ pub trait DatabaseProof<Storage> {
         block_number: u64,
         input: TrieInput,
         targets: MultiProofTargets,
+        pending: Option<BlockStateDiff>,
     ) -> Result<MultiProof, StateProofError>;
 }
 
@@ -242,13 +244,18 @@ impl<Storage: OpProofsStorage + Clone> DatabaseProof<Storage>
         input: TrieInput,
         address: Address,
         slots: &[B256],
+        pending: Option<BlockStateDiff>,
     ) -> Result<AccountProof, StateProofError> {
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state.extend(input.state);
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
         let nodes_sorted = input.nodes.into_sorted();
-        let state_sorted = input.state.into_sorted();
         Self::from_tx(storage.clone(), block_number)
             .with_trie_cursor_factory(InMemoryTrieCursorFactory::new(
                 OpProofsTrieCursorFactory::new(storage.clone(), block_number),
-                &nodes_sorted,
+                &trie_updates,
             ))
             .with_hashed_cursor_factory(HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
@@ -264,13 +271,17 @@ impl<Storage: OpProofsStorage + Clone> DatabaseProof<Storage>
         block_number: u64,
         input: TrieInput,
         targets: MultiProofTargets,
+        pending: Option<BlockStateDiff>,
     ) -> Result<MultiProof, StateProofError> {
-        let nodes_sorted = input.nodes.into_sorted();
-        let state_sorted = input.state.into_sorted();
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state.extend(input.state);
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
         Self::from_tx(storage.clone(), block_number)
             .with_trie_cursor_factory(InMemoryTrieCursorFactory::new(
                 OpProofsTrieCursorFactory::new(storage.clone(), block_number),
-                &nodes_sorted,
+                &trie_updates,
             ))
             .with_hashed_cursor_factory(HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
@@ -293,6 +304,7 @@ pub trait DatabaseStorageProof<Storage> {
         address: Address,
         slot: B256,
         storage: HashedStorage,
+        pending: Option<BlockStateDiff>,
     ) -> Result<reth_trie::StorageProof, StateProofError>;
 
     /// Generates the storage multiproof for target slots based on [`TrieInput`].
@@ -302,6 +314,7 @@ pub trait DatabaseStorageProof<Storage> {
         address: Address,
         slots: &[B256],
         storage: HashedStorage,
+        pending: Option<BlockStateDiff>,
     ) -> Result<StorageMultiProof, StateProofError>;
 }
 
@@ -326,14 +339,21 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStorageProof<Storage>
         address: Address,
         slot: B256,
         hashed_storage: HashedStorage,
+        pending: Option<BlockStateDiff>,
     ) -> Result<reth_trie::StorageProof, StateProofError> {
-        let hashed_address = keccak256(address);
         let prefix_set = hashed_storage.construct_prefix_set();
-        let state_sorted = HashedPostStateSorted::new(
-            Default::default(),
-            HashMap::from_iter([(hashed_address, hashed_storage.into_sorted())]),
-        );
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state
+            .extend(HashedPostState::from_hashed_storage(keccak256(address), hashed_storage));
+        let state_sorted = initial_state.into_sorted();
+
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
         Self::from_tx(storage.clone(), block_number, address)
+            .with_trie_cursor_factory(InMemoryTrieCursorFactory::new(
+                OpProofsTrieCursorFactory::new(storage.clone(), block_number),
+                &trie_updates,
+            ))
             .with_hashed_cursor_factory(HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
                 &state_sorted,
@@ -348,13 +368,20 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStorageProof<Storage>
         address: Address,
         slots: &[B256],
         hashed_storage: HashedStorage,
+        pending: Option<BlockStateDiff>,
     ) -> Result<StorageMultiProof, StateProofError> {
         let hashed_address = keccak256(address);
         let targets = slots.iter().map(keccak256).collect();
         let prefix_set = hashed_storage.construct_prefix_set();
-        let state_sorted = HashedPostStateSorted::new(
-            Default::default(),
-            HashMap::from_iter([(hashed_address, hashed_storage.into_sorted())]),
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state
+            .extend(HashedPostState::from_hashed_storage(keccak256(address), hashed_storage));
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
+        let factory = InMemoryTrieCursorFactory::new(
+            OpProofsTrieCursorFactory::new(storage.clone(), block_number),
+            &trie_updates,
         );
         Self::from_tx(storage.clone(), block_number, address)
             .with_hashed_cursor_factory(HashedPostStateCursorFactory::new(
@@ -379,6 +406,7 @@ pub trait DatabaseStateRoot<Storage: OpProofsStorage + Clone>: Sized {
         storage: Storage,
         block_number: u64,
         post_state: HashedPostState,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256, StateRootError>;
 
     /// Calculates the state root for this [`HashedPostState`] and returns it alongside trie
@@ -387,6 +415,7 @@ pub trait DatabaseStateRoot<Storage: OpProofsStorage + Clone>: Sized {
         storage: Storage,
         block_number: u64,
         post_state: HashedPostState,
+        pending: Option<BlockStateDiff>,
     ) -> Result<(B256, TrieUpdates), StateRootError>;
 
     /// Calculates the state root for provided [`HashedPostState`] using cached intermediate nodes.
@@ -394,6 +423,7 @@ pub trait DatabaseStateRoot<Storage: OpProofsStorage + Clone>: Sized {
         storage: Storage,
         block_number: u64,
         input: TrieInput,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256, StateRootError>;
 
     /// Calculates the state root and trie updates for provided [`HashedPostState`] using
@@ -402,6 +432,7 @@ pub trait DatabaseStateRoot<Storage: OpProofsStorage + Clone>: Sized {
         storage: Storage,
         block_number: u64,
         input: TrieInput,
+        pending: Option<BlockStateDiff>,
     ) -> Result<(B256, TrieUpdates), StateRootError>;
 }
 
@@ -412,11 +443,23 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStateRoot<Storage>
         storage: Storage,
         block_number: u64,
         post_state: HashedPostState,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256, StateRootError> {
-        let prefix_sets = post_state.construct_prefix_sets().freeze();
-        let state_sorted = post_state.into_sorted();
-        StateRoot::new(
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state.extend(post_state);
+        let prefix_sets = initial_state.construct_prefix_sets().freeze();
+        let state_sorted = initial_state.into_sorted();
+
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
+
+        let factory = InMemoryTrieCursorFactory::new(
             OpProofsTrieCursorFactory::new(storage.clone(), block_number),
+            &trie_updates,
+        );
+
+        StateRoot::new(
+            factory,
             HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
                 &state_sorted,
@@ -430,11 +473,22 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStateRoot<Storage>
         storage: Storage,
         block_number: u64,
         post_state: HashedPostState,
+        pending: Option<BlockStateDiff>,
     ) -> Result<(B256, TrieUpdates), StateRootError> {
-        let prefix_sets = post_state.construct_prefix_sets().freeze();
-        let state_sorted = post_state.into_sorted();
-        StateRoot::new(
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state.extend(post_state);
+        let prefix_sets = initial_state.construct_prefix_sets().freeze();
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
+
+        let factory = InMemoryTrieCursorFactory::new(
             OpProofsTrieCursorFactory::new(storage.clone(), block_number),
+            &trie_updates,
+        );
+
+        StateRoot::new(
+            factory,
             HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
                 &state_sorted,
@@ -448,14 +502,21 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStateRoot<Storage>
         storage: Storage,
         block_number: u64,
         input: TrieInput,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256, StateRootError> {
-        let state_sorted = input.state.into_sorted();
-        let nodes_sorted = input.nodes.into_sorted();
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state.extend(input.state);
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
+
+        let factory = InMemoryTrieCursorFactory::new(
+            OpProofsTrieCursorFactory::new(storage.clone(), block_number),
+            &trie_updates,
+        );
+
         StateRoot::new(
-            InMemoryTrieCursorFactory::new(
-                OpProofsTrieCursorFactory::new(storage.clone(), block_number),
-                &nodes_sorted,
-            ),
+            factory,
             HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
                 &state_sorted,
@@ -469,14 +530,21 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStateRoot<Storage>
         storage: Storage,
         block_number: u64,
         input: TrieInput,
+        pending: Option<BlockStateDiff>,
     ) -> Result<(B256, TrieUpdates), StateRootError> {
-        let state_sorted = input.state.into_sorted();
-        let nodes_sorted = input.nodes.into_sorted();
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state.extend(input.state);
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
+
+        let factory = InMemoryTrieCursorFactory::new(
+            OpProofsTrieCursorFactory::new(storage.clone(), block_number),
+            &trie_updates,
+        );
+
         StateRoot::new(
-            InMemoryTrieCursorFactory::new(
-                OpProofsTrieCursorFactory::new(storage.clone(), block_number),
-                &nodes_sorted,
-            ),
+            factory,
             HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
                 &state_sorted,
@@ -495,6 +563,7 @@ pub trait DatabaseStorageRoot<Storage: OpProofsStorage + Clone> {
         block_number: u64,
         address: Address,
         hashed_storage: HashedStorage,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256, StorageRootError>;
 }
 
@@ -506,12 +575,23 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStorageRoot<Storage>
         block_number: u64,
         address: Address,
         hashed_storage: HashedStorage,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256, StorageRootError> {
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
         let prefix_set = hashed_storage.construct_prefix_set().freeze();
-        let state_sorted =
-            HashedPostState::from_hashed_storage(keccak256(address), hashed_storage).into_sorted();
-        StorageRoot::new(
+        initial_state
+            .extend(HashedPostState::from_hashed_storage(keccak256(address), hashed_storage));
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
+
+        let factory = InMemoryTrieCursorFactory::new(
             OpProofsTrieCursorFactory::new(storage.clone(), block_number),
+            &trie_updates,
+        );
+
+        StorageRoot::new(
+            factory,
             HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
                 &state_sorted,
@@ -524,7 +604,6 @@ impl<Storage: OpProofsStorage + Clone> DatabaseStorageRoot<Storage>
         .root()
     }
 }
-
 /// Extends [`TrieWitness`] with operations specific for working with an external storage.
 pub trait DatabaseTrieWitness<Storage: OpProofsStorage + Clone> {
     /// Creates a new [`TrieWitness`] instance from external storage.
@@ -536,6 +615,7 @@ pub trait DatabaseTrieWitness<Storage: OpProofsStorage + Clone> {
         block_number: u64,
         input: TrieInput,
         target: HashedPostState,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256Map<Bytes>, TrieWitnessError>;
 }
 
@@ -554,13 +634,20 @@ impl<Storage: OpProofsStorage + Clone> DatabaseTrieWitness<Storage>
         block_number: u64,
         input: TrieInput,
         target: HashedPostState,
+        pending: Option<BlockStateDiff>,
     ) -> Result<B256Map<Bytes>, TrieWitnessError> {
         let nodes_sorted = input.nodes.into_sorted();
         let state_sorted = input.state.into_sorted();
+        let mut initial_state = pending.as_ref().map(|p| p.post_state.clone()).unwrap_or_default();
+        initial_state.extend(target);
+        let state_sorted = initial_state.into_sorted();
+        let trie_updates: TrieUpdatesSorted =
+            pending.as_ref().map(|p| p.trie_updates.clone().into_sorted()).unwrap_or_default();
+
         Self::from_tx(storage.clone(), block_number)
             .with_trie_cursor_factory(InMemoryTrieCursorFactory::new(
                 OpProofsTrieCursorFactory::new(storage.clone(), block_number),
-                &nodes_sorted,
+                &trie_updates,
             ))
             .with_hashed_cursor_factory(HashedPostStateCursorFactory::new(
                 OpProofsHashedAccountCursorFactory::new(storage, block_number),
@@ -568,6 +655,6 @@ impl<Storage: OpProofsStorage + Clone> DatabaseTrieWitness<Storage>
             ))
             .with_prefix_sets_mut(input.prefix_sets)
             .always_include_root_node()
-            .compute(target)
+            .compute(initial_state)
     }
 }

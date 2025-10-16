@@ -5,6 +5,7 @@ use crate::{
     provider::OpProofsStateProviderRef,
     storage::{BlockStateDiff, OpProofsStorage},
 };
+use alloy_primitives::B256;
 use reth_evm::{execute::Executor, ConfigureEvm};
 use reth_node_api::{FullNodeComponents, NodePrimitives, NodeTypes};
 use reth_primitives_traits::{AlloyBlockHeader, RecoveredBlock};
@@ -13,8 +14,86 @@ use reth_provider::{
     StateRootProvider,
 };
 use reth_revm::database::StateProviderDatabase;
-use std::{sync::Arc, time::Instant};
+use reth_storage_api::StateProvider;
+use std::{
+    collections::VecDeque,
+    sync::{Arc, RwLock},
+    time::Instant,
+};
 use tracing::debug;
+
+pub struct LiveTrieWriter<S: OpProofsStorage, P> {
+    provider: P,
+
+    storage: S,
+
+    // map of (block_number, block_hash, combined_state_diff)
+    // The last element is the most recent block with the smallest state diff
+    // Adding a block involves updating all previous blocks to include the new block's state diff
+    // When we save a block, we just delete the entry for the block we are saving and it's assumed
+    // that storage now contains this block's state diff
+    pending_blocks: RwLock<VecDeque<(u64, B256, BlockStateDiff)>>,
+}
+
+impl<'a, S: OpProofsStorage + Clone + 'a, P: StateProviderFactory + DatabaseProviderFactory>
+    LiveTrieWriter<S, P>
+{
+    pub fn write_block_updates(
+        &self,
+        block_number: u64,
+        block_hash: B256,
+        block_state_diff: BlockStateDiff,
+    ) -> eyre::Result<()> {
+        let mut pending_blocks = self.pending_blocks.write().unwrap();
+        // update all previous blocks to include the new block's state diff
+        for i in (0..pending_blocks.len() - 1).rev() {
+            pending_blocks[i].2.extend_ref(&block_state_diff);
+        }
+        pending_blocks.push_back((block_number, block_hash, block_state_diff));
+        Ok(())
+    }
+
+    pub async fn flush_block(&self) -> eyre::Result<()> {
+        //
+        let pending_block = self.pending_blocks.read().unwrap().front().cloned();
+        if let Some((block_number, block_hash, block_state_diff)) = pending_block {
+            self.storage.store_trie_updates(block_number, block_state_diff).await?;
+
+            // remove this block from the pending blocks
+            {
+                let mut pending_blocks = self.pending_blocks.write().unwrap();
+                let remove_idx = pending_blocks
+                    .iter()
+                    .position(|(b, h, _)| *b == block_number && *h == block_hash)
+                    .unwrap();
+                pending_blocks.remove(remove_idx);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn state_provider(
+        &self,
+        block_hash: B256,
+        block_number: u64,
+    ) -> Box<dyn StateProvider + 'a> {
+        // check if we have a pending block for this block number
+        let pending = self
+            .pending_blocks
+            .read()
+            .unwrap()
+            .iter()
+            .find(|(_, h, _)| *h == block_hash)
+            .map(|(_, _, diff)| diff.clone());
+
+        Box::new(OpProofsStateProviderRef::new(
+            self.provider.state_by_block_hash(block_hash).unwrap(),
+            self.storage.clone(),
+            block_number,
+            pending,
+        ))
+    }
+}
 
 /// Live trie collector for external proofs storage.
 #[derive(Debug)]
