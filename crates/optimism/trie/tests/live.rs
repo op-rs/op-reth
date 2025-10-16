@@ -183,7 +183,7 @@ mod tests {
 
         let hashed_state =
             LatestStateProviderRef::new(&provider).hashed_post_state(&execution_result.state);
-        let state_root = LatestStateProviderRef::new(&provider).state_root(hashed_state.clone())?;
+        let state_root = LatestStateProviderRef::new(&provider).state_root(hashed_state)?;
 
         block.set_state_root(state_root);
 
