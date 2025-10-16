@@ -39,7 +39,7 @@ impl Decompress for BlockNumberHash {
 
 impl BlockNumberHash {
     /// Create new instance
-    pub fn new(number: u64, hash: B256) -> Self {
+    pub const fn new(number: u64, hash: B256) -> Self {
         Self(BlockNumHash { number, hash })
     }
 }
