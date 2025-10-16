@@ -10083,6 +10083,7 @@ dependencies = [
  "reth-revm",
  "reth-trie",
  "serde",
+ "tempfile",
  "test-case",
  "thiserror 2.0.17",
  "tokio",
