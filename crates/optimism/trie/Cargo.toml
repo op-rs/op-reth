@@ -28,6 +28,7 @@ reth-metrics = { workspace = true, features = ["common"] }
 
 # ethereum
 alloy-primitives.workspace = true
+alloy-eips.workspace = true
 
 # async
 tokio = { workspace = true, features = ["sync"] }
