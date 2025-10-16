@@ -17,31 +17,6 @@ use std::{
 };
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-/// Context in which a storage operation is performed.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, EnumCount, EnumIter)]
-pub enum OperationContext {
-    /// Storage operations during block execution (EVM state access)
-    Execution,
-    /// Storage operations during state root calculation (trie traversal)
-    StateRoot,
-    /// Storage operations during writing updates (storing trie updates)
-    Write,
-    /// Storage operations for metadata (block number queries, etc.)
-    Metadata,
-}
-
-impl OperationContext {
-    /// Returns the context as a string for metrics labels.
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Execution => "execution",
-            Self::StateRoot => "state_root",
-            Self::Write => "write",
-            Self::Metadata => "metadata",
-        }
-    }
-}
-
 /// Types of storage operations that can be tracked.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, EnumCount, EnumIter)]
 pub enum StorageOperation {
