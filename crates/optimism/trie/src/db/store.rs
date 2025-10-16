@@ -2,7 +2,7 @@ use crate::{
     db::{
         models::{
             AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
-            MaybeDeleted, StorageValue, VersionedValue,
+            MaybeDeleted, StorageTrieHistory, StorageTrieKey, StorageValue, VersionedValue,
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
@@ -44,9 +44,12 @@ impl OpProofsStorage for MdbxProofsStorage {
         block_number: u64,
         updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
+        let mut updates = updates;
         if updates.is_empty() {
             return Ok(());
         }
+
+        updates.sort_by_key(|(key, _)| *key);
 
         self.env.update(|tx| {
             let mut cursor = tx.new_cursor::<AccountTrieHistory>()?;
@@ -64,15 +67,17 @@ impl OpProofsStorage for MdbxProofsStorage {
         hashed_address: B256,
         items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> OpProofsStorageResult<()> {
+        let mut items = items;
         if items.is_empty() {
             return Ok(());
         }
 
+        items.sort_by_key(|(key, _)| *key);
+
         self.env.update(|tx| {
-            let mut cursor = tx.new_cursor::<super::models::StorageTrieHistory>()?;
+            let mut cursor = tx.new_cursor::<StorageTrieHistory>()?;
             for (nibble, branch_node) in items {
-                let key =
-                    super::models::StorageTrieKey::new(hashed_address, StoredNibbles::from(nibble));
+                let key = StorageTrieKey::new(hashed_address, StoredNibbles::from(nibble));
                 let vv = VersionedValue { block_number, value: MaybeDeleted(branch_node) };
                 cursor.append_dup(key, vv)?;
             }
