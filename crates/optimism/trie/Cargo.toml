@@ -45,11 +45,7 @@ derive_more.workspace = true
 
 [dev-dependencies]
 reth-codecs = { workspace = true, features = ["test-utils"] }
-tokio = { workspace = true, features = [
-    "test-util",
-    "rt-multi-thread",
-    "macros",
-] }
+tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 test-case.workspace = true
 reth-db = { workspace = true, features = ["test-utils"] }
 reth-db-api = { workspace = true, features = ["test-utils"] }
