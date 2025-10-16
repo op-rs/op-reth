@@ -9631,6 +9631,7 @@ dependencies = [
  "reth-trie",
  "serde",
  "strum 0.27.2",
+ "tempfile",
  "test-case",
  "thiserror 2.0.16",
  "tokio",
