@@ -145,10 +145,57 @@ impl OpProofsStorage for MdbxProofsStorage {
 
     async fn store_trie_updates(
         &self,
-        _block_number: u64,
-        _block_state_diff: BlockStateDiff,
+        block_number: u64,
+        block_state_diff: BlockStateDiff,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!()
+
+        // Todo: save trie updates
+        let mut trie_updates = block_state_diff.trie_updates;
+        let sorted_trie_updates = trie_updates.into_sorted();
+        let sorted_account_nodes = sorted_trie_updates.account_nodes;
+
+        let mut sorted_storage_nodes = Vec::new();
+        for (hashed_address, nodes) in sorted_trie_updates.storage_tries {
+            sorted_storage_nodes.push((hashed_address, nodes));
+        }
+        sorted_storage_nodes.sort_by_key(|(hashed_address, _)| *hashed_address);
+
+        let sorted_post_state = block_state_diff.post_state.into_sorted();
+        let sorted_accounts = sorted_post_state
+            .accounts()
+            .accounts_sorted()
+            .collect::<Vec<_>>();
+
+        // convert to sorted vec of (hashed_address, Vec<(storage_key, storage_value)>)
+        let mut sorted_storage = Vec::new();
+        for (hashed_address, storage) in sorted_post_state.account_storages() {
+            sorted_storage.push((hashed_address, storage));
+        }
+        sorted_storage.sort_by_key(|(hashed_address, _)| *hashed_address);
+
+        self.env.update(|tx| {
+            let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            for (hashed_address, account) in sorted_accounts {
+                let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
+                account_cursor.append_dup(hashed_address, vv)?;
+            }
+
+            let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+            for (hashed_address, storage) in sorted_storage {
+                // todo: handle wiped storage scenario
+                let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
+                for (storage_key, storage_value) in storage_items {
+                    let vv = VersionedValue {
+                        block_number,
+                        value: MaybeDeleted(Some(StorageValue(storage_value))),
+                    };
+                    let key = HashedStorageKey::new(*hashed_address, storage_key);
+                    storage_cursor.append_dup(key, vv)?;
+                }
+            }
+
+            Ok(())
+        })?
     }
 
     async fn fetch_trie_updates(
