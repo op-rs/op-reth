@@ -1,3 +1,4 @@
+use alloy_eips::BlockNumHash;
 use alloy_primitives::B256;
 use bytes::BufMut;
 use derive_more::{From, Into};
@@ -6,7 +7,6 @@ use reth_db::{
     DatabaseError,
 };
 use serde::{Deserialize, Serialize};
-use alloy_eips::BlockNumHash;
 
 /// Wrapper for block number and block hash tuple to implement [`Compress`]/[`Decompress`].
 ///
@@ -30,18 +30,17 @@ impl Decompress for BlockNumberHash {
             return Err(DatabaseError::Decode);
         }
 
-        let number =
-            u64::from_be_bytes(value[..8].try_into().map_err(|_| DatabaseError::Decode)?);
+        let number = u64::from_be_bytes(value[..8].try_into().map_err(|_| DatabaseError::Decode)?);
         let hash = B256::from_slice(&value[8..40]);
 
-        Ok(Self(BlockNumHash {number, hash}))
+        Ok(Self(BlockNumHash { number, hash }))
     }
 }
 
 impl BlockNumberHash {
     /// Create new instance
     pub fn new(number: u64, hash: B256) -> Self {
-        Self(BlockNumHash {number, hash})
+        Self(BlockNumHash { number, hash })
     }
 }
 
