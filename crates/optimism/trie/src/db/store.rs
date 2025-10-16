@@ -4,17 +4,21 @@ use crate::{
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::{
+    cursor::DbCursorRO,
     mdbx::{init_db_for, DatabaseArguments},
-    DatabaseEnv,
+    transaction::DbTx,
+    Database, DatabaseEnv,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles};
 use std::path::Path;
 
+use super::{ProofWindow, ProofWindowKey};
+
 /// MDBX implementation of `OpProofsStorage`.
 #[derive(Debug)]
 pub struct MdbxProofsStorage {
-    _env: DatabaseEnv,
+    env: DatabaseEnv,
 }
 
 impl MdbxProofsStorage {
@@ -22,7 +26,19 @@ impl MdbxProofsStorage {
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())
             .map_err(OpProofsStorageError::Other)?;
-        Ok(Self { _env: env })
+        Ok(Self { env })
+    }
+
+    async fn get_block_number_hash(
+        &self,
+        key: ProofWindowKey,
+    ) -> OpProofsStorageResult<Option<(u64, B256)>> {
+        let result = self.env.view(|tx| {
+            let mut cursor = tx.cursor_read::<ProofWindow>().ok()?;
+            let value = cursor.seek_exact(key).ok()?;
+            value.map(|(_, val)| (val.0, val.1))
+        });
+        Ok(result?)
     }
 }
 
@@ -67,11 +83,11 @@ impl OpProofsStorage for MdbxProofsStorage {
     }
 
     async fn get_earliest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        unimplemented!()
+        self.get_block_number_hash(ProofWindowKey::EarliestBlock).await
     }
 
     async fn get_latest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        unimplemented!()
+        self.get_block_number_hash(ProofWindowKey::LatestBlock).await
     }
 
     fn storage_trie_cursor(
