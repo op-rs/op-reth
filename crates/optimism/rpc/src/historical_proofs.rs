@@ -48,20 +48,20 @@ where
             .provider()
             .block_number_for_id(block_id)?
             .ok_or(EthApiError::HeaderNotFound(block_id))
-            .map_err(|e| ProviderError::other(e))?;
+            .map_err(ProviderError::other)?;
 
         let historical_provider =
-            self.eth_api.state_at_block_id(block_id).await.map_err(|e| ProviderError::other(e))?;
+            self.eth_api.state_at_block_id(block_id).await.map_err(ProviderError::other)?;
 
         let (Some((latest_block_number, _)), Some((earliest_block_number, _))) = (
             self.preimage_store
                 .get_latest_block_number()
                 .await
-                .map_err(|e| ProviderError::other(e))?,
+                .map_err(|e| ProviderError::Database(e.into()))?,
             self.preimage_store
                 .get_earliest_block_number()
                 .await
-                .map_err(|e| ProviderError::other(e))?,
+                .map_err(|e| ProviderError::Database(e.into()))?,
         ) else {
             // if no earliest block, db is empty - use historical provider
             return Ok(historical_provider);
