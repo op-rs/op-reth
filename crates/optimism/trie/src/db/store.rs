@@ -9,6 +9,7 @@ use crate::{
     BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult,
 };
 use alloy_primitives::{map::HashMap, B256, U256};
+use itertools::Itertools;
 use reth_db::{
     cursor::DbDupCursorRW,
     mdbx::{init_db_for, DatabaseArguments},
@@ -178,21 +179,20 @@ impl OpProofsStorage for MdbxProofsStorage {
         let sorted_trie_updates = block_state_diff.trie_updates.into_sorted();
         let sorted_account_nodes = sorted_trie_updates.account_nodes;
 
-        let mut sorted_storage_nodes = Vec::new();
-        for (hashed_address, nodes) in sorted_trie_updates.storage_tries {
-            sorted_storage_nodes.push((hashed_address, nodes));
-        }
-        sorted_storage_nodes.sort_by_key(|(hashed_address, _)| *hashed_address);
+        let sorted_storage_nodes = sorted_trie_updates
+            .storage_tries
+            .into_iter()
+            .sorted_by_key(|(hashed_address, _)| *hashed_address)
+            .collect::<Vec<_>>();
 
         let sorted_post_state = block_state_diff.post_state.into_sorted();
         let sorted_accounts = sorted_post_state.accounts().accounts_sorted();
 
-        // convert to sorted vec of (hashed_address, Vec<(storage_key, storage_value)>)
-        let mut sorted_storage = Vec::new();
-        for (hashed_address, storage) in sorted_post_state.account_storages() {
-            sorted_storage.push((hashed_address, storage));
-        }
-        sorted_storage.sort_by_key(|(hashed_address, _)| *hashed_address);
+        let sorted_storage = sorted_post_state
+            .account_storages()
+            .iter()
+            .sorted_by_key(|(hashed_address, _)| *hashed_address)
+            .collect::<Vec<_>>();
 
         self.env.update(|tx| {
             let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
