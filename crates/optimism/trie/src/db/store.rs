@@ -1,9 +1,8 @@
 use crate::{
     db::{
         models::{
-            AccountTrieHistory, StorageTrieHistory, HashedAccountHistory, 
-            HashedStorageHistory, StorageTrieKey, HashedStorageKey, MaybeDeleted,
-            StorageValue, VersionedValue,
+            AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
+            MaybeDeleted, StorageTrieHistory, StorageTrieKey, StorageValue, VersionedValue,
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
@@ -15,7 +14,7 @@ use reth_db::{
     mdbx::{init_db_for, DatabaseArguments},
     Database, DatabaseEnv,
 };
-use reth_primitives_traits::{Account};
+use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles};
 use std::path::Path;
 
@@ -159,10 +158,7 @@ impl OpProofsStorage for MdbxProofsStorage {
         sorted_storage_nodes.sort_by_key(|(hashed_address, _)| *hashed_address);
 
         let sorted_post_state = block_state_diff.post_state.into_sorted();
-        let sorted_accounts = sorted_post_state
-            .accounts()
-            .accounts_sorted()
-            .collect::<Vec<_>>();
+        let sorted_accounts = sorted_post_state.accounts().accounts_sorted().collect::<Vec<_>>();
 
         // convert to sorted vec of (hashed_address, Vec<(storage_key, storage_value)>)
         let mut sorted_storage = Vec::new();
@@ -248,6 +244,7 @@ impl OpProofsStorage for MdbxProofsStorage {
 mod tests {
     use super::*;
     use reth_db::cursor::DbDupCursorRO;
+    use reth_trie::{updates::StorageTrieUpdates, HashedStorage};
     use tempfile::TempDir;
 
     const B0: u64 = 0;
@@ -463,5 +460,183 @@ mod tests {
                 assert_eq!(inner.0, expected);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_store_trie_updates_comprehensive() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // Sample block number
+        const BLOCK: u64 = 42;
+
+        // Sample addresses and keys
+        let addr1 = B256::from([0x11; 32]);
+        let addr2 = B256::from([0x22; 32]);
+        let slot1 = B256::from([0xA1; 32]);
+        let slot2 = B256::from([0xA2; 32]);
+
+        // Sample accounts
+        let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
+
+        // Sample storage values
+        let val1 = U256::from(1234u64);
+        let val2 = U256::from(5678u64);
+
+        // Sample trie paths
+        let account_path1 = Nibbles::from_nibbles_unchecked(vec![0, 1, 2, 3]);
+        let account_path2 = Nibbles::from_nibbles_unchecked(vec![4, 5, 6, 7]);
+        let removed_account_path = Nibbles::from_nibbles_unchecked(vec![7, 8, 9]);
+
+        let account_node1 = BranchNodeCompact::default();
+        let account_node2 = BranchNodeCompact::default();
+
+        let storage_path1 = Nibbles::from_nibbles_unchecked(vec![1, 2, 3, 4]);
+        let storage_path2 = Nibbles::from_nibbles_unchecked(vec![8, 9, 0, 1]);
+
+        let storage_node1 = BranchNodeCompact::default();
+        let storage_node2 = BranchNodeCompact::default();
+
+        // Construct test BlockStateDiff
+        let mut block_state_diff = BlockStateDiff::default();
+
+        // Add account trie nodes
+        block_state_diff.trie_updates.account_nodes.insert(account_path1, account_node1.clone());
+        block_state_diff.trie_updates.account_nodes.insert(account_path2, account_node2.clone());
+        block_state_diff.trie_updates.removed_nodes.insert(removed_account_path);
+
+        // Add storage trie nodes for two addresses
+        let mut storage_nodes1 = StorageTrieUpdates::default();
+        storage_nodes1.storage_nodes.insert(storage_path1, storage_node1.clone());
+        block_state_diff.trie_updates.storage_tries.insert(addr1, storage_nodes1);
+
+        let mut storage_nodes2 = StorageTrieUpdates::default();
+        storage_nodes2.storage_nodes.insert(storage_path2, storage_node2.clone());
+        block_state_diff.trie_updates.storage_tries.insert(addr2, storage_nodes2);
+
+        // Add hashed accounts (one Some, one None)
+        block_state_diff.post_state.accounts.insert(addr1, Some(acc1));
+        block_state_diff.post_state.accounts.insert(addr2, None); // Deletion
+
+        // Add storage slots for both addresses
+        let mut storage1 = HashedStorage::default();
+        storage1.storage.insert(slot1, val1);
+        block_state_diff.post_state.storages.insert(addr1, storage1);
+
+        let mut storage2 = HashedStorage::default();
+        storage2.storage.insert(slot2, val2);
+        block_state_diff.post_state.storages.insert(addr2, storage2);
+
+        // Store everything
+        store.store_trie_updates(BLOCK, block_state_diff).await.expect("store");
+
+        // Verify account trie nodes
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<AccountTrieHistory>().expect("cursor");
+
+            // Check first node
+            let vv1 =
+                cur.seek_by_key_subkey(account_path1.into(), BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv1.block_number, BLOCK);
+            assert!(vv1.value.0.is_some());
+
+            // Check second node
+            let vv2 =
+                cur.seek_by_key_subkey(account_path2.into(), BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv2.block_number, BLOCK);
+            assert!(vv2.value.0.is_some());
+
+            // Check removed node
+            let vv3 = cur
+                .seek_by_key_subkey(removed_account_path.into(), BLOCK)
+                .expect("seek")
+                .expect("exists");
+            assert_eq!(vv3.block_number, BLOCK);
+            assert!(vv3.value.0.is_none(), "Expected node deletion");
+        }
+
+        // Verify storage trie nodes
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<StorageTrieHistory>().expect("cursor");
+
+            // Check node for addr1
+            let key1 = StorageTrieKey::new(addr1, storage_path1.into());
+            let vv1 = cur.seek_by_key_subkey(key1, BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv1.block_number, BLOCK);
+            assert!(vv1.value.0.is_some());
+
+            // Check node for addr2
+            let key2 = StorageTrieKey::new(addr2, storage_path2.into());
+            let vv2 = cur.seek_by_key_subkey(key2, BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv2.block_number, BLOCK);
+            assert!(vv2.value.0.is_some());
+        }
+
+        // Verify hashed accounts
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
+
+            // Check account1 (exists)
+            let vv1 = cur.seek_by_key_subkey(addr1, BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv1.block_number, BLOCK);
+            assert_eq!(vv1.value.0, Some(acc1));
+
+            // Check account2 (deletion)
+            let vv2 = cur.seek_by_key_subkey(addr2, BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv2.block_number, BLOCK);
+            assert!(vv2.value.0.is_none(), "Expected account deletion");
+        }
+
+        // Verify hashed storages
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<HashedStorageHistory>().expect("cursor");
+
+            // Check storage for addr1
+            let key1 = HashedStorageKey::new(addr1, slot1);
+            let vv1 = cur.seek_by_key_subkey(key1, BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv1.block_number, BLOCK);
+            let inner1 = vv1.value.0.as_ref().expect("Some(StorageValue)");
+            assert_eq!(inner1.0, val1);
+
+            // Check storage for addr2
+            let key2 = HashedStorageKey::new(addr2, slot2);
+            let vv2 = cur.seek_by_key_subkey(key2, BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv2.block_number, BLOCK);
+            let inner2 = vv2.value.0.as_ref().expect("Some(StorageValue)");
+            assert_eq!(inner2.0, val2);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_store_trie_updates_empty_collections() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        const BLOCK: u64 = 42;
+
+        // Create BlockStateDiff with empty collections
+        let block_state_diff = BlockStateDiff::default();
+
+        // This should work without errors
+        store.store_trie_updates(BLOCK, block_state_diff).await.expect("store");
+
+        // Verify nothing was written (should be empty)
+        let tx = store.env.tx().expect("tx");
+
+        let mut cur1 = tx.new_cursor::<AccountTrieHistory>().expect("cursor");
+        assert!(cur1.next_dup_val().expect("first").is_none(), "Account trie should be empty");
+
+        let mut cur2 = tx.new_cursor::<StorageTrieHistory>().expect("cursor");
+        assert!(cur2.next_dup_val().expect("first").is_none(), "Storage trie should be empty");
+
+        let mut cur3 = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
+        assert!(cur3.next_dup_val().expect("first").is_none(), "Hashed accounts should be empty");
+
+        let mut cur4 = tx.new_cursor::<HashedStorageHistory>().expect("cursor");
+        assert!(cur4.next_dup_val().expect("first").is_none(), "Hashed storage should be empty");
     }
 }
