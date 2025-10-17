@@ -192,11 +192,16 @@ impl OpProofsStorage for MdbxProofsStorage {
         Ok(MdbxTrieCursor::new(cursor, max_block_number, Some(hashed_address)))
     }
 
-    fn account_trie_cursor(
+    fn account_trie_cursor<'tx>(
         &self,
-        _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>> {
-        unimplemented!()
+        max_block_number: u64,
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'tx>> {
+        let tx = self.env.tx().map_err(|e| OpProofsStorageError::Other(e.into()))?;
+        let cursor = tx
+            .cursor_dup_read::<AccountTrieHistory>()
+            .map_err(|e| OpProofsStorageError::Other(e.into()))?;
+
+        Ok(MdbxTrieCursor::new(cursor, max_block_number, None))
     }
 
     fn storage_hashed_cursor(

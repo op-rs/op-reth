@@ -469,10 +469,10 @@ impl OpProofsStorage for InMemoryProofsStorage {
         Ok(InMemoryTrieCursor::new(&inner, Some(hashed_address), max_block_number))
     }
 
-    fn account_trie_cursor(
+    fn account_trie_cursor<'tx>(
         &self,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>> {
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'tx>> {
         let inner = self
             .inner
             .try_read()

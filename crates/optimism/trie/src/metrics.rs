@@ -408,10 +408,10 @@ where
         Ok(TrieCursorWithMetrics::new(cursor, self.metrics.clone()))
     }
 
-    fn account_trie_cursor(
+    fn account_trie_cursor<'tx>(
         &self,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>> {
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'tx>> {
         let cursor = self.storage.account_trie_cursor(max_block_number)?;
         Ok(TrieCursorWithMetrics::new(cursor, self.metrics.clone()))
     }

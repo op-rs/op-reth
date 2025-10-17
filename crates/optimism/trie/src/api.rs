@@ -154,10 +154,10 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     ) -> OpProofsStorageResult<Self::StorageTrieCursor<'tx>>;
 
     /// Get a trie cursor for the account backend
-    fn account_trie_cursor(
+    fn account_trie_cursor<'tx>(
         &self,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'_>>;
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor<'tx>>;
 
     /// Get a storage cursor for the storage backend
     fn storage_hashed_cursor(
