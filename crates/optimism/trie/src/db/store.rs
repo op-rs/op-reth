@@ -10,6 +10,7 @@ use reth_db::{
     mdbx::{init_db_for, DatabaseArguments},
     DatabaseEnv,
 };
+use reth_db_api::{transaction::DbTx, Database};
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles};
 use std::path::Path;
@@ -17,7 +18,7 @@ use std::path::Path;
 /// MDBX implementation of `OpProofsStorage`.
 #[derive(Debug)]
 pub struct MdbxProofsStorage {
-    _env: DatabaseEnv,
+    env: DatabaseEnv,
 }
 
 impl MdbxProofsStorage {
@@ -25,7 +26,7 @@ impl MdbxProofsStorage {
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())
             .map_err(OpProofsStorageError::Other)?;
-        Ok(Self { _env: env })
+        Ok(Self { env })
     }
 }
 
@@ -83,12 +84,17 @@ impl OpProofsStorage for MdbxProofsStorage {
         unimplemented!()
     }
 
-    fn storage_trie_cursor(
+    fn storage_trie_cursor<'tx>(
         &self,
-        _hashed_address: B256,
-        _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'_>> {
-        unimplemented!()
+        hashed_address: B256,
+        max_block_number: u64,
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'tx>> {
+        let tx = self.env.tx().map_err(|e| OpProofsStorageError::Other(e.into()))?;
+        let cursor = tx
+            .cursor_dup_read::<StorageTrieHistory>()
+            .map_err(|e| OpProofsStorageError::Other(e.into()))?;
+
+        Ok(MdbxTrieCursor::new(cursor, max_block_number, Some(hashed_address)))
     }
 
     fn account_trie_cursor(

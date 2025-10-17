@@ -460,11 +460,11 @@ impl OpProofsStorage for InMemoryProofsStorage {
         }
     }
 
-    fn storage_trie_cursor(
+    fn storage_trie_cursor<'tx>(
         &self,
         hashed_address: B256,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'_>> {
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'tx>> {
         // For synchronous methods, we need to try_read() and handle potential blocking
         let inner = self
             .inner

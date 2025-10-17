@@ -130,11 +130,11 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     ) -> impl Future<Output = OpProofsStorageResult<Option<(u64, B256)>>> + Send;
 
     /// Get a trie cursor for the storage backend
-    fn storage_trie_cursor(
+    fn storage_trie_cursor<'tx>(
         &self,
         hashed_address: B256,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'_>>;
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor<'tx>>;
 
     /// Get a trie cursor for the account backend
     fn account_trie_cursor(
