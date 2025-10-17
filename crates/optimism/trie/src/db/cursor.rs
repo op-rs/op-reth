@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    db::{AccountTrieHistory, MaybeDeleted, StorageTrieHistory, StorageTrieSubKey, VersionedValue},
+    db::{AccountTrieHistory, MaybeDeleted, StorageTrieHistory, StorageTrieKey, VersionedValue},
     OpProofsHashedCursor, OpProofsStorageError, OpProofsStorageResult, OpProofsTrieCursor,
 };
 use alloy_primitives::{B256, U256};
@@ -222,7 +222,7 @@ where
         path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         if let Some(address) = self.hashed_address {
-            let key = StorageTrieSubKey::new(address, StoredNibbles(path));
+            let key = StorageTrieKey::new(address, StoredNibbles(path));
             return self.inner.seek_exact(key).map(|opt| {
                 opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
             })
@@ -235,7 +235,7 @@ where
         path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         if let Some(address) = self.hashed_address {
-            let key = StorageTrieSubKey::new(address, StoredNibbles(path));
+            let key = StorageTrieKey::new(address, StoredNibbles(path));
             return self.inner.seek(key).map(|opt| opt.map(|(k, node)| (k.path.0, node)))
         }
         Ok(None)
@@ -339,7 +339,7 @@ mod tests {
         val: Option<BranchNodeCompact>,
     ) {
         let mut c = wtx.cursor_dup_write::<StorageTrieHistory>().expect("dup write cursor");
-        let key = StorageTrieSubKey::new(address, StoredNibbles(path));
+        let key = StorageTrieKey::new(address, StoredNibbles(path));
         let vv = VersionedValue { block_number: block, value: MaybeDeleted(val) };
         c.append_dup(key, vv).expect("append dup");
     }

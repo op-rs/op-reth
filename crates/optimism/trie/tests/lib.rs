@@ -138,7 +138,7 @@ async fn test_cursor_single_entry<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     // Store single entry
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
 
@@ -171,7 +171,7 @@ async fn test_cursor_multiple_entries<S: OpProofsStorage>(
 
     // Store multiple entries
     for path in &paths {
-        storage.store_account_branches(50, vec![(*path, Some(branch.clone()))]).await?;
+        storage.store_account_branches(vec![(*path, Some(branch.clone()))]).await?;
     }
 
     let mut cursor = storage.account_trie_cursor(100)?;
@@ -204,7 +204,7 @@ async fn test_seek_exact_existing_path<S: OpProofsStorage>(
     let path = nibbles_from(vec![1, 2, 3]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     let result = cursor.seek_exact(path)?.unwrap();
@@ -222,7 +222,7 @@ async fn test_seek_exact_non_existing_path<S: OpProofsStorage>(
     let path = nibbles_from(vec![1, 2, 3]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     let non_existing = nibbles_from(vec![4, 5, 6]);
@@ -240,7 +240,7 @@ async fn test_seek_exact_empty_path<S: OpProofsStorage>(
     let path = nibbles_from(vec![]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     let result = cursor.seek_exact(Nibbles::default())?.unwrap();
@@ -258,7 +258,7 @@ async fn test_seek_to_existing_path<S: OpProofsStorage>(
     let path = nibbles_from(vec![1, 2, 3]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     let result = cursor.seek(path)?.unwrap();
@@ -277,8 +277,8 @@ async fn test_seek_between_existing_nodes<S: OpProofsStorage>(
     let path2 = nibbles_from(vec![3]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path1, Some(branch.clone()))]).await?;
-    storage.store_account_branches(50, vec![(path2, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path1, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path2, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     // Seek to path between 1 and 3, should return path 3
@@ -298,7 +298,7 @@ async fn test_seek_after_all_nodes<S: OpProofsStorage>(
     let path = nibbles_from(vec![1]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     // Seek to path after all nodes
@@ -317,7 +317,7 @@ async fn test_seek_before_all_nodes<S: OpProofsStorage>(
     let path = nibbles_from(vec![5]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     // Seek to path before all nodes, should return first node
@@ -341,7 +341,7 @@ async fn test_next_without_prior_seek<S: OpProofsStorage>(
     let path = nibbles_from(vec![1, 2]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     // next() without prior seek should start from beginning
@@ -359,8 +359,8 @@ async fn test_next_after_seek<S: OpProofsStorage>(storage: S) -> Result<(), OpPr
     let path2 = nibbles_from(vec![2]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path1, Some(branch.clone()))]).await?;
-    storage.store_account_branches(50, vec![(path2, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path1, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path2, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     cursor.seek(path1)?;
@@ -381,7 +381,7 @@ async fn test_next_at_end_of_trie<S: OpProofsStorage>(
     let path = nibbles_from(vec![1]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
     cursor.seek(path)?;
@@ -402,7 +402,7 @@ async fn test_multiple_consecutive_next<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     for path in &paths {
-        storage.store_account_branches(50, vec![(*path, Some(branch.clone()))]).await?;
+        storage.store_account_branches(vec![(*path, Some(branch.clone()))]).await?;
     }
 
     let mut cursor = storage.account_trie_cursor(100)?;
@@ -429,8 +429,8 @@ async fn test_current_after_operations<S: OpProofsStorage>(
     let path2 = nibbles_from(vec![2]);
     let branch = create_test_branch();
 
-    storage.store_account_branches(50, vec![(path1, Some(branch.clone()))]).await?;
-    storage.store_account_branches(50, vec![(path2, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path1, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path2, Some(branch.clone()))]).await?;
 
     let mut cursor = storage.account_trie_cursor(100)?;
 
@@ -477,8 +477,8 @@ async fn test_same_path_different_blocks<S: OpProofsStorage>(
     let branch2 = create_test_branch_variant();
 
     // Store same path at different blocks
-    storage.store_account_branches(50, vec![(path, Some(branch1.clone()))]).await?;
-    storage.store_account_branches(100, vec![(path, Some(branch2.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch1.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch2.clone()))]).await?;
 
     // Cursor with max_block_number=75 should see only block 50 data
     let mut cursor75 = storage.account_trie_cursor(75)?;
@@ -503,13 +503,14 @@ async fn test_deleted_branch_nodes<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     // Store branch node, then delete it (store None)
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
-    storage.store_account_branches(100, vec![(path, None)]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     // Cursor before deletion should see the node
     let mut cursor75 = storage.account_trie_cursor(75)?;
     assert!(cursor75.seek_exact(path)?.is_some());
 
+    // set the node to None
+    storage.store_account_branches(vec![(path, None)]).await?;
     // Cursor after deletion should not see the node
     let mut cursor150 = storage.account_trie_cursor(150)?;
     assert!(cursor150.seek_exact(path)?.is_none());
@@ -533,8 +534,8 @@ async fn test_account_specific_cursor<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     // Store same path for different accounts (using storage branches)
-    storage.store_storage_branches(50, addr1, vec![(path, Some(branch.clone()))]).await?;
-    storage.store_storage_branches(50, addr2, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_storage_branches(addr1, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_storage_branches(addr2, vec![(path, Some(branch.clone()))]).await?;
 
     // Cursor for addr1 should only see addr1 data
     let mut cursor1 = storage.storage_trie_cursor(addr1, 100)?;
@@ -568,8 +569,8 @@ async fn test_state_trie_cursor<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     // Store data for account trie and state trie
-    storage.store_storage_branches(50, addr, vec![(path, Some(branch.clone()))]).await?;
-    storage.store_account_branches(50, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_storage_branches(addr, vec![(path, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
 
     // State trie cursor (None address) should only see state trie data
     let mut state_cursor = storage.account_trie_cursor(100)?;
@@ -600,8 +601,8 @@ async fn test_mixed_account_state_data<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     // Store mixed account and state trie data
-    storage.store_storage_branches(50, addr, vec![(path1, Some(branch.clone()))]).await?;
-    storage.store_account_branches(50, vec![(path2, Some(branch.clone()))]).await?;
+    storage.store_storage_branches(addr, vec![(path1, Some(branch.clone()))]).await?;
+    storage.store_account_branches(vec![(path2, Some(branch.clone()))]).await?;
 
     // Account cursor should only see account data
     let mut account_cursor = storage.storage_trie_cursor(addr, 100)?;
@@ -644,7 +645,7 @@ async fn test_lexicographic_ordering<S: OpProofsStorage>(
 
     // Store paths in random order
     for path in &paths {
-        storage.store_account_branches(50, vec![(*path, Some(branch.clone()))]).await?;
+        storage.store_account_branches(vec![(*path, Some(branch.clone()))]).await?;
     }
 
     let mut cursor = storage.account_trie_cursor(100)?;
@@ -680,7 +681,7 @@ async fn test_path_prefix_scenarios<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     for path in &paths {
-        storage.store_account_branches(50, vec![(*path, Some(branch.clone()))]).await?;
+        storage.store_account_branches(vec![(*path, Some(branch.clone()))]).await?;
     }
 
     let mut cursor = storage.account_trie_cursor(100)?;
@@ -716,7 +717,7 @@ async fn test_complex_nibble_combinations<S: OpProofsStorage>(
     let branch = create_test_branch();
 
     for path in &paths {
-        storage.store_account_branches(50, vec![(*path, Some(branch.clone()))]).await?;
+        storage.store_account_branches(vec![(*path, Some(branch.clone()))]).await?;
     }
 
     let mut cursor = storage.account_trie_cursor(100)?;
@@ -750,7 +751,7 @@ async fn test_store_and_retrieve_single_account<S: OpProofsStorage>(
     let account = create_test_account();
 
     // Store account
-    storage.store_hashed_accounts(vec![(account_key, Some(account))], 50).await?;
+    storage.store_hashed_accounts(vec![(account_key, Some(account))]).await?;
 
     // Retrieve via cursor
     let mut cursor = storage.account_hashed_cursor(100)?;
@@ -778,7 +779,7 @@ async fn test_account_cursor_navigation<S: OpProofsStorage>(
 
     // Store accounts
     let accounts_to_store: Vec<_> = accounts.iter().map(|(k, v)| (*k, Some(*v))).collect();
-    storage.store_hashed_accounts(accounts_to_store, 50).await?;
+    storage.store_hashed_accounts(accounts_to_store).await?;
 
     let mut cursor = storage.account_hashed_cursor(100)?;
 
@@ -812,8 +813,7 @@ async fn test_account_block_versioning<S: OpProofsStorage>(
     let account_v2 = create_test_account_with_values(2, 200, 0xDD);
 
     // Store account at different blocks
-    storage.store_hashed_accounts(vec![(account_key, Some(account_v1))], 50).await?;
-    storage.store_hashed_accounts(vec![(account_key, Some(account_v2))], 100).await?;
+    storage.store_hashed_accounts(vec![(account_key, Some(account_v1))]).await?;
 
     // Cursor with max_block_number=75 should see v1
     let mut cursor75 = storage.account_hashed_cursor(75)?;
@@ -821,7 +821,9 @@ async fn test_account_block_versioning<S: OpProofsStorage>(
     assert_eq!(result75.1.nonce, account_v1.nonce);
     assert_eq!(result75.1.balance, account_v1.balance);
 
-    // Cursor with max_block_number=150 should see v2
+    storage.store_hashed_accounts(vec![(account_key, Some(account_v2))]).await?;
+
+    // After update, Cursor with max_block_number=150 should see v2
     let mut cursor150 = storage.account_hashed_cursor(150)?;
     let result150 = cursor150.seek(account_key)?.unwrap();
     assert_eq!(result150.1.nonce, account_v2.nonce);
@@ -844,7 +846,7 @@ async fn test_store_and_retrieve_storage<S: OpProofsStorage>(
     ];
 
     // Store storage slots
-    storage.store_hashed_storages(hashed_address, storage_slots.clone(), 50).await?;
+    storage.store_hashed_storages(hashed_address, storage_slots.clone()).await?;
 
     // Retrieve via cursor
     let mut cursor = storage.storage_hashed_cursor(hashed_address, 100)?;
@@ -872,7 +874,7 @@ async fn test_storage_cursor_navigation<S: OpProofsStorage>(
         (B256::repeat_byte(0x50), U256::from(500)),
     ];
 
-    storage.store_hashed_storages(hashed_address, storage_slots.clone(), 50).await?;
+    storage.store_hashed_storages(hashed_address, storage_slots.clone()).await?;
 
     let mut cursor = storage.storage_hashed_cursor(hashed_address, 100)?;
 
@@ -901,8 +903,8 @@ async fn test_storage_account_isolation<S: OpProofsStorage>(
     let storage_key = B256::repeat_byte(0x10);
 
     // Store same storage key for different accounts
-    storage.store_hashed_storages(address1, vec![(storage_key, U256::from(100))], 50).await?;
-    storage.store_hashed_storages(address2, vec![(storage_key, U256::from(200))], 50).await?;
+    storage.store_hashed_storages(address1, vec![(storage_key, U256::from(100))]).await?;
+    storage.store_hashed_storages(address2, vec![(storage_key, U256::from(200))]).await?;
 
     // Verify each account sees only its own storage
     let mut cursor1 = storage.storage_hashed_cursor(address1, 100)?;
@@ -934,16 +936,14 @@ async fn test_storage_block_versioning<S: OpProofsStorage>(
     let storage_key = B256::repeat_byte(0x10);
 
     // Store storage at different blocks
-    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::from(100))], 50).await?;
-    storage
-        .store_hashed_storages(hashed_address, vec![(storage_key, U256::from(200))], 100)
-        .await?;
+    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::from(100))]).await?;
 
     // Cursor with max_block_number=75 should see old value
     let mut cursor75 = storage.storage_hashed_cursor(hashed_address, 75)?;
     let result75 = cursor75.seek(storage_key)?.unwrap();
     assert_eq!(result75.1, U256::from(100));
 
+    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::from(200))]).await?;
     // Cursor with max_block_number=150 should see new value
     let mut cursor150 = storage.storage_hashed_cursor(hashed_address, 150)?;
     let result150 = cursor150.seek(storage_key)?.unwrap();
@@ -962,15 +962,15 @@ async fn test_storage_zero_value_deletion<S: OpProofsStorage>(
     let storage_key = B256::repeat_byte(0x10);
 
     // Store non-zero value
-    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::from(100))], 50).await?;
-
-    // "Delete" by storing zero value
-    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::ZERO)], 100).await?;
+    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::from(100))]).await?;
 
     // Cursor before deletion should see the value
     let mut cursor75 = storage.storage_hashed_cursor(hashed_address, 75)?;
     let result75 = cursor75.seek(storage_key)?.unwrap();
     assert_eq!(result75.1, U256::from(100));
+
+    // "Delete" by storing zero value
+    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::ZERO)]).await?;
 
     // Cursor after deletion should NOT see the entry (zero values are skipped)
     let mut cursor150 = storage.storage_hashed_cursor(hashed_address, 150)?;
@@ -998,7 +998,7 @@ async fn test_storage_cursor_skips_zero_values<S: OpProofsStorage>(
     ];
 
     // Store all slots
-    storage.store_hashed_storages(hashed_address, storage_slots.clone(), 50).await?;
+    storage.store_hashed_storages(hashed_address, storage_slots.clone()).await?;
 
     // Create cursor and iterate through all entries
     let mut cursor = storage.storage_hashed_cursor(hashed_address, 100)?;
@@ -1054,7 +1054,7 @@ async fn test_cursor_boundary_conditions<S: OpProofsStorage>(
     let account_key = B256::repeat_byte(0x80); // Middle value
     let account = create_test_account();
 
-    storage.store_hashed_accounts(vec![(account_key, Some(account))], 50).await?;
+    storage.store_hashed_accounts(vec![(account_key, Some(account))]).await?;
 
     let mut cursor = storage.account_hashed_cursor(100)?;
 
@@ -1088,7 +1088,7 @@ async fn test_large_batch_operations<S: OpProofsStorage>(
     }
 
     // Store in batch
-    storage.store_hashed_accounts(accounts.clone(), 50).await?;
+    storage.store_hashed_accounts(accounts.clone()).await?;
 
     // Verify all accounts can be retrieved
     let mut cursor = storage.account_hashed_cursor(100)?;
@@ -1128,7 +1128,7 @@ async fn test_store_trie_updates_with_wiped_storage<S: OpProofsStorage>(
         (B256::repeat_byte(0x40), U256::from(400)),
     ];
 
-    storage.store_hashed_storages(hashed_address, storage_slots.clone(), 50).await?;
+    storage.store_hashed_storages(hashed_address, storage_slots.clone()).await?;
 
     // Verify all values are present at block 75
     let mut cursor75 = storage.storage_hashed_cursor(hashed_address, 75)?;
@@ -1591,6 +1591,250 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStorage>(
     assert!(
         fetched_101.post_state.accounts.contains_key(&new_account_addr),
         "New account should be in post_state"
+    );
+
+    Ok(())
+}
+
+/// Test that pure deletions (nodes only in `removed_nodes`) are properly stored
+///
+/// This test verifies that when a node appears only in `removed_nodes` (not in updates),
+/// it is properly stored as a deletion and subsequent queries return None for that path.
+#[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[tokio::test]
+async fn test_pure_deletions_stored_correctly<S: OpProofsStorage>(
+    storage: S,
+) -> Result<(), OpProofsStorageError> {
+    use reth_trie::updates::StorageTrieUpdates;
+
+    // ========== Setup: Store initial branch nodes at block 50 ==========
+    let account_path1 = nibbles_from(vec![1, 2, 3]);
+    let account_path2 = nibbles_from(vec![4, 5, 6]);
+    let storage_path1 = nibbles_from(vec![7, 8, 9]);
+    let storage_path2 = nibbles_from(vec![10, 11, 12]);
+    let storage_address = B256::repeat_byte(0x42);
+
+    let initial_branch = create_test_branch();
+
+    let mut initial_trie_updates = TrieUpdates::default();
+    initial_trie_updates.account_nodes.insert(account_path1, initial_branch.clone());
+    initial_trie_updates.account_nodes.insert(account_path2, initial_branch.clone());
+
+    let mut storage_trie = StorageTrieUpdates::default();
+    storage_trie.storage_nodes.insert(storage_path1, initial_branch.clone());
+    storage_trie.storage_nodes.insert(storage_path2, initial_branch.clone());
+    initial_trie_updates.insert_storage_updates(storage_address, storage_trie);
+
+    let initial_diff = BlockStateDiff {
+        trie_updates: initial_trie_updates,
+        post_state: HashedPostState::default(),
+    };
+
+    storage.store_trie_updates(50, initial_diff).await?;
+
+    // Verify initial state exists at block 75
+    let mut cursor_75 = storage.account_trie_cursor(75)?;
+    assert!(
+        cursor_75.seek_exact(account_path1)?.is_some(),
+        "Initial account branch 1 should exist at block 75"
+    );
+    assert!(
+        cursor_75.seek_exact(account_path2)?.is_some(),
+        "Initial account branch 2 should exist at block 75"
+    );
+
+    let mut storage_cursor_75 = storage.storage_trie_cursor(storage_address, 75)?;
+    assert!(
+        storage_cursor_75.seek_exact(storage_path1)?.is_some(),
+        "Initial storage branch 1 should exist at block 75"
+    );
+    assert!(
+        storage_cursor_75.seek_exact(storage_path2)?.is_some(),
+        "Initial storage branch 2 should exist at block 75"
+    );
+
+    // ========== At block 100: Mark paths as deleted (ONLY in removed_nodes) ==========
+    let mut deletion_trie_updates = TrieUpdates::default();
+
+    // Add to removed_nodes ONLY (no updates)
+    deletion_trie_updates.removed_nodes.insert(account_path1);
+
+    // Do the same for storage branch
+    let mut deletion_storage_trie = StorageTrieUpdates::default();
+    deletion_storage_trie.removed_nodes.insert(storage_path1);
+    deletion_trie_updates.insert_storage_updates(storage_address, deletion_storage_trie);
+
+    let deletion_diff = BlockStateDiff {
+        trie_updates: deletion_trie_updates,
+        post_state: HashedPostState::default(),
+    };
+
+    storage.store_trie_updates(100, deletion_diff).await?;
+
+    // ========== Verify that deleted nodes return None at block 150 ==========
+
+    // Deleted account branch should not be found
+    let mut cursor_150 = storage.account_trie_cursor(150)?;
+    let account_result = cursor_150.seek_exact(account_path1)?;
+    assert!(account_result.is_none(), "Deleted account branch should return None at block 150");
+
+    // Non-deleted account branch should still exist
+    let account_result2 = cursor_150.seek_exact(account_path2)?;
+    assert!(
+        account_result2.is_some(),
+        "Non-deleted account branch should still exist at block 150"
+    );
+
+    // Deleted storage branch should not be found
+    let mut storage_cursor_150 = storage.storage_trie_cursor(storage_address, 150)?;
+    let storage_result = storage_cursor_150.seek_exact(storage_path1)?;
+    assert!(storage_result.is_none(), "Deleted storage branch should return None at block 150");
+
+    // Non-deleted storage branch should still exist
+    let storage_result2 = storage_cursor_150.seek_exact(storage_path2)?;
+    assert!(
+        storage_result2.is_some(),
+        "Non-deleted storage branch should still exist at block 150"
+    );
+
+    // ========== Verify that the nodes still exist at block 75 (before deletion) ==========
+    let mut cursor_75_after = storage.account_trie_cursor(75)?;
+    assert!(
+        cursor_75_after.seek_exact(account_path1)?.is_some(),
+        "Deleted node should still exist at block 75 (before deletion)"
+    );
+
+    let mut storage_cursor_75_after = storage.storage_trie_cursor(storage_address, 75)?;
+    assert!(
+        storage_cursor_75_after.seek_exact(storage_path1)?.is_some(),
+        "Deleted storage node should still exist at block 75 (before deletion)"
+    );
+
+    // ========== Verify iteration skips deleted nodes ==========
+    let mut cursor_iter = storage.account_trie_cursor(150)?;
+    let mut found_paths = Vec::new();
+    while let Some((path, _)) = cursor_iter.next()? {
+        found_paths.push(path);
+    }
+
+    assert!(!found_paths.contains(&account_path1), "Iteration should skip deleted node");
+    assert!(found_paths.contains(&account_path2), "Iteration should include non-deleted node");
+
+    Ok(())
+}
+
+/// Test that updates take precedence over removals when both are present
+///
+/// This test verifies that when a path appears in both `removed_nodes` and `account_nodes`,
+/// the update from `account_nodes` takes precedence. This is critical for correctness
+/// when processing trie updates that both remove and update the same node.
+#[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[tokio::test]
+async fn test_updates_take_precedence_over_removals<S: OpProofsStorage>(
+    storage: S,
+) -> Result<(), OpProofsStorageError> {
+    use reth_trie::updates::StorageTrieUpdates;
+
+    // ========== Setup: Store initial branch nodes at block 50 ==========
+    let account_path = nibbles_from(vec![1, 2, 3]);
+    let storage_path = nibbles_from(vec![4, 5, 6]);
+    let storage_address = B256::repeat_byte(0x42);
+
+    let initial_branch = create_test_branch();
+
+    let mut initial_trie_updates = TrieUpdates::default();
+    initial_trie_updates.account_nodes.insert(account_path, initial_branch.clone());
+
+    let mut storage_trie = StorageTrieUpdates::default();
+    storage_trie.storage_nodes.insert(storage_path, initial_branch.clone());
+    initial_trie_updates.insert_storage_updates(storage_address, storage_trie);
+
+    let initial_diff = BlockStateDiff {
+        trie_updates: initial_trie_updates,
+        post_state: HashedPostState::default(),
+    };
+
+    storage.store_trie_updates(50, initial_diff).await?;
+
+    // Verify initial state exists at block 75
+    let mut cursor_75 = storage.account_trie_cursor(75)?;
+    assert!(
+        cursor_75.seek_exact(account_path)?.is_some(),
+        "Initial account branch should exist at block 75"
+    );
+
+    let mut storage_cursor_75 = storage.storage_trie_cursor(storage_address, 75)?;
+    assert!(
+        storage_cursor_75.seek_exact(storage_path)?.is_some(),
+        "Initial storage branch should exist at block 75"
+    );
+
+    // ========== At block 100: Add paths to BOTH removed_nodes AND account_nodes ==========
+    // This simulates a scenario where a node is both removed and updated
+    // The update should take precedence
+    let updated_branch = create_test_branch_variant();
+
+    let mut conflicting_trie_updates = TrieUpdates::default();
+
+    // Add to removed_nodes
+    conflicting_trie_updates.removed_nodes.insert(account_path);
+
+    // Also add to account_nodes (this should take precedence)
+    conflicting_trie_updates.account_nodes.insert(account_path, updated_branch.clone());
+
+    // Do the same for storage branch
+    let mut conflicting_storage_trie = StorageTrieUpdates::default();
+    conflicting_storage_trie.removed_nodes.insert(storage_path);
+    conflicting_storage_trie.storage_nodes.insert(storage_path, updated_branch.clone());
+    conflicting_trie_updates.insert_storage_updates(storage_address, conflicting_storage_trie);
+
+    let conflicting_diff = BlockStateDiff {
+        trie_updates: conflicting_trie_updates,
+        post_state: HashedPostState::default(),
+    };
+
+    storage.store_trie_updates(100, conflicting_diff).await?;
+
+    // ========== Verify that updates took precedence at block 150 ==========
+
+    // Account branch should exist (not deleted) with the updated value
+    let mut cursor_150 = storage.account_trie_cursor(150)?;
+    let account_result = cursor_150.seek_exact(account_path)?;
+    assert!(
+        account_result.is_some(),
+        "Account branch should exist at block 150 (update should take precedence over removal)"
+    );
+    let (found_path, found_branch) = account_result.unwrap();
+    assert_eq!(found_path, account_path);
+    // Verify it's the updated branch, not the initial one
+    assert_eq!(
+        found_branch.state_mask, updated_branch.state_mask,
+        "Account branch should be the updated version, not the initial one"
+    );
+
+    // Storage branch should exist (not deleted) with the updated value
+    let mut storage_cursor_150 = storage.storage_trie_cursor(storage_address, 150)?;
+    let storage_result = storage_cursor_150.seek_exact(storage_path)?;
+    assert!(
+        storage_result.is_some(),
+        "Storage branch should exist at block 150 (update should take precedence over removal)"
+    );
+    let (found_storage_path, found_storage_branch) = storage_result.unwrap();
+    assert_eq!(found_storage_path, storage_path);
+    // Verify it's the updated branch
+    assert_eq!(
+        found_storage_branch.state_mask, updated_branch.state_mask,
+        "Storage branch should be the updated version, not the initial one"
+    );
+
+    // ========== Verify that the old version still exists at block 75 ==========
+    let mut cursor_75_after = storage.account_trie_cursor(75)?;
+    let result_75 = cursor_75_after.seek_exact(account_path)?;
+    assert!(result_75.is_some(), "Initial version should still exist at block 75");
+    let (_, branch_75) = result_75.unwrap();
+    assert_eq!(
+        branch_75.state_mask, initial_branch.state_mask,
+        "Block 75 should see the initial branch, not the updated one"
     );
 
     Ok(())

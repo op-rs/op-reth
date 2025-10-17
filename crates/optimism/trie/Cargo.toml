@@ -13,10 +13,19 @@ workspace = true
 
 [dependencies]
 # reth
+reth-db = { workspace = true, features = ["mdbx"] }
+reth-db-api.workspace = true
+reth-evm.workspace = true
+reth-execution-errors.workspace = true
+reth-node-api.workspace = true
+reth-primitives-traits.workspace = true
+reth-provider.workspace = true
+reth-revm.workspace = true
 reth-trie = { workspace = true, features = ["serde"] }
-reth-primitives-traits = { workspace = true, features = ["op"] }
-reth-db = { workspace = true, features = ["mdbx", "op"] }
-reth-db-api = { workspace = true, features = ["op"] }
+
+# metrics
+metrics.workspace = true
+reth-metrics = { workspace = true, features = ["common"] }
 
 # ethereum
 alloy-primitives.workspace = true
@@ -32,6 +41,7 @@ serde.workspace = true
 thiserror.workspace = true
 auto_impl.workspace = true
 eyre.workspace = true
+strum.workspace = true
 tracing.workspace = true
 derive_more.workspace = true
 
@@ -41,5 +51,4 @@ tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"
 tempfile.workspace = true
 test-case.workspace = true
 reth-db = { workspace = true, features = ["test-utils"] }
-reth-db-api = { workspace = true, features = ["test-utils"] }
 reth-trie = { workspace = true, features = ["test-utils"] }
