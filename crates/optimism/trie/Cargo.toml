@@ -52,3 +52,9 @@ tempfile.workspace = true
 test-case.workspace = true
 reth-db = { workspace = true, features = ["test-utils"] }
 reth-trie = { workspace = true, features = ["test-utils"] }
+
+[features]
+serde-bincode-compat = [
+    "reth-primitives-traits/serde-bincode-compat",
+    "reth-trie/serde-bincode-compat",
+]
