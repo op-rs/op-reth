@@ -2,6 +2,7 @@
 
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
+use reth_db_api::DatabaseError;
 use reth_primitives_traits::Account;
 use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
 use std::fmt::Debug;
@@ -22,6 +23,10 @@ pub enum OpProofsStorageError {
     /// State root mismatch
     #[error("State root mismatch for block {0} (have: {1}, expected: {2})")]
     StateRootMismatch(u64, B256, B256),
+    /// Error occurred while interacting with the database.
+    #[error(transparent)]
+    DatabaseError(#[from] DatabaseError),
+
     /// Other error
     #[error("Other error: {0}")]
     Other(eyre::Error),
