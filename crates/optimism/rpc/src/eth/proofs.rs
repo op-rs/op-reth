@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use derive_more::Constructor;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee_core::RpcResult;
+use jsonrpsee_types::error::ErrorObject;
 use reth_optimism_trie::{provider::OpProofsStateProviderRef, OpProofsStorage};
 use reth_provider::{BlockIdReader, ProviderError, ProviderResult, StateProviderBox};
 use reth_rpc_api::eth::helpers::FullEthApi;
@@ -37,7 +38,7 @@ pub struct EthApiExt<Eth, P> {
 impl<Eth, P> EthApiExt<Eth, P>
 where
     Eth: FullEthApi + Send + Sync + 'static,
-    jsonrpsee_types::error::ErrorObject<'static>: From<Eth::Error>,
+    ErrorObject<'static>: From<Eth::Error>,
     P: OpProofsStorage + Clone + 'static,
 {
     async fn state_provider(&self, block_id: Option<BlockId>) -> ProviderResult<StateProviderBox> {
@@ -85,7 +86,7 @@ where
 impl<Eth, P> EthApiOverrideServer for EthApiExt<Eth, P>
 where
     Eth: FullEthApi + Send + Sync + 'static,
-    jsonrpsee_types::error::ErrorObject<'static>: From<Eth::Error>,
+    ErrorObject<'static>: From<Eth::Error>,
     P: OpProofsStorage + Clone + 'static,
 {
     async fn get_proof(

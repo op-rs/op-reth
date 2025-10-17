@@ -9,7 +9,7 @@ use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
 use reth_optimism_exex::OpProofsExEx;
 use reth_optimism_node::{args::RollupArgs, OpNode};
-use reth_optimism_rpc::historical_proofs::{EthApiExt, EthApiOverrideServer};
+use reth_optimism_rpc::eth::proofs::{EthApiExt, EthApiOverrideServer};
 use reth_optimism_trie::{db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage};
 use tracing::info;
 
