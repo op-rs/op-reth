@@ -158,7 +158,7 @@ impl OpProofsStorage for MdbxProofsStorage {
         sorted_storage_nodes.sort_by_key(|(hashed_address, _)| *hashed_address);
 
         let sorted_post_state = block_state_diff.post_state.into_sorted();
-        let sorted_accounts = sorted_post_state.accounts().accounts_sorted().collect::<Vec<_>>();
+        let sorted_accounts = sorted_post_state.accounts().accounts_sorted();
 
         // convert to sorted vec of (hashed_address, Vec<(storage_key, storage_value)>)
         let mut sorted_storage = Vec::new();
