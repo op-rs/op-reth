@@ -53,13 +53,8 @@ impl MdbxProofsStorage {
         hash: B256,
     ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
-            let mut cursor = tx
-                .new_cursor::<ProofWindow>()
-                .map_err(|err| OpProofsStorageError::DatabaseError(err))?;
-
-            cursor
-                .append(ProofWindowKey::EarliestBlock, &BlockNumberHash(block_number, hash))
-                .map_err(OpProofsStorageError::DatabaseError)?;
+            let mut cursor = tx.new_cursor::<ProofWindow>()?;
+            cursor.insert(ProofWindowKey::EarliestBlock, &BlockNumberHash(block_number, hash))?;
             Ok(())
         })?
     }
@@ -697,7 +692,10 @@ mod tests {
 
         // Verify that latest_block falls back to earliest when not set
         let latest = store.get_latest_block_number().await.expect("get latest");
-        assert_eq!(latest, Some((new_block_number, new_hash)), 
-            "Latest block should fall back to earliest when not explicitly set");
+        assert_eq!(
+            latest,
+            Some((new_block_number, new_hash)),
+            "Latest block should fall back to earliest when not explicitly set"
+        );
     }
 }
