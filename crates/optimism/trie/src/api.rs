@@ -2,6 +2,7 @@
 
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
+use reth_db_api::DatabaseError;
 use reth_primitives_traits::Account;
 use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
 use std::fmt::Debug;
@@ -10,7 +11,22 @@ use thiserror::Error;
 /// Error type for storage operations
 #[derive(Debug, Error)]
 pub enum OpProofsStorageError {
-    // TODO: add more errors once we know what they are
+    /// No blocks found
+    #[error("No blocks found")]
+    NoBlocksFound,
+    /// Parent block number is less than earliest stored block number
+    #[error("Parent block number is less than earliest stored block number")]
+    UnknownParent,
+    /// Block update failed since parent state
+    #[error("Cannot execute block updates for block {0} without parent state {1} (latest stored block number: {2})")]
+    BlockUpdateFailed(u64, u64, u64),
+    /// State root mismatch
+    #[error("State root mismatch for block {0} (have: {1}, expected: {2})")]
+    StateRootMismatch(u64, B256, B256),
+    /// Error occurred while interacting with the database.
+    #[error(transparent)]
+    DatabaseError(#[from] DatabaseError),
+
     /// Other error
     #[error("Other error: {0}")]
     Other(eyre::Error),
@@ -52,6 +68,11 @@ pub trait OpProofsHashedCursor: Send + Sync {
 
     /// Move the cursor to the next entry and return it.
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>>;
+
+    /// Returns `true` if there are no entries for a given key.
+    fn is_storage_empty(&mut self) -> OpProofsStorageResult<bool> {
+        Ok(self.seek(B256::ZERO)?.is_none())
+    }
 }
 
 /// Diff of trie updates and post state for a block.
@@ -70,7 +91,10 @@ pub struct BlockStateDiff {
 #[auto_impl(Arc)]
 pub trait OpProofsStorage: Send + Sync + Debug {
     /// Cursor for iterating over trie branches.
-    type TrieCursor: OpProofsTrieCursor;
+    type StorageTrieCursor: OpProofsTrieCursor;
+
+    /// Cursor for iterating over account trie branches.
+    type AccountTrieCursor: OpProofsTrieCursor;
 
     /// Cursor for iterating over storage leaves.
     type StorageCursor: OpProofsHashedCursor<Value = U256>;
@@ -82,14 +106,14 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     /// capture, use [store_trie_updates](OpProofsStorage::store_trie_updates).
     fn store_account_branches(
         &self,
-        updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        account_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Store a batch of storage trie branches. Used for saving existing state.
     fn store_storage_branches(
         &self,
         hashed_address: B256,
-        items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        storage_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Store a batch of account trie leaf nodes. Used for saving existing state.
@@ -119,11 +143,17 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     ) -> impl Future<Output = OpProofsStorageResult<Option<(u64, B256)>>> + Send;
 
     /// Get a trie cursor for the storage backend
-    fn trie_cursor(
+    fn storage_trie_cursor(
         &self,
-        hashed_address: Option<B256>,
+        hashed_address: B256,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::TrieCursor>;
+    ) -> OpProofsStorageResult<Self::StorageTrieCursor>;
+
+    /// Get a trie cursor for the account backend
+    fn account_trie_cursor(
+        &self,
+        max_block_number: u64,
+    ) -> OpProofsStorageResult<Self::AccountTrieCursor>;
 
     /// Get a storage cursor for the storage backend
     fn storage_hashed_cursor(
