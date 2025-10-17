@@ -54,7 +54,7 @@ impl MdbxProofsStorage {
     ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
             let mut cursor = tx.new_cursor::<ProofWindow>()?;
-            cursor.insert(ProofWindowKey::EarliestBlock, &BlockNumberHash(block_number, hash))?;
+            cursor.append(ProofWindowKey::EarliestBlock, &BlockNumberHash(block_number, hash))?;
             Ok(())
         })?
     }
