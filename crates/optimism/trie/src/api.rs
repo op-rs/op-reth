@@ -11,10 +11,22 @@ use thiserror::Error;
 /// Error type for storage operations
 #[derive(Debug, Error)]
 pub enum OpProofsStorageError {
-    // TODO: add more errors once we know what they are
+    /// No blocks found
+    #[error("No blocks found")]
+    NoBlocksFound,
+    /// Parent block number is less than earliest stored block number
+    #[error("Parent block number is less than earliest stored block number")]
+    UnknownParent,
+    /// Block update failed since parent state
+    #[error("Cannot execute block updates for block {0} without parent state {1} (latest stored block number: {2})")]
+    BlockUpdateFailed(u64, u64, u64),
+    /// State root mismatch
+    #[error("State root mismatch for block {0} (have: {1}, expected: {2})")]
+    StateRootMismatch(u64, B256, B256),
     /// Error occurred while interacting with the database.
     #[error(transparent)]
     DatabaseError(#[from] DatabaseError),
+
     /// Other error
     #[error("Other error: {0}")]
     Other(eyre::Error),
@@ -94,23 +106,20 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     /// capture, use [store_trie_updates](OpProofsStorage::store_trie_updates).
     fn store_account_branches(
         &self,
-        block_number: u64,
-        updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        account_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Store a batch of storage trie branches. Used for saving existing state.
     fn store_storage_branches(
         &self,
-        block_number: u64,
         hashed_address: B256,
-        items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+        storage_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Store a batch of account trie leaf nodes. Used for saving existing state.
     fn store_hashed_accounts(
         &self,
         accounts: Vec<(B256, Option<Account>)>,
-        block_number: u64,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Store a batch of storage trie leaf nodes. Used for saving existing state.
@@ -118,7 +127,6 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         &self,
         hashed_address: B256,
         storages: Vec<(B256, U256)>,
-        block_number: u64,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Get the earliest block number and hash that has been stored
