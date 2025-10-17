@@ -120,10 +120,18 @@ where
                         continue;
                     }
                     for block_number in (latest_stored_block_number + 1)..=new.tip().number() {
-                        let block = new.blocks().get(&block_number).unwrap();
+                        let Some(block) = self
+                            .ctx
+                            .provider()
+                            .recovered_block(block_number.into(), TransactionVariant::NoHash)?
+                        else {
+                            return Err(eyre::eyre!("Block {} not found", block_number));
+                        };
+
+                        info!("Processing block {}", block_number);
 
                         // By this point, we know that the parent block is stored
-                        collector.execute_and_store_block_updates(block).await?;
+                        collector.execute_and_store_block_updates(&block).await?;
                     }
                 }
                 _ => {}

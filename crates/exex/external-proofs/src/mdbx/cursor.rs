@@ -82,36 +82,30 @@ impl<
             return Ok(None);
         }
 
-        // Key exists, find the last dup entry (which will have the highest block_number <
-        // max_block_number)
-        let mut last = None;
-        while let Some((key, value)) =
-            self.cursor.next_dup().map_err(|e| OpProofsStorageError::Other(e.into()))?
-        {
-            // If the key is not the target path, we've found the last dup entry
-            if key != target_path {
-                break;
+        // Key exists. Optimization: Jump to next distinct key, then go back one entry
+        // This avoids iterating through all duplicates of the current key
+        let next_key_result =
+            self.cursor.next_no_dup().map_err(|e| OpProofsStorageError::Other(e.into()))?;
+
+        if next_key_result.is_some() {
+            // We successfully moved to the next key
+            // Now go back one entry to get the last duplicate of target_path
+            let prev = self.cursor.prev().map_err(|e| OpProofsStorageError::Other(e.into()))?;
+
+            match prev {
+                Some((key, value)) if key == target_path => {
+                    // This is the last duplicate for our target_path
+                    Ok(Some((key, value)))
+                }
+                _ => {
+                    // Should not happen, but fallback to None
+                    Ok(None)
+                }
             }
-
-            // If the block number is greater than the max block number, we've found the last dup
-            // entry
-            if value.block_number > self.max_block_number {
-                break;
-            }
-
-            last = Some((key, value));
-        }
-
-        // If last is None, it means there's only one entry (the one from seek_exact)
-        if last.is_none() {
-            // Go back to get that first entry
-            let res = self
-                .cursor
-                .seek_exact(target_path)
-                .map_err(|e| OpProofsStorageError::Other(e.into()))?;
-            return Ok(res);
         } else {
-            Ok(last)
+            // No next key exists, meaning target_path is the last key in the table
+            // Use last() to get the very last entry, which is the last duplicate of target_path
+            Ok(self.cursor.last().map_err(|e| OpProofsStorageError::Other(e.into()))?)
         }
     }
 
