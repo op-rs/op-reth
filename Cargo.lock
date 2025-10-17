@@ -9620,6 +9620,7 @@ dependencies = [
  "reth-evm-ethereum",
  "reth-execution-errors",
  "reth-metrics",
+ "reth-node-api",
  "reth-primitives-traits",
  "reth-provider",
  "reth-revm",
