@@ -5,7 +5,7 @@ use crate::{
     provider::OpProofsStateProviderRef,
 };
 use reth_evm::{execute::Executor, ConfigureEvm};
-use reth_primitives_traits::{AlloyBlockHeader, NodePrimitives, RecoveredBlock};
+use reth_primitives_traits::{AlloyBlockHeader, BlockTy, RecoveredBlock};
 use reth_provider::{
     DatabaseProviderFactory, HashedPostStateProvider, StateProviderFactory, StateReader,
     StateRootProvider,
@@ -40,7 +40,7 @@ where
     /// Execute a block and store the updates in the storage.
     pub async fn execute_and_store_block_updates(
         &self,
-        block: &RecoveredBlock<<Evm::Primitives as NodePrimitives>::Block>,
+        block: &RecoveredBlock<BlockTy<Evm::Primitives>>,
     ) -> eyre::Result<()> {
         let start = Instant::now();
         // ensure that we have the state of the parent block
