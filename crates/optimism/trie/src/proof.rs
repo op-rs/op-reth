@@ -10,7 +10,7 @@ use alloy_primitives::{
     Address, Bytes, B256, U256,
 };
 use derive_more::Constructor;
-use reth_db_api::DatabaseError;
+use reth_db::DatabaseError;
 use reth_execution_errors::{StateProofError, StateRootError, StorageRootError, TrieWitnessError};
 use reth_primitives_traits::Account;
 use reth_trie::{
