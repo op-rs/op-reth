@@ -10079,6 +10079,7 @@ dependencies = [
  "bytes",
  "derive_more",
  "eyre",
+ "itertools 0.14.0",
  "metrics",
  "reth-codecs",
  "reth-db",
