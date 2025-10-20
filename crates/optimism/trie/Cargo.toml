@@ -60,4 +60,5 @@ reth-trie = { workspace = true, features = ["test-utils"] }
 serde-bincode-compat = [
     "reth-primitives-traits/serde-bincode-compat",
     "reth-trie/serde-bincode-compat",
+    "alloy-eips/serde-bincode-compat"
 ]
