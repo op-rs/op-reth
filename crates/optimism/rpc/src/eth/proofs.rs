@@ -1,7 +1,8 @@
 //! Historical proofs RPC server implementation.
 
-use alloy_eips::BlockId;
-use alloy_primitives::Address;
+use alloy_eips::{BlockId, BlockNumberOrTag};
+use alloy_primitives::{Address, B256};
+use alloy_rpc_types_debug::ExecutionWitness;
 use alloy_rpc_types_eth::EIP1186AccountProofResponse;
 use alloy_serde::JsonStorageKey;
 use async_trait::async_trait;
@@ -9,10 +10,23 @@ use derive_more::Constructor;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee_core::RpcResult;
 use jsonrpsee_types::error::ErrorObject;
+use reth_evm::ConfigureEvm;
+use reth_node_api::{BuildNextEnv, NodePrimitives};
+use reth_optimism_forks::OpHardforks;
+use reth_optimism_payload_builder::{OpAttributes, OpPayloadBuilder, OpPayloadPrimitives};
 use reth_optimism_trie::{provider::OpProofsStateProviderRef, OpProofsStorage};
-use reth_provider::{BlockIdReader, ProviderError, ProviderResult, StateProofProvider};
+use reth_optimism_txpool::OpPooledTx;
+use reth_primitives_traits::{SealedHeader, TxTy};
+use reth_provider::{
+    BlockIdReader, BlockReaderIdExt, ChainSpecProvider, NodePrimitivesProvider, ProviderError,
+    ProviderResult, StateProofProvider, StateProviderBox, StateProviderFactory,
+};
 use reth_rpc_api::eth::helpers::FullEthApi;
 use reth_rpc_eth_types::EthApiError;
+use reth_rpc_server_types::{result::internal_rpc_err, ToRpcResult};
+use reth_tasks::TaskSpawner;
+use reth_transaction_pool::TransactionPool;
+use tokio::sync::oneshot;
 
 #[cfg_attr(not(test), rpc(server, namespace = "eth"))]
 #[cfg_attr(test, rpc(server, client, namespace = "eth"))]
@@ -28,14 +42,27 @@ pub trait EthApiOverride {
     ) -> RpcResult<EIP1186AccountProofResponse>;
 }
 
+#[cfg_attr(not(test), rpc(server, namespace = "debug"))]
+#[cfg_attr(test, rpc(server, client, namespace = "debug"))]
+pub trait DebugApiOverride<Attributes> {
+    #[method(name = "executePayload")]
+    async fn execute_payload(
+        &self,
+        parent_block_hash: B256,
+        attributes: Attributes,
+    ) -> RpcResult<ExecutionWitness>;
+
+    #[method(name = "executionWitness")]
+    async fn execution_witness(&self, block: BlockNumberOrTag) -> RpcResult<ExecutionWitness>;
+}
+
 #[derive(Debug, Constructor)]
-/// Overrides applied to the `eth_` namespace of the RPC API for historical proofs ExEx.
-pub struct EthApiExt<Eth, P> {
+pub struct OpStateProviderFactory<Eth, P> {
     eth_api: Eth,
     preimage_store: P,
 }
 
-impl<Eth, P> EthApiExt<Eth, P>
+impl<Eth, P> OpStateProviderFactory<Eth, P>
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
@@ -82,6 +109,23 @@ where
     }
 }
 
+#[derive(Debug)]
+/// Overrides applied to the `eth_` namespace of the RPC API for historical proofs ExEx.
+pub struct EthApiExt<Eth, P> {
+    state_provider_factory: OpStateProviderFactory<Eth, P>,
+}
+
+impl<Eth, P> EthApiExt<Eth, P>
+where
+    Eth: FullEthApi + Send + Sync + 'static,
+    ErrorObject<'static>: From<Eth::Error>,
+    P: OpProofsStorage + Clone + 'static,
+{
+    pub fn new(eth_api: Eth, preimage_store: P) -> Self {
+        Self { state_provider_factory: OpStateProviderFactory::new(eth_api, preimage_store) }
+    }
+}
+
 #[async_trait]
 impl<Eth, P> EthApiOverrideServer for EthApiExt<Eth, P>
 where
@@ -95,11 +139,107 @@ where
         keys: Vec<JsonStorageKey>,
         block_number: Option<BlockId>,
     ) -> RpcResult<EIP1186AccountProofResponse> {
-        let state = self.state_provider(block_number).await.map_err(Into::into)?;
+        let state =
+            self.state_provider_factory.state_provider(block_number).await.map_err(Into::into)?;
         let storage_keys = keys.iter().map(|key| key.as_b256()).collect::<Vec<_>>();
 
         let proof = state.proof(Default::default(), address, &storage_keys).map_err(Into::into)?;
 
         return Ok(proof.into_eip1186_response(keys));
+    }
+}
+
+#[derive(Debug)]
+/// Overrides applied to the `debug_` namespace of the RPC API for historical proofs ExEx.
+pub struct DebugApiExt<Eth: FullEthApi, Storage, Pool, Provider, EvmConfig, Attrs> {
+    state_provider_factory: OpStateProviderFactory<Eth, Storage>,
+    builder: OpPayloadBuilder<Pool, Provider, EvmConfig, (), Attrs>,
+    task_spawner: Box<dyn TaskSpawner>,
+}
+
+impl<Eth, P, Pool, Provider, EvmConfig, Attrs> DebugApiExt<Eth, P, Pool, Provider, EvmConfig, Attrs>
+where
+    Eth: FullEthApi + Send + Sync + 'static,
+    ErrorObject<'static>: From<Eth::Error>,
+    P: OpProofsStorage + Clone + 'static,
+{
+    pub fn new(
+        eth_api: Eth,
+        preimage_store: P,
+        task_spawner: Box<dyn TaskSpawner>,
+        builder: OpPayloadBuilder<Pool, Provider, EvmConfig, (), Attrs>,
+    ) -> Self {
+        Self {
+            state_provider_factory: OpStateProviderFactory::new(eth_api, preimage_store),
+            builder,
+            task_spawner,
+        }
+    }
+}
+
+impl<Eth, P, Pool, Provider, EvmConfig, Attrs> DebugApiExt<Eth, P, Pool, Provider, EvmConfig, Attrs>
+where
+    Eth: FullEthApi + Send + Sync + 'static,
+    ErrorObject<'static>: From<Eth::Error>,
+    P: OpProofsStorage + Clone + 'static,
+    Provider: BlockReaderIdExt,
+    Attrs: Send + 'static,
+{
+    fn parent_header(
+        &self,
+        parent_block_hash: B256,
+    ) -> ProviderResult<SealedHeader<Provider::Header>> {
+        self.state_provider_factory
+            .provider()
+            .sealed_header_by_hash(parent_block_hash)?
+            .ok_or_else(|| ProviderError::HeaderNotFound(parent_block_hash.into()))
+    }
+}
+
+#[async_trait]
+impl<Eth, P, Pool, Provider, EvmConfig, Attrs> DebugApiOverrideServer<Attrs::RpcPayloadAttributes>
+    for DebugApiExt<Eth, P, Pool, Provider, EvmConfig, Attrs>
+where
+    Eth: FullEthApi + Send + Sync + 'static,
+    ErrorObject<'static>: From<Eth::Error>,
+    P: OpProofsStorage + Clone + 'static,
+    Attrs: OpAttributes<Transaction = TxTy<EvmConfig::Primitives>>,
+    EvmConfig: ConfigureEvm<
+            Primitives = Provider::Primitives,
+            NextBlockEnvCtx: BuildNextEnv<Attrs, Provider::Header, Provider::ChainSpec>,
+        > + 'static,
+    Provider: BlockReaderIdExt<Header = <Provider::Primitives as NodePrimitives>::BlockHeader>
+        + NodePrimitivesProvider<Primitives: OpPayloadPrimitives>
+        + StateProviderFactory
+        + ChainSpecProvider<ChainSpec: OpHardforks>
+        + Clone
+        + 'static,
+    Pool: TransactionPool<
+            Transaction: OpPooledTx<Consensus = <Provider::Primitives as NodePrimitives>::SignedTx>,
+        > + 'static,
+{
+    async fn execute_payload(
+        &self,
+        parent_block_hash: B256,
+        attributes: Attrs::RpcPayloadAttributes,
+    ) -> RpcResult<ExecutionWitness> {
+        // let _permit = self.inner.semaphore.acquire().await;
+
+        let parent_header = self.parent_header(parent_block_hash).to_rpc_result()?;
+
+        let (tx, rx) = oneshot::channel();
+        let this = self.clone();
+        self.task_spawner.spawn_blocking(Box::pin(async move {
+            let res = this.builder.payload_witness(parent_header, attributes);
+            let _ = tx.send(res);
+        }));
+
+        rx.await
+            .map_err(|err| internal_rpc_err(err.to_string()))?
+            .map_err(|err| internal_rpc_err(err.to_string()))
+    }
+
+    async fn execution_witness(&self, block: BlockNumberOrTag) -> RpcResult<ExecutionWitness> {
+        unimplemented!()
     }
 }
