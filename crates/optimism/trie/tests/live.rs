@@ -298,7 +298,7 @@ mod tests {
             // Create a fresh blockchain provider to ensure it sees all committed blocks
             let blockchain_db = BlockchainProvider::new(provider_factory.clone())?;
             let live_trie_collector =
-                LiveTrieCollector::new(evm_config.clone(), blockchain_db, storage.clone());
+                LiveTrieCollector::new(evm_config.clone(), blockchain_db, &storage);
 
             // Use the live collector to execute and store trie updates
             live_trie_collector.execute_and_store_block_updates(&block).await?;
