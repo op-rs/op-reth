@@ -47,11 +47,7 @@ itertools.workspace = true
 [dev-dependencies]
 reth-codecs = { workspace = true, features = ["test-utils"] }
 tempfile.workspace = true
-tokio = { workspace = true, features = [
-    "test-util",
-    "rt-multi-thread",
-    "macros",
-] }
+tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 test-case.workspace = true
 reth-db = { workspace = true, features = ["test-utils"] }
 # workaround for failing doc test <https://github.com/op-rs/op-reth/pull/234>
@@ -70,9 +66,9 @@ secp256k1.workspace = true
 
 [features]
 serde-bincode-compat = [
-	"reth-primitives-traits/serde-bincode-compat",
-	"reth-trie/serde-bincode-compat",
-	"alloy-consensus/serde-bincode-compat",
-	"alloy-genesis/serde-bincode-compat",
-	"reth-ethereum-primitives/serde-bincode-compat"
+    "reth-primitives-traits/serde-bincode-compat",
+    "reth-trie/serde-bincode-compat",
+    "alloy-consensus/serde-bincode-compat",
+    "alloy-genesis/serde-bincode-compat",
+    "reth-ethereum-primitives/serde-bincode-compat",
 ]
