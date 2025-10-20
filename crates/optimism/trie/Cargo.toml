@@ -27,6 +27,7 @@ reth-metrics = { workspace = true, features = ["common"] }
 
 # ethereum
 alloy-primitives.workspace = true
+alloy-eips.workspace = true
 
 # async
 tokio = { workspace = true, features = ["sync"] }
@@ -69,6 +70,7 @@ serde-bincode-compat = [
     "reth-primitives-traits/serde-bincode-compat",
     "reth-trie/serde-bincode-compat",
     "alloy-consensus/serde-bincode-compat",
+    "alloy-eips/serde-bincode-compat",
     "alloy-genesis/serde-bincode-compat",
     "reth-ethereum-primitives/serde-bincode-compat",
 ]

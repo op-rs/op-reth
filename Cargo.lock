@@ -9602,6 +9602,7 @@ name = "reth-optimism-trie"
 version = "1.8.2"
 dependencies = [
  "alloy-consensus",
+ "alloy-eips",
  "alloy-genesis",
  "alloy-primitives",
  "auto_impl",
