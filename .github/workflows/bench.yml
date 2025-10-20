@@ -16,6 +16,9 @@ name: bench
 jobs:
   codspeed:
     runs-on: ubuntu-latest
+    # Set the CODSPEED_TOKEN as an environment variable at the job level
+    env:
+      CODSPEED_TOKEN: ${{ secrets.CODSPEED_TOKEN }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -33,10 +36,9 @@ jobs:
         run: ./.github/scripts/codspeed-build.sh
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
-        env:
-          CODSPEED_TOKEN: ${{ secrets.CODSPEED_TOKEN }}
         # op-reth does not have a codspeed token
-        if: ${{ env.CODSPEED_TOKEN != '' }}
+        # Only run if the token is available (e.g., in the upstream repository)
+        if: env.CODSPEED_TOKEN != ''
         with:
           run: cargo codspeed run --workspace
           mode: instrumentation
