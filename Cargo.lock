@@ -9833,6 +9833,7 @@ dependencies = [
 name = "reth-optimism-trie"
 version = "1.9.2"
 dependencies = [
+ "alloy-eips",
  "alloy-primitives",
  "auto_impl",
  "bytes",
