@@ -9508,7 +9508,7 @@ dependencies = [
  "reth-optimism-trie",
  "reth-provider",
  "serde",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -9784,7 +9784,7 @@ dependencies = [
  "strum 0.27.2",
  "tempfile",
  "test-case",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
