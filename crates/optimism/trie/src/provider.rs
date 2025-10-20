@@ -40,17 +40,6 @@ pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
     block_number: BlockNumber,
 }
 
-impl<'a, Storage: OpProofsStorage> OpProofsStateProviderRef<'a, Storage> {
-    /// Initializes new `OpProofsStateProviderRef`
-    pub fn new(
-        latest: Box<dyn StateProvider + 'a>,
-        storage: &'a Storage,
-        block_number: BlockNumber,
-    ) -> Self {
-        Self { latest, storage, block_number }
-    }
-}
-
 impl<'a, Storage> Debug for OpProofsStateProviderRef<'a, Storage>
 where
     Storage: OpProofsStorage + 'a + Debug,
