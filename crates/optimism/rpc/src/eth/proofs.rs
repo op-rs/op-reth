@@ -101,11 +101,11 @@ where
                 .map_err(|e| ProviderError::Database(e.into()))?,
         ) else {
             // if no earliest block, db is empty - use historical provider
-            return Ok(Box::new(historical_provider));
+            return Ok(historical_provider);
         };
 
         if block_number < earliest_block_number || block_number > latest_block_number {
-            return Ok(Box::new(historical_provider));
+            return Ok(historical_provider);
         }
 
         let external_overlay_provider =

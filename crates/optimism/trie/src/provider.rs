@@ -31,7 +31,7 @@ use std::fmt::Debug;
 #[derive(Constructor)]
 pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStore> {
     /// Historical state provider for non-state related tasks.
-    latest: Box<dyn StateProvider>,
+    latest: Box<dyn StateProvider + 'a>,
 
     /// Storage provider for state lookups.
     storage: &'a OpProofsStorage<Storage>,
@@ -76,12 +76,12 @@ impl<'a, Storage: OpProofsStore + Clone> StateRootProvider
     for OpProofsStateProviderRef<'a, Storage>
 {
     fn state_root(&self, state: HashedPostState) -> ProviderResult<B256> {
-        StateRoot::overlay_root(&self.storage, self.block_number, state)
+        StateRoot::overlay_root(self.storage, self.block_number, state)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
     fn state_root_from_nodes(&self, input: TrieInput) -> ProviderResult<B256> {
-        StateRoot::overlay_root_from_nodes(&self.storage, self.block_number, input)
+        StateRoot::overlay_root_from_nodes(self.storage, self.block_number, input)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
@@ -89,7 +89,7 @@ impl<'a, Storage: OpProofsStore + Clone> StateRootProvider
         &self,
         state: HashedPostState,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        StateRoot::overlay_root_with_updates(&self.storage, self.block_number, state)
+        StateRoot::overlay_root_with_updates(self.storage, self.block_number, state)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
@@ -97,7 +97,7 @@ impl<'a, Storage: OpProofsStore + Clone> StateRootProvider
         &self,
         input: TrieInput,
     ) -> ProviderResult<(B256, TrieUpdates)> {
-        StateRoot::overlay_root_from_nodes_with_updates(&self.storage, self.block_number, input)
+        StateRoot::overlay_root_from_nodes_with_updates(self.storage, self.block_number, input)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 }
@@ -106,7 +106,7 @@ impl<'a, Storage: OpProofsStore + Clone> StorageRootProvider
     for OpProofsStateProviderRef<'a, Storage>
 {
     fn storage_root(&self, address: Address, storage: HashedStorage) -> ProviderResult<B256> {
-        StorageRoot::overlay_root(&self.storage, self.block_number, address, storage)
+        StorageRoot::overlay_root(self.storage, self.block_number, address, storage)
             .map_err(|err| ProviderError::Database(err.into()))
     }
 
@@ -116,14 +116,8 @@ impl<'a, Storage: OpProofsStore + Clone> StorageRootProvider
         slot: B256,
         storage: HashedStorage,
     ) -> ProviderResult<reth_trie::StorageProof> {
-        StorageProof::overlay_storage_proof(
-            &self.storage,
-            self.block_number,
-            address,
-            slot,
-            storage,
-        )
-        .map_err(ProviderError::from)
+        StorageProof::overlay_storage_proof(self.storage, self.block_number, address, slot, storage)
+            .map_err(ProviderError::from)
     }
 
     fn storage_multiproof(
@@ -133,7 +127,7 @@ impl<'a, Storage: OpProofsStore + Clone> StorageRootProvider
         storage: HashedStorage,
     ) -> ProviderResult<StorageMultiProof> {
         StorageProof::overlay_storage_multiproof(
-            &self.storage,
+            self.storage,
             self.block_number,
             address,
             slots,
@@ -152,7 +146,7 @@ impl<'a, Storage: OpProofsStore + Clone> StateProofProvider
         address: Address,
         slots: &[B256],
     ) -> ProviderResult<AccountProof> {
-        Proof::overlay_account_proof(&self.storage, self.block_number, input, address, slots)
+        Proof::overlay_account_proof(self.storage, self.block_number, input, address, slots)
             .map_err(ProviderError::from)
     }
 
@@ -161,12 +155,12 @@ impl<'a, Storage: OpProofsStore + Clone> StateProofProvider
         input: TrieInput,
         targets: MultiProofTargets,
     ) -> ProviderResult<MultiProof> {
-        Proof::overlay_multiproof(&self.storage, self.block_number, input, targets)
+        Proof::overlay_multiproof(self.storage, self.block_number, input, targets)
             .map_err(ProviderError::from)
     }
 
     fn witness(&self, input: TrieInput, target: HashedPostState) -> ProviderResult<Vec<Bytes>> {
-        TrieWitness::overlay_witness(&self.storage, self.block_number, input, target)
+        TrieWitness::overlay_witness(self.storage, self.block_number, input, target)
             .map_err(ProviderError::from)
             .map(|hm| hm.into_values().collect())
     }
@@ -193,7 +187,7 @@ impl<'a, Storage: OpProofsStore> AccountReader for OpProofsStateProviderRef<'a, 
 
 impl<'a, Storage> StateProvider for OpProofsStateProviderRef<'a, Storage>
 where
-    Storage: OpProofsStore + Clone + 'a,
+    Storage: OpProofsStore + Clone,
 {
     fn storage(&self, address: Address, storage_key: B256) -> ProviderResult<Option<StorageValue>> {
         let hashed_key = keccak256(storage_key);
