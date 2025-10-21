@@ -174,7 +174,7 @@ where
         let (tx, rx) = oneshot::channel();
         let this = self.inner.clone();
         self.inner.task_spawner.spawn_blocking(Box::pin(async move {
-            let result = (async move || {
+            let result = async {
                 let parent_hash = parent_header.hash();
                 let attributes = Attrs::try_new(parent_hash, attributes, 3)
                     .map_err(PayloadBuilderError::other)?;
@@ -205,10 +205,9 @@ where
                 });
 
                 builder.witness(state_provider, &ctx).map_err(PayloadBuilderError::other)
-            })()
-            .await;
+            };
 
-            let _ = tx.send(result);
+            let _ = tx.send(result.await);
         }));
 
         rx.await

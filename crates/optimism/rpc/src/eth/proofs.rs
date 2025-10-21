@@ -41,7 +41,7 @@ where
     P: OpProofsStore + Clone + 'static,
 {
     /// Creates a new instance of the `EthApiExt`.
-    pub fn new(eth_api: Eth, preimage_store: OpProofsStorage<P>) -> Self {
+    pub const fn new(eth_api: Eth, preimage_store: OpProofsStorage<P>) -> Self {
         Self { state_provider_factory: OpStateProviderFactory::new(eth_api, preimage_store) }
     }
 }
