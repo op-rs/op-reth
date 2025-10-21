@@ -116,7 +116,7 @@ pub trait OpProofsStore: Send + Sync + Debug {
         Self: 'tx;
 
     /// Store a batch of account trie branches. Used for saving existing state. For live state
-    /// capture, use [store_trie_updates](OpProofsStorage::store_trie_updates).
+    /// capture, use [store_trie_updates](OpProofsStore::store_trie_updates).
     fn store_account_branches(
         &self,
         account_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,

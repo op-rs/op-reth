@@ -319,7 +319,7 @@ impl OpProofsHashedCursorRO for InMemoryStorageCursor {
     }
 }
 
-/// In-memory implementation of [`OpProofsHashedCursor`] for accounts
+/// In-memory implementation of [`OpProofsHashedCursorRO`] for accounts
 #[derive(Debug)]
 pub struct InMemoryAccountCursor {
     /// Current position in the iteration (-1 means not positioned yet)
