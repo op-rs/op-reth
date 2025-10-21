@@ -15,9 +15,9 @@ use crate::{
 use alloy_primitives::{map::HashMap, B256, U256};
 use itertools::Itertools;
 use reth_db::{
-    table::{Encode, Decode},
-    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRW, DbDupCursorRO},
+    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
     mdbx::{init_db_for, DatabaseArguments},
+    table::{Decode, Encode},
     transaction::DbTx,
     Database, DatabaseEnv,
 };
@@ -271,10 +271,8 @@ impl OpProofsStorage for MdbxProofsStorage {
                 let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
                 account_trie_cursor.append_dup(key.clone(), vv)?;
 
-                let pruning_key = PruningKey {
-                    table: PruningTableName::AccountTrieHistory,
-                    key: key.encode(),
-                };
+                let pruning_key =
+                    PruningKey { table: PruningTableName::AccountTrieHistory, key: key.encode() };
                 pruning_cursor.append_dup(block_number, pruning_key)?;
             }
 
@@ -369,28 +367,33 @@ impl OpProofsStorage for MdbxProofsStorage {
 
                 let mut pruning_cursor_write = tx.new_cursor::<BlockPruningIndex>()?;
 
-                for (block_number, pruning_key) in keys_to_prune.clone() {
+                for (block_number, pruning_key) in keys_to_prune {
                     match pruning_key.table {
                         PruningTableName::AccountTrieHistory => {
-                            let key = StoredNibbles::decode(&mut pruning_key.key.as_slice())?;
-                            if account_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some() {
+                            let key = StoredNibbles::decode(pruning_key.key.as_slice())?;
+                            if account_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some()
+                            {
                                 account_trie_cursor.delete_current()?;
                             }
                         }
                         PruningTableName::StorageTrieHistory => {
-                            let key = StorageTrieKey::decode(&mut pruning_key.key.as_slice())?;
-                            if storage_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some() {
+                            let key = StorageTrieKey::decode(pruning_key.key.as_slice())?;
+                            if storage_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some()
+                            {
                                 storage_trie_cursor.delete_current()?;
                             }
                         }
                         PruningTableName::HashedAccountHistory => {
-                            let key = B256::decode(&mut pruning_key.key.as_slice())?;
-                            if hashed_account_cursor.seek_by_key_subkey(key, block_number)?.is_some() {
+                            let key = B256::decode(pruning_key.key.as_slice())?;
+                            if hashed_account_cursor
+                                .seek_by_key_subkey(key, block_number)?
+                                .is_some()
+                            {
                                 hashed_account_cursor.delete_current()?;
                             }
                         }
                         PruningTableName::HashedStorageHistory => {
-                            let key = HashedStorageKey::decode(&mut pruning_key.key.as_slice())?;
+                            let key = HashedStorageKey::decode(pruning_key.key.as_slice())?;
                             if hashed_storage_cursor
                                 .seek_by_key_subkey(key, block_number)?
                                 .is_some()
