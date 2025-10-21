@@ -62,6 +62,4 @@ serde-bincode-compat = [
     "reth-trie/serde-bincode-compat",
     "alloy-eips/serde-bincode-compat",
 ]
-metrics = [
-    "reth-trie/metrics"
-]
+metrics = ["reth-trie/metrics"]
