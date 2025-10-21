@@ -224,12 +224,177 @@
           ],
           "title": "Transaction Forward Latency",
           "type": "timeseries"
+      },
+      {
+          "datasource": {
+              "type": "prometheus",
+              "uid": "${DS_PROMETHEUS}"
+          },
+          "description": "Length of a completed flashblock sequence per block.",
+          "fieldConfig": {
+              "defaults": {
+                  "color": {
+                      "mode": "palette-classic"
+                  },
+                  "custom": {
+                      "axisBorderShow": false,
+                      "axisCenteredZero": false,
+                      "axisColorMode": "text",
+                      "axisLabel": "",
+                      "axisPlacement": "auto",
+                      "barAlignment": 0,
+                      "barWidthFactor": 0.6,
+                      "drawStyle": "line",
+                      "fillOpacity": 0,
+                      "gradientMode": "none",
+                      "hideFrom": {
+                          "legend": false,
+                          "tooltip": false,
+                          "viz": false
+                      },
+                      "insertNulls": false,
+                      "lineInterpolation": "linear",
+                      "lineWidth": 1,
+                      "pointSize": 5,
+                      "scaleDistribution": {
+                          "type": "linear"
+                      },
+                      "showPoints": "auto",
+                      "spanNulls": false,
+                      "stacking": {
+                          "group": "A",
+                          "mode": "none"
+                      },
+                      "thresholdsStyle": {
+                          "mode": "off"
+                      }
+                  },
+                  "mappings": [],
+                  "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                          {
+                              "color": "green",
+                              "value": null
+                          },
+                          {
+                              "color": "red",
+                              "value": 8
+                          }
+                      ]
+                  },
+                  "unit": "short"
+              },
+              "overrides": []
+          },
+          "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+          },
+          "id": 211,
+          "options": {
+              "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+              },
+              "legend": {
+                  "showLegend": true,
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "calcs": []
+              }
+          },
+          "targets": [
+              {
+                  "datasource": {
+                      "type": "prometheus",
+                      "uid": "Prometheus"
+                  },
+                  "disableTextWrap": false,
+                  "editorMode": "builder",
+                  "expr": "reth_flashblock_service_last_flashblock_length{instance=~\"$instance\", quantile=\"0\"}",
+                  "fullMetaSearch": false,
+                  "includeNullMetadata": true,
+                  "legendFormat": "min",
+                  "range": true,
+                  "refId": "A",
+                  "useBackend": false
+              },
+              {
+                  "datasource": {
+                      "type": "prometheus",
+                      "uid": "Prometheus"
+                  },
+                  "disableTextWrap": false,
+                  "editorMode": "builder",
+                  "expr": "reth_flashblock_service_last_flashblock_length{instance=~\"$instance\", quantile=\"0.5\"}",
+                  "fullMetaSearch": false,
+                  "hide": false,
+                  "includeNullMetadata": true,
+                  "legendFormat": "p50",
+                  "range": true,
+                  "refId": "B",
+                  "useBackend": false
+              },
+              {
+                  "datasource": {
+                      "type": "prometheus",
+                      "uid": "Prometheus"
+                  },
+                  "disableTextWrap": false,
+                  "editorMode": "builder",
+                  "expr": "reth_flashblock_service_last_flashblock_length{instance=~\"$instance\", quantile=\"0.9\"}",
+                  "fullMetaSearch": false,
+                  "hide": false,
+                  "includeNullMetadata": true,
+                  "legendFormat": "p90",
+                  "range": true,
+                  "refId": "C",
+                  "useBackend": false
+              },
+              {
+                  "datasource": {
+                      "type": "prometheus",
+                      "uid": "Prometheus"
+                  },
+                  "disableTextWrap": false,
+                  "editorMode": "builder",
+                  "expr": "reth_flashblock_service_last_flashblock_length{instance=~\"$instance\", quantile=\"0.95\"}",
+                  "fullMetaSearch": false,
+                  "hide": false,
+                  "includeNullMetadata": true,
+                  "legendFormat": "p95",
+                  "range": true,
+                  "refId": "D",
+                  "useBackend": false
+              },
+              {
+                  "datasource": {
+                      "type": "prometheus",
+                      "uid": "Prometheus"
+                  },
+                  "disableTextWrap": false,
+                  "editorMode": "builder",
+                  "expr": "reth_flashblock_service_last_flashblock_length{instance=~\"$instance\", quantile=\"0.99\"}",
+                  "fullMetaSearch": false,
+                  "hide": false,
+                  "includeNullMetadata": true,
+                  "legendFormat": "p99",
+                  "range": true,
+                  "refId": "E",
+                  "useBackend": false
+              }
+          ],
+          "title": "Flashblock Sequence Length",
+          "type": "timeseries"
       }
 
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["optimism", "sequencer", "transactions"],
+  "tags": ["optimism", "sequencer", "transactions", "flashblocks"],
   "templating": {
     "list": [
       {
