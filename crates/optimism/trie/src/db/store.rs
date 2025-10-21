@@ -1,6 +1,5 @@
 use super::{BlockNumberHash, ProofWindow, ProofWindowKey};
 use crate::{
-    api::OpProofsStorage,
     db::{
         cursor::Dup,
         models::{
@@ -9,7 +8,7 @@ use crate::{
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
-    BlockStateDiff, OpProofsStorageError, OpProofsStorageResult,
+    BlockStateDiff, OpProofsStorageError, OpProofsStorageResult, OpProofsStore,
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use itertools::Itertools;
@@ -44,7 +43,7 @@ impl MdbxProofsStorage {
         let result = self.env.view(|tx| {
             let mut cursor = tx.cursor_read::<ProofWindow>().ok()?;
             let value = cursor.seek_exact(key).ok()?;
-            value.map(|(_, val)| (val.0, val.1))
+            value.map(|(_, val)| (val.number(), *val.hash()))
         });
         Ok(result?)
     }
@@ -56,13 +55,14 @@ impl MdbxProofsStorage {
     ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
             let mut cursor = tx.new_cursor::<ProofWindow>()?;
-            cursor.append(ProofWindowKey::EarliestBlock, &BlockNumberHash(block_number, hash))?;
+            cursor
+                .append(ProofWindowKey::EarliestBlock, &BlockNumberHash::new(block_number, hash))?;
             Ok(())
         })?
     }
 }
 
-impl OpProofsStorage for MdbxProofsStorage {
+impl OpProofsStore for MdbxProofsStorage {
     type StorageTrieCursor<'tx>
         = MdbxTrieCursor<StorageTrieHistory, Dup<'tx, StorageTrieHistory>>
     where
@@ -71,8 +71,14 @@ impl OpProofsStorage for MdbxProofsStorage {
         = MdbxTrieCursor<AccountTrieHistory, Dup<'tx, AccountTrieHistory>>
     where
         Self: 'tx;
-    type StorageCursor = MdbxStorageCursor;
-    type AccountHashedCursor = MdbxAccountCursor;
+    type StorageCursor<'tx>
+        = MdbxStorageCursor<Dup<'tx, HashedStorageHistory>>
+    where
+        Self: 'tx;
+    type AccountHashedCursor<'tx>
+        = MdbxAccountCursor<Dup<'tx, HashedAccountHistory>>
+    where
+        Self: 'tx;
 
     async fn store_account_branches(
         &self,
@@ -205,19 +211,29 @@ impl OpProofsStorage for MdbxProofsStorage {
         Ok(MdbxTrieCursor::new(cursor, max_block_number, None))
     }
 
-    fn storage_hashed_cursor(
+    fn storage_hashed_cursor<'tx>(
         &self,
-        _hashed_address: B256,
-        _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageCursor> {
-        unimplemented!()
+        hashed_address: B256,
+        max_block_number: u64,
+    ) -> OpProofsStorageResult<Self::StorageCursor<'tx>> {
+        let tx = self.env.tx().map_err(|e| OpProofsStorageError::Other(e.into()))?;
+        let cursor = tx
+            .cursor_dup_read::<HashedStorageHistory>()
+            .map_err(|e| OpProofsStorageError::Other(e.into()))?;
+
+        Ok(MdbxStorageCursor::new(cursor, max_block_number, hashed_address))
     }
 
-    fn account_hashed_cursor(
+    fn account_hashed_cursor<'tx>(
         &self,
-        _max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountHashedCursor> {
-        unimplemented!()
+        max_block_number: u64,
+    ) -> OpProofsStorageResult<Self::AccountHashedCursor<'tx>> {
+        let tx = self.env.tx().map_err(|e| OpProofsStorageError::Other(e.into()))?;
+        let cursor = tx
+            .cursor_dup_read::<HashedAccountHistory>()
+            .map_err(|e| OpProofsStorageError::Other(e.into()))?;
+
+        Ok(MdbxAccountCursor::new(cursor, max_block_number))
     }
 
     async fn store_trie_updates(

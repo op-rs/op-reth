@@ -20,13 +20,13 @@ use reth_optimism_payload_builder::{
     builder::{OpBuilder, OpPayloadBuilderCtx},
     OpAttributes, OpPayloadPrimitives,
 };
-use reth_optimism_trie::{provider::OpProofsStateProviderRef, OpProofsStorage};
+use reth_optimism_trie::{provider::OpProofsStateProviderRef, OpProofsStorage, OpProofsStore};
 use reth_optimism_txpool::OpPooledTransaction as OpPooledTx2;
 use reth_payload_util::NoopPayloadTransactions;
 use reth_primitives_traits::{SealedHeader, TxTy};
 use reth_provider::{
     BlockIdReader, BlockReaderIdExt, ChainSpecProvider, HeaderProvider, NodePrimitivesProvider,
-    ProviderError, ProviderResult, StateProofProvider, StateProviderBox, StateProviderFactory,
+    ProviderError, ProviderResult, StateProofProvider, StateProvider, StateProviderFactory,
 };
 use reth_rpc_api::eth::helpers::FullEthApi;
 use reth_rpc_eth_types::EthApiError;
@@ -65,16 +65,19 @@ pub trait DebugApiOverride<Attributes> {
 #[derive(Debug, Constructor)]
 pub struct OpStateProviderFactory<Eth, P> {
     eth_api: Eth,
-    preimage_store: P,
+    preimage_store: OpProofsStorage<P>,
 }
 
-impl<Eth, P> OpStateProviderFactory<Eth, P>
+impl<'a, Eth, P> OpStateProviderFactory<Eth, P>
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    P: OpProofsStorage + Clone + 'static,
+    P: OpProofsStore + Clone + 'a,
 {
-    async fn state_provider(&self, block_id: Option<BlockId>) -> ProviderResult<StateProviderBox> {
+    async fn state_provider(
+        &'a self,
+        block_id: Option<BlockId>,
+    ) -> ProviderResult<Box<dyn StateProvider + 'a>> {
         let block_id = block_id.unwrap_or_default();
         // Check whether the distance to the block exceeds the maximum configured window.
         let block_number = self
@@ -105,11 +108,8 @@ where
             return Ok(Box::new(historical_provider));
         }
 
-        let external_overlay_provider = OpProofsStateProviderRef::new(
-            historical_provider,
-            self.preimage_store.clone(),
-            block_number,
-        );
+        let external_overlay_provider =
+            OpProofsStateProviderRef::new(historical_provider, &self.preimage_store, block_number);
 
         Ok(Box::new(external_overlay_provider))
     }
@@ -125,9 +125,9 @@ impl<Eth, P> EthApiExt<Eth, P>
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    P: OpProofsStorage + Clone + 'static,
+    P: OpProofsStore + Clone + 'static,
 {
-    pub fn new(eth_api: Eth, preimage_store: P) -> Self {
+    pub fn new(eth_api: Eth, preimage_store: OpProofsStorage<P>) -> Self {
         Self { state_provider_factory: OpStateProviderFactory::new(eth_api, preimage_store) }
     }
 }
@@ -137,7 +137,7 @@ impl<Eth, P> EthApiOverrideServer for EthApiExt<Eth, P>
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    P: OpProofsStorage + Clone + 'static,
+    P: OpProofsStore + Clone + 'static,
 {
     async fn get_proof(
         &self,
@@ -164,14 +164,14 @@ impl<Eth, Storage, Provider, EvmConfig, Attrs> DebugApiExt<Eth, Storage, Provide
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    Storage: OpProofsStorage + Clone + 'static,
+    Storage: OpProofsStore + Clone + 'static,
     Provider: BlockReaderIdExt + NodePrimitivesProvider<Primitives: OpPayloadPrimitives>,
     EvmConfig: ConfigureEvm<Primitives = Provider::Primitives> + 'static,
 {
     pub fn new(
         provider: Provider,
         eth_api: Eth,
-        preimage_store: Storage,
+        preimage_store: OpProofsStorage<Storage>,
         task_spawner: Box<dyn TaskSpawner>,
         evm_config: EvmConfig,
     ) -> Self {
@@ -202,13 +202,13 @@ impl<Eth, P, Provider, EvmConfig, Attrs> DebugApiExtInner<Eth, P, Provider, EvmC
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    P: OpProofsStorage + Clone + 'static,
+    P: OpProofsStore + Clone + 'static,
     Provider: NodePrimitivesProvider<Primitives: OpPayloadPrimitives>,
 {
     fn new(
         provider: Provider,
         eth_api: Eth,
-        preimage_store: P,
+        preimage_store: OpProofsStorage<P>,
         task_spawner: Box<dyn TaskSpawner>,
         evm_config: EvmConfig,
     ) -> Self {
@@ -227,7 +227,7 @@ impl<Eth, P, Provider, EvmConfig, Attrs> DebugApiExt<Eth, P, Provider, EvmConfig
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    P: OpProofsStorage + Clone + 'static,
+    P: OpProofsStore + Clone + 'static,
     Provider: BlockReaderIdExt
         + NodePrimitivesProvider<Primitives: OpPayloadPrimitives>
         + HeaderProvider<Header = <Provider::Primitives as NodePrimitives>::BlockHeader>,
@@ -249,7 +249,7 @@ impl<Eth, P, Provider, EvmConfig, Attrs, N> DebugApiOverrideServer<Attrs::RpcPay
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    P: OpProofsStorage + Clone + 'static,
+    P: OpProofsStore + Clone + 'static,
     Attrs: OpAttributes<Transaction = TxTy<EvmConfig::Primitives>>,
     N: OpPayloadPrimitives,
     EvmConfig: ConfigureEvm<

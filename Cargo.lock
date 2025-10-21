@@ -9337,7 +9337,6 @@ dependencies = [
 name = "reth-optimism-exex"
 version = "1.8.2"
 dependencies = [
- "alloy-primitives",
  "derive_more",
  "eyre",
  "futures",
@@ -9347,11 +9346,8 @@ dependencies = [
  "reth-exex",
  "reth-node-api",
  "reth-node-types",
- "reth-optimism-primitives",
  "reth-optimism-trie",
  "reth-provider",
- "serde",
- "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -9610,6 +9606,9 @@ dependencies = [
 name = "reth-optimism-trie"
 version = "1.8.2"
 dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-genesis",
  "alloy-primitives",
  "auto_impl",
  "bytes",
@@ -9617,17 +9616,23 @@ dependencies = [
  "eyre",
  "itertools 0.14.0",
  "metrics",
+ "reth-chainspec",
  "reth-codecs",
  "reth-db",
  "reth-db-api",
+ "reth-db-common",
+ "reth-ethereum-primitives",
  "reth-evm",
+ "reth-evm-ethereum",
  "reth-execution-errors",
  "reth-metrics",
  "reth-node-api",
  "reth-primitives-traits",
  "reth-provider",
  "reth-revm",
+ "reth-testing-utils",
  "reth-trie",
+ "secp256k1 0.30.0",
  "serde",
  "strum 0.27.2",
  "tempfile",

@@ -1,12 +1,20 @@
 //! ExEx unique for OP-Reth. See also [`reth_exex`] for more op-reth execution extensions.
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/paradigmxyz/reth/main/assets/reth-docs.png",
+    html_favicon_url = "https://avatars0.githubusercontent.com/u/97369466?s=256",
+    issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
+)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
+
 use derive_more::Constructor;
 use futures_util::TryStreamExt;
 use reth_chainspec::ChainInfo;
 use reth_exex::{ExExContext, ExExEvent};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
-use reth_optimism_trie::{BackfillJob, OpProofsStorage};
+use reth_optimism_trie::{BackfillJob, OpProofsStore};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
@@ -18,7 +26,7 @@ use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
 pub struct OpProofsExEx<Node, S>
 where
     Node: FullNodeComponents,
-    S: OpProofsStorage + Clone,
+    S: OpProofsStore + Clone,
 {
     /// The ExEx context containing the node related utilities e.g. provider, notifications,
     /// events.
@@ -35,7 +43,7 @@ impl<Node, S, Primitives> OpProofsExEx<Node, S>
 where
     Node: FullNodeComponents<Types: NodeTypes<Primitives = Primitives>>,
     Primitives: NodePrimitives,
-    S: OpProofsStorage + Clone,
+    S: OpProofsStore + Clone,
 {
     /// Main execution loop for the ExEx
     pub async fn run(mut self) -> eyre::Result<()> {

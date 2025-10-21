@@ -20,7 +20,7 @@ reth-optimism-payload-builder.workspace = true
 reth-optimism-primitives.workspace = true
 reth-optimism-forks.workspace = true
 reth-optimism-exex.workspace = true
-reth-optimism-trie.workspace = true
+reth-optimism-trie = { workspace = true, features = ["metrics"] }
 reth-node-builder.workspace = true
 reth-db-api.workspace = true
 reth-chainspec.workspace = true
@@ -43,10 +43,7 @@ tracy-allocator = ["reth-cli-util/tracy-allocator"]
 
 asm-keccak = ["reth-optimism-cli/asm-keccak", "reth-optimism-node/asm-keccak"]
 
-dev = [
-    "reth-optimism-cli/dev",
-    "reth-optimism-primitives/arbitrary",
-]
+dev = ["reth-optimism-cli/dev", "reth-optimism-primitives/arbitrary"]
 
 min-error-logs = ["tracing/release_max_level_error"]
 min-warn-logs = ["tracing/release_max_level_warn"]

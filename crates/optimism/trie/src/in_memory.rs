@@ -1,8 +1,8 @@
-//! In-memory implementation of [`OpProofsStorage`] for testing purposes
+//! In-memory implementation of [`OpProofsStore`] for testing purposes
 
 use crate::{
-    BlockStateDiff, OpProofsHashedCursor, OpProofsStorage, OpProofsStorageError,
-    OpProofsStorageResult, OpProofsTrieCursor,
+    BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult,
+    OpProofsStore, OpProofsTrieCursorRO,
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_primitives_traits::Account;
@@ -10,7 +10,7 @@ use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibble
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::RwLock;
 
-/// In-memory implementation of [`OpProofsStorage`] for testing purposes
+/// In-memory implementation of [`OpProofsStore`] for testing purposes
 #[derive(Debug, Clone)]
 pub struct InMemoryProofsStorage {
     /// Shared state across all instances
@@ -207,7 +207,7 @@ impl InMemoryTrieCursor {
     }
 }
 
-impl OpProofsTrieCursor for InMemoryTrieCursor {
+impl OpProofsTrieCursorRO for InMemoryTrieCursor {
     fn seek_exact(
         &mut self,
         path: Nibbles,
@@ -297,7 +297,7 @@ impl InMemoryStorageCursor {
     }
 }
 
-impl OpProofsHashedCursor for InMemoryStorageCursor {
+impl OpProofsHashedCursorRO for InMemoryStorageCursor {
     type Value = U256;
 
     fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
@@ -319,7 +319,7 @@ impl OpProofsHashedCursor for InMemoryStorageCursor {
     }
 }
 
-/// In-memory implementation of [`OpProofsHashedCursor`] for accounts
+/// In-memory implementation of [`OpProofsHashedCursorRO`] for accounts
 #[derive(Debug)]
 pub struct InMemoryAccountCursor {
     /// Current position in the iteration (-1 means not positioned yet)
@@ -357,7 +357,7 @@ impl InMemoryAccountCursor {
     }
 }
 
-impl OpProofsHashedCursor for InMemoryAccountCursor {
+impl OpProofsHashedCursorRO for InMemoryAccountCursor {
     type Value = Account;
 
     fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
@@ -379,11 +379,11 @@ impl OpProofsHashedCursor for InMemoryAccountCursor {
     }
 }
 
-impl OpProofsStorage for InMemoryProofsStorage {
+impl OpProofsStore for InMemoryProofsStorage {
     type StorageTrieCursor<'tx> = InMemoryTrieCursor;
     type AccountTrieCursor<'tx> = InMemoryTrieCursor;
-    type StorageCursor = InMemoryStorageCursor;
-    type AccountHashedCursor = InMemoryAccountCursor;
+    type StorageCursor<'tx> = InMemoryStorageCursor;
+    type AccountHashedCursor<'tx> = InMemoryAccountCursor;
 
     async fn store_account_branches(
         &self,
@@ -452,7 +452,8 @@ impl OpProofsStorage for InMemoryProofsStorage {
             // We don't have a hash stored, so return a default
             Ok(Some((block, B256::ZERO)))
         } else {
-            Ok(None)
+            // otherwise return earliest block if set
+            Ok(inner.earliest_block)
         }
     }
 
@@ -480,11 +481,11 @@ impl OpProofsStorage for InMemoryProofsStorage {
         Ok(InMemoryTrieCursor::new(&inner, None, max_block_number))
     }
 
-    fn storage_hashed_cursor(
+    fn storage_hashed_cursor<'tx>(
         &self,
         hashed_address: B256,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::StorageCursor> {
+    ) -> OpProofsStorageResult<Self::StorageCursor<'tx>> {
         let inner = self
             .inner
             .try_read()
@@ -492,10 +493,10 @@ impl OpProofsStorage for InMemoryProofsStorage {
         Ok(InMemoryStorageCursor::new(&inner, hashed_address, max_block_number))
     }
 
-    fn account_hashed_cursor(
+    fn account_hashed_cursor<'tx>(
         &self,
         max_block_number: u64,
-    ) -> OpProofsStorageResult<Self::AccountHashedCursor> {
+    ) -> OpProofsStorageResult<Self::AccountHashedCursor<'tx>> {
         let inner = self
             .inner
             .try_read()
