@@ -272,7 +272,7 @@ impl<Cursor> MdbxStorageCursor<Cursor>
 where
     Cursor: DbCursorRO<HashedStorageHistory> + DbDupCursorRO<HashedStorageHistory> + Send + Sync,
 {
-    ///  Initializes new `MdbxStorageCursor`
+    ///  Initializes new [`MdbxStorageCursor`]
     pub const fn new(cursor: Cursor, block_number: u64, hashed_address: B256) -> Self {
         Self { inner: BlockNumberVersionedCursor::new(cursor, block_number), hashed_address }
     }
