@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 # reth
+reth-basic-payload-builder.workspace = true
 reth-evm.workspace = true
 reth-primitives-traits = { workspace = true, features = ["op"] }
 reth-storage-api.workspace = true
@@ -29,6 +30,7 @@ reth-chainspec.workspace = true
 reth-chain-state.workspace = true
 reth-rpc-engine-api.workspace = true
 reth-rpc-convert.workspace = true
+reth-payload-util.workspace = true
 reth-provider.workspace = true
 
 # op-reth
@@ -37,7 +39,11 @@ reth-optimism-flashblocks.workspace = true
 reth-optimism-payload-builder.workspace = true
 reth-optimism-txpool.workspace = true
 # TODO remove node-builder import
-reth-optimism-primitives = { workspace = true, features = ["reth-codec", "serde-bincode-compat", "serde"] }
+reth-optimism-primitives = { workspace = true, features = [
+    "reth-codec",
+    "serde-bincode-compat",
+    "serde",
+] }
 reth-optimism-forks.workspace = true
 reth-optimism-trie.workspace = true
 

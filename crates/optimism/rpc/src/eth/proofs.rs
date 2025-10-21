@@ -1,5 +1,7 @@
 //! Historical proofs RPC server implementation.
 
+use std::{marker::PhantomData, sync::Arc};
+
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_primitives::{Address, B256};
 use alloy_rpc_types_debug::ExecutionWitness;
@@ -10,23 +12,28 @@ use derive_more::Constructor;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee_core::RpcResult;
 use jsonrpsee_types::error::ErrorObject;
+use op_alloy_consensus::OpPooledTransaction;
+use reth_basic_payload_builder::PayloadConfig;
 use reth_evm::ConfigureEvm;
-use reth_node_api::{BuildNextEnv, NodePrimitives};
+use reth_node_api::{BuildNextEnv, NodePrimitives, PayloadBuilderError};
 use reth_optimism_forks::OpHardforks;
-use reth_optimism_payload_builder::{OpAttributes, OpPayloadBuilder, OpPayloadPrimitives};
+use reth_optimism_payload_builder::{
+    builder::{OpBuilder, OpPayloadBuilderCtx},
+    OpAttributes, OpPayloadPrimitives,
+};
 use reth_optimism_trie::{provider::OpProofsStateProviderRef, OpProofsStorage};
-use reth_optimism_txpool::OpPooledTx;
+use reth_optimism_txpool::OpPooledTransaction as OpPooledTx2;
+use reth_payload_util::NoopPayloadTransactions;
 use reth_primitives_traits::{SealedHeader, TxTy};
 use reth_provider::{
-    BlockIdReader, BlockReaderIdExt, ChainSpecProvider, NodePrimitivesProvider, ProviderError,
-    ProviderResult, StateProofProvider, StateProviderBox, StateProviderFactory,
+    BlockIdReader, BlockReaderIdExt, ChainSpecProvider, HeaderProvider, NodePrimitivesProvider,
+    ProviderError, ProviderResult, StateProofProvider, StateProviderBox, StateProviderFactory,
 };
 use reth_rpc_api::eth::helpers::FullEthApi;
 use reth_rpc_eth_types::EthApiError;
 use reth_rpc_server_types::{result::internal_rpc_err, ToRpcResult};
 use reth_tasks::TaskSpawner;
-use reth_transaction_pool::TransactionPool;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Semaphore};
 
 #[cfg_attr(not(test), rpc(server, namespace = "eth"))]
 #[cfg_attr(test, rpc(server, client, namespace = "eth"))]
@@ -68,10 +75,7 @@ where
     ErrorObject<'static>: From<Eth::Error>,
     P: OpProofsStorage + Clone + 'static,
 {
-    async fn state_provider(
-        &self,
-        block_id: Option<BlockId>,
-    ) -> ProviderResult<impl StateProofProvider> {
+    async fn state_provider(&self, block_id: Option<BlockId>) -> ProviderResult<StateProviderBox> {
         let block_id = block_id.unwrap_or_default();
         // Check whether the distance to the block exceeds the maximum configured window.
         let block_number = self
@@ -95,15 +99,18 @@ where
                 .map_err(|e| ProviderError::Database(e.into()))?,
         ) else {
             // if no earliest block, db is empty - use historical provider
-            return Ok(historical_provider as Box<dyn StateProofProvider>);
+            return Ok(Box::new(historical_provider));
         };
 
         if block_number < earliest_block_number || block_number > latest_block_number {
-            return Ok(historical_provider as Box<dyn StateProofProvider>);
+            return Ok(Box::new(historical_provider));
         }
 
-        let external_overlay_provider =
-            OpProofsStateProviderRef::new(historical_provider, &self.preimage_store, block_number);
+        let external_overlay_provider = OpProofsStateProviderRef::new(
+            historical_provider,
+            self.preimage_store.clone(),
+            block_number,
+        );
 
         Ok(Box::new(external_overlay_provider))
     }
@@ -150,88 +157,164 @@ where
 }
 
 #[derive(Debug)]
-/// Overrides applied to the `debug_` namespace of the RPC API for historical proofs ExEx.
-pub struct DebugApiExt<Eth: FullEthApi, Storage, Pool, Provider, EvmConfig, Attrs> {
-    state_provider_factory: OpStateProviderFactory<Eth, Storage>,
-    builder: OpPayloadBuilder<Pool, Provider, EvmConfig, (), Attrs>,
-    task_spawner: Box<dyn TaskSpawner>,
+pub struct DebugApiExt<Eth: FullEthApi, Storage, Provider, EvmConfig, Attrs> {
+    inner: Arc<DebugApiExtInner<Eth, Storage, Provider, EvmConfig, Attrs>>,
 }
 
-impl<Eth, P, Pool, Provider, EvmConfig, Attrs> DebugApiExt<Eth, P, Pool, Provider, EvmConfig, Attrs>
+impl<Eth, Storage, Provider, EvmConfig, Attrs> DebugApiExt<Eth, Storage, Provider, EvmConfig, Attrs>
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
-    P: OpProofsStorage + Clone + 'static,
+    Storage: OpProofsStorage + Clone + 'static,
+    Provider: BlockReaderIdExt + NodePrimitivesProvider<Primitives: OpPayloadPrimitives>,
+    EvmConfig: ConfigureEvm<Primitives = Provider::Primitives> + 'static,
 {
     pub fn new(
+        provider: Provider,
         eth_api: Eth,
-        preimage_store: P,
+        preimage_store: Storage,
         task_spawner: Box<dyn TaskSpawner>,
-        builder: OpPayloadBuilder<Pool, Provider, EvmConfig, (), Attrs>,
+        evm_config: EvmConfig,
     ) -> Self {
         Self {
-            state_provider_factory: OpStateProviderFactory::new(eth_api, preimage_store),
-            builder,
-            task_spawner,
+            inner: Arc::new(DebugApiExtInner::new(
+                provider,
+                eth_api,
+                preimage_store,
+                task_spawner,
+                evm_config,
+            )),
         }
     }
 }
 
-impl<Eth, P, Pool, Provider, EvmConfig, Attrs> DebugApiExt<Eth, P, Pool, Provider, EvmConfig, Attrs>
+#[derive(Debug)]
+/// Overrides applied to the `debug_` namespace of the RPC API for historical proofs ExEx.
+pub struct DebugApiExtInner<Eth: FullEthApi, Storage, Provider, EvmConfig, Attrs> {
+    provider: Provider,
+    state_provider_factory: OpStateProviderFactory<Eth, Storage>,
+    evm_config: EvmConfig,
+    task_spawner: Box<dyn TaskSpawner>,
+    semaphore: Semaphore,
+    _attrs: PhantomData<Attrs>,
+}
+
+impl<Eth, P, Provider, EvmConfig, Attrs> DebugApiExtInner<Eth, P, Provider, EvmConfig, Attrs>
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
     P: OpProofsStorage + Clone + 'static,
-    Provider: BlockReaderIdExt,
-    Attrs: Send + 'static,
+    Provider: NodePrimitivesProvider<Primitives: OpPayloadPrimitives>,
+{
+    fn new(
+        provider: Provider,
+        eth_api: Eth,
+        preimage_store: P,
+        task_spawner: Box<dyn TaskSpawner>,
+        evm_config: EvmConfig,
+    ) -> Self {
+        Self {
+            provider,
+            state_provider_factory: OpStateProviderFactory::new(eth_api, preimage_store),
+            evm_config,
+            task_spawner,
+            semaphore: Semaphore::new(3),
+            _attrs: PhantomData,
+        }
+    }
+}
+
+impl<Eth, P, Provider, EvmConfig, Attrs> DebugApiExt<Eth, P, Provider, EvmConfig, Attrs>
+where
+    Eth: FullEthApi + Send + Sync + 'static,
+    ErrorObject<'static>: From<Eth::Error>,
+    P: OpProofsStorage + Clone + 'static,
+    Provider: BlockReaderIdExt
+        + NodePrimitivesProvider<Primitives: OpPayloadPrimitives>
+        + HeaderProvider<Header = <Provider::Primitives as NodePrimitives>::BlockHeader>,
 {
     fn parent_header(
         &self,
         parent_block_hash: B256,
     ) -> ProviderResult<SealedHeader<Provider::Header>> {
-        self.state_provider_factory
-            .provider()
+        self.inner
+            .provider
             .sealed_header_by_hash(parent_block_hash)?
             .ok_or_else(|| ProviderError::HeaderNotFound(parent_block_hash.into()))
     }
 }
 
 #[async_trait]
-impl<Eth, P, Pool, Provider, EvmConfig, Attrs> DebugApiOverrideServer<Attrs::RpcPayloadAttributes>
-    for DebugApiExt<Eth, P, Pool, Provider, EvmConfig, Attrs>
+impl<Eth, P, Provider, EvmConfig, Attrs, N> DebugApiOverrideServer<Attrs::RpcPayloadAttributes>
+    for DebugApiExt<Eth, P, Provider, EvmConfig, Attrs>
 where
     Eth: FullEthApi + Send + Sync + 'static,
     ErrorObject<'static>: From<Eth::Error>,
     P: OpProofsStorage + Clone + 'static,
     Attrs: OpAttributes<Transaction = TxTy<EvmConfig::Primitives>>,
+    N: OpPayloadPrimitives,
     EvmConfig: ConfigureEvm<
-            Primitives = Provider::Primitives,
-            NextBlockEnvCtx: BuildNextEnv<Attrs, Provider::Header, Provider::ChainSpec>,
+            Primitives = N,
+            NextBlockEnvCtx: BuildNextEnv<Attrs, N::BlockHeader, Provider::ChainSpec>,
         > + 'static,
-    Provider: BlockReaderIdExt<Header = <Provider::Primitives as NodePrimitives>::BlockHeader>
-        + NodePrimitivesProvider<Primitives: OpPayloadPrimitives>
+    Provider: BlockReaderIdExt<Header = N::BlockHeader>
         + StateProviderFactory
         + ChainSpecProvider<ChainSpec: OpHardforks>
+        + NodePrimitivesProvider<Primitives = N>
+        + HeaderProvider<Header = N::BlockHeader>
         + Clone
         + 'static,
-    Pool: TransactionPool<
-            Transaction: OpPooledTx<Consensus = <Provider::Primitives as NodePrimitives>::SignedTx>,
-        > + 'static,
+    op_alloy_consensus::OpPooledTransaction:
+        TryFrom<<N as OpPayloadPrimitives>::_TX, Error: core::error::Error>,
+    <N as OpPayloadPrimitives>::_TX: From<op_alloy_consensus::OpPooledTransaction>,
 {
     async fn execute_payload(
         &self,
         parent_block_hash: B256,
         attributes: Attrs::RpcPayloadAttributes,
     ) -> RpcResult<ExecutionWitness> {
-        // let _permit = self.inner.semaphore.acquire().await;
+        let _permit = self.inner.semaphore.acquire().await;
 
         let parent_header = self.parent_header(parent_block_hash).to_rpc_result()?;
 
         let (tx, rx) = oneshot::channel();
-        let this = self.clone();
-        self.task_spawner.spawn_blocking(Box::pin(async move {
-            let res = this.builder.payload_witness(parent_header, attributes);
-            let _ = tx.send(res);
+        let this = self.inner.clone();
+        self.inner.task_spawner.spawn_blocking(Box::pin(async move {
+            let result = (async move || {
+                let parent_hash = parent_header.hash();
+                let attributes = Attrs::try_new(parent_hash, attributes, 3)
+                    .map_err(PayloadBuilderError::other)?;
+
+                let config = PayloadConfig { parent_header: Arc::new(parent_header), attributes };
+                let ctx = OpPayloadBuilderCtx {
+                    evm_config: this.evm_config.clone(),
+                    da_config: Default::default(), // doesn't matter if no txpool
+                    chain_spec: this.provider.chain_spec(),
+                    config,
+                    cancel: Default::default(),
+                    best_payload: Default::default(),
+                };
+
+                let state_provider = this
+                    .state_provider_factory
+                    .state_provider(Some(BlockId::Hash(parent_hash.into())))
+                    .await
+                    .map_err(PayloadBuilderError::other)?;
+
+                let builder = OpBuilder::new(|_| {
+                    NoopPayloadTransactions::<
+                        OpPooledTx2<
+                            <N as OpPayloadPrimitives>::_TX,
+                            op_alloy_consensus::OpPooledTransaction,
+                        >,
+                    >::default()
+                });
+
+                builder.witness(state_provider, &ctx).map_err(PayloadBuilderError::other)
+            })()
+            .await;
+
+            let _ = tx.send(result);
         }));
 
         rx.await

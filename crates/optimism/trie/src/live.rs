@@ -74,7 +74,7 @@ where
 
         let state_provider = OpProofsStateProviderRef::new(
             self.provider.state_by_block_hash(block.parent_hash())?,
-            self.storage,
+            self.storage.clone(),
             parent_block_number,
         );
 
