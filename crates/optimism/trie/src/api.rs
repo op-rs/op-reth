@@ -107,7 +107,7 @@ pub trait OpProofsStorage: Send + Sync + Debug {
     type AccountHashedCursor: OpProofsHashedCursor<Value = Account>;
 
     /// Store a batch of account trie branches. Used for saving existing state. For live state
-    /// capture, use [store_trie_updates](OpProofsStorage::store_trie_updates).
+    /// capture, use [`store_trie_updates`](OpProofsStorage::store_trie_updates).
     fn store_account_branches(
         &self,
         account_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,
@@ -188,7 +188,7 @@ pub trait OpProofsStorage: Send + Sync + Debug {
         block_number: u64,
     ) -> impl Future<Output = OpProofsStorageResult<BlockStateDiff>> + Send;
 
-    /// Applies `BlockStateDiff` to the earliest state (updating/deleting nodes) and updates the
+    /// Applies [`BlockStateDiff`] to the earliest state (updating/deleting nodes) and updates the
     /// earliest block number.
     fn prune_earliest_state(
         &self,

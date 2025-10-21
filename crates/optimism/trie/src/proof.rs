@@ -31,7 +31,7 @@ use reth_trie::{
 pub struct OpProofsTrieCursor<C: OpProofsDBTrieCursor>(pub C);
 
 impl<C: OpProofsDBTrieCursor> OpProofsTrieCursor<C> {
-    /// Creates a new `OpProofsTrieCursor` instance.
+    /// Creates a new [`OpProofsTrieCursor`] instance.
     pub const fn new(cursor: C) -> Self {
         Self(cursor)
     }
@@ -79,7 +79,7 @@ pub struct OpProofsTrieCursorFactory<'tx, Storage: OpProofsStorage> {
 }
 
 impl<'tx, Storage: OpProofsStorage> OpProofsTrieCursorFactory<'tx, Storage> {
-    /// Initializes new `OpProofsTrieCursorFactory`
+    /// Initializes new [`OpProofsTrieCursorFactory`].
     pub const fn new(storage: &'tx Storage, block_number: u64) -> Self {
         Self { storage, block_number, _marker: core::marker::PhantomData }
     }
@@ -116,7 +116,7 @@ impl<'tx, Storage: OpProofsStorage + 'tx> TrieCursorFactory
 pub struct OpProofsHashedAccountCursor<C>(pub C);
 
 impl<C> OpProofsHashedAccountCursor<C> {
-    /// Creates a new `OpProofsHashedAccountCursor` instance.
+    /// Creates a new [`OpProofsHashedAccountCursor`] instance.
     pub const fn new(cursor: C) -> Self {
         Self(cursor)
     }
@@ -141,7 +141,7 @@ impl<C: OpProofsHashedCursor<Value = Account> + Send + Sync> HashedCursor
 pub struct OpProofsHashedStorageCursor<C: OpProofsHashedCursor<Value = U256>>(pub C);
 
 impl<C: OpProofsHashedCursor<Value = U256>> OpProofsHashedStorageCursor<C> {
-    /// Creates a new `OpProofsHashedStorageCursor` instance.
+    /// Creates a new [`OpProofsHashedStorageCursor`] instance.
     pub const fn new(cursor: C) -> Self {
         Self(cursor)
     }
@@ -177,7 +177,7 @@ pub struct OpProofsHashedAccountCursorFactory<Storage: OpProofsStorage> {
 }
 
 impl<Storage: OpProofsStorage> OpProofsHashedAccountCursorFactory<Storage> {
-    /// Creates a new `OpProofsHashedAccountCursorFactory` instance.
+    /// Creates a new [`OpProofsHashedAccountCursorFactory`] instance.
     pub const fn new(storage: Storage, block_number: u64) -> Self {
         Self { storage, block_number }
     }
@@ -203,7 +203,7 @@ impl<Storage: OpProofsStorage> HashedCursorFactory for OpProofsHashedAccountCurs
 
 /// Extends [`Proof`] with operations specific for working with [`OpProofsStorage`].
 pub trait DatabaseProof<'tx, Storage> {
-    /// Creates a new `DatabaseProof` instance from external storage.
+    /// Creates a new [`DatabaseProof`] instance from external storage.
     fn from_tx(storage: &'tx Storage, block_number: u64) -> Self;
 
     /// Generates the state proof for target account based on [`TrieInput`].

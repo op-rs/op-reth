@@ -33,7 +33,7 @@ where
     Primitives: NodePrimitives,
     Store: 'tx + OpProofsStorage + Clone + 'static,
 {
-    /// Create a new `LiveTrieCollector` instance
+    /// Create a new [`LiveTrieCollector`] instance
     pub const fn new(evm_config: Node::Evm, provider: Node::Provider, storage: &'tx Store) -> Self {
         Self { evm_config, provider, storage }
     }

@@ -39,7 +39,7 @@ pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStorage> {
 }
 
 impl<'a, Storage: OpProofsStorage> OpProofsStateProviderRef<'a, Storage> {
-    /// Initializes new `OpProofsStateProviderRef`
+    /// Initializes new [`OpProofsStateProviderRef`].
     pub fn new(
         latest: Box<dyn StateProvider + 'a>,
         storage: &'a Storage,
