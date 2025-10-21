@@ -9796,7 +9796,6 @@ dependencies = [
 name = "reth-optimism-exex"
 version = "1.9.3"
 dependencies = [
- "alloy-primitives",
  "derive_more",
  "eyre",
  "futures",
@@ -9806,11 +9805,8 @@ dependencies = [
  "reth-exex",
  "reth-node-api",
  "reth-node-types",
- "reth-optimism-primitives",
  "reth-optimism-trie",
  "reth-provider",
- "serde",
- "thiserror 2.0.17",
  "tokio",
 ]
 
