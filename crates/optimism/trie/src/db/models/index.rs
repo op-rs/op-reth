@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 /// Key for pruning entries from historical trie tables
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum PruningTableName {
-    /// AccountTrieHistory table.
+    /// `AccountTrieHistory` table.
     AccountTrieHistory,
-    /// StorageTrieHistory table.
+    /// `StorageTrieHistory` table.
     StorageTrieHistory,
-    /// HashedAccountHistory table.
+    /// `HashedAccountHistory` table.
     HashedAccountHistory,
-    /// HashedStorageHistory table.
+    /// `HashedStorageHistory` table.
     HashedStorageHistory,
 }
 
