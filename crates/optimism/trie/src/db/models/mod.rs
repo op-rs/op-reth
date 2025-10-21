@@ -1,16 +1,13 @@
 //! MDBX implementation of [`OpProofsStorage`](crate::OpProofsStorage).
-//!
-//! This module provides a complete MDBX implementation of the
-//! [`OpProofsStorage`](crate::OpProofsStorage) trait. It uses the [`reth_db`] crate for
-//! database interactions and defines the necessary tables and models for storing trie branches,
-//! accounts, and storage leaves.
-
+// Hiding the original content for brevity.
 mod block;
 pub use block::*;
 mod version;
 pub use version::*;
 mod storage;
 pub use storage::*;
+mod index;
+pub use index::*;
 
 use alloy_primitives::B256;
 use reth_db::{
@@ -69,5 +66,13 @@ tables! {
     table ProofWindow {
       type Key = ProofWindowKey;
       type Value = BlockNumberHash;
+    }
+
+    /// An index that maps block numbers to a composite key of the table and the key of the entry.
+    /// This is used for efficient pruning of data by block number.
+    table BlockPruningIndex {
+        type Key = u64; // Block number
+        type Value = PruningKey;
+        type SubKey = u64;
     }
 }
