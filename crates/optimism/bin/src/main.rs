@@ -9,8 +9,9 @@ use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
 use reth_optimism_exex::OpProofsExEx;
 use reth_optimism_node::{args::RollupArgs, OpNode};
-use reth_optimism_rpc::eth::proofs::{
-    DebugApiExt, DebugApiOverrideServer, EthApiExt, EthApiOverrideServer,
+use reth_optimism_rpc::{
+    debug::{DebugApiExt, DebugApiOverrideServer},
+    eth::proofs::{EthApiExt, EthApiOverrideServer},
 };
 use reth_optimism_trie::{
     db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage, OpProofsStore, StorageMetrics,
