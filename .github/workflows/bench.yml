@@ -20,25 +20,43 @@ jobs:
     env:
       CODSPEED_TOKEN: ${{ secrets.CODSPEED_TOKEN }}
     steps:
+      # Check token early to provide clear feedback
+      - name: Check CODSPEED_TOKEN availability
+        id: check_token
+        run: |
+          if [ -z "$CODSPEED_TOKEN" ]; then
+            echo "::notice::CODSPEED_TOKEN is not set, benchmarks will be skipped"
+            echo "This is expected for forks. Benchmarks only run in the upstream repository."
+            echo "has_token=false" >> $GITHUB_OUTPUT
+          else
+            echo "CODSPEED_TOKEN is available, proceeding with benchmarks"
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          fi
       - uses: actions/checkout@v5
+        if: steps.check_token.outputs.has_token == 'true'
         with:
           submodules: true
       - uses: rui314/setup-mold@v1
+        if: steps.check_token.outputs.has_token == 'true'
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.check_token.outputs.has_token == 'true'
       - uses: Swatinem/rust-cache@v2
+        if: steps.check_token.outputs.has_token == 'true'
         with:
           cache-on-failure: true
       - name: Install cargo-codspeed
+        if: steps.check_token.outputs.has_token == 'true'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-codspeed
       - name: Build the benchmark target(s)
+        if: steps.check_token.outputs.has_token == 'true'
         run: ./.github/scripts/codspeed-build.sh
       - name: Run the benchmarks
+        if: steps.check_token.outputs.has_token == 'true'
         uses: CodSpeedHQ/action@v4
         # op-reth does not have a codspeed token
         # Only run if the token is available (e.g., in the upstream repository)
-        if: env.CODSPEED_TOKEN != ''
         with:
           run: cargo codspeed run --workspace
           mode: instrumentation
