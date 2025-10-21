@@ -1,9 +1,11 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-    api::{BlockStateDiff, OpProofsStorage, OpProofsStorageError},
+    api::{BlockStateDiff, OpProofsStorageError, OpProofsStore},
     provider::OpProofsStateProviderRef,
+    OpProofsStorage,
 };
+use derive_more::Constructor;
 use reth_evm::{execute::Executor, ConfigureEvm};
 use reth_node_api::{FullNodeComponents, NodePrimitives, NodeTypes};
 use reth_primitives_traits::{AlloyBlockHeader, RecoveredBlock};
@@ -16,7 +18,7 @@ use std::time::Instant;
 use tracing::debug;
 
 /// Live trie collector for external proofs storage.
-#[derive(Debug)]
+#[derive(Debug, Constructor)]
 pub struct LiveTrieCollector<'tx, Node, PreimageStore>
 where
     Node: FullNodeComponents,
@@ -24,20 +26,15 @@ where
 {
     evm_config: Node::Evm,
     provider: Node::Provider,
-    storage: &'tx PreimageStore,
+    storage: &'tx OpProofsStorage<PreimageStore>,
 }
 
 impl<'tx, Node, Store, Primitives> LiveTrieCollector<'tx, Node, Store>
 where
     Node: FullNodeComponents<Types: NodeTypes<Primitives = Primitives>>,
     Primitives: NodePrimitives,
-    Store: 'tx + OpProofsStorage + Clone + 'static,
+    Store: 'tx + OpProofsStore + Clone + 'static,
 {
-    /// Create a new `LiveTrieCollector` instance
-    pub const fn new(evm_config: Node::Evm, provider: Node::Provider, storage: &'tx Store) -> Self {
-        Self { evm_config, provider, storage }
-    }
-
     /// Execute a block and store the updates in the storage.
     pub async fn execute_and_store_block_updates(
         &self,
