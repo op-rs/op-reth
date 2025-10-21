@@ -3,33 +3,16 @@
 use clap::{builder::ArgPredicate, Parser};
 use eyre::ErrReport;
 use futures_util::FutureExt;
-use jsonrpsee_types::error::ErrorObject;
-use op_alloy_consensus::OpTransaction;
-use reth_chainspec::ChainSpecProvider;
 use reth_db::DatabaseEnv;
-use reth_node_builder::{
-    rpc::RpcContext, BuildNextEnv, ConfigureEvm, FullNodeComponents, FullNodeTypes,
-    FullNodeTypesAdapter, FullProvider, NodeBuilder, NodeComponents, NodePrimitives, NodeTypes,
-    NodeTypesWithDBAdapter, PayloadBuilderAttributes, TxTy, WithLaunchContext,
-};
+use reth_node_builder::{FullNodeComponents, NodeBuilder, WithLaunchContext};
 use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
 use reth_optimism_exex::OpProofsExEx;
-use reth_optimism_forks::OpHardforks;
-use reth_optimism_node::{
-    args::RollupArgs,
-    txpool::{OpPooledTransaction, OpPooledTx},
-    OpFullNodeTypes, OpNode, OpNodeTypes, OpPayloadAttributes, OpPayloadPrimitives,
-};
-use reth_optimism_payload_builder::OpAttributes;
+use reth_optimism_node::{args::RollupArgs, OpNode};
 use reth_optimism_rpc::eth::proofs::{
     DebugApiExt, DebugApiOverrideServer, EthApiExt, EthApiOverrideServer,
 };
 use reth_optimism_trie::{db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage};
-use reth_rpc_eth_api::{helpers::FullEthApi, EthApiTypes};
-use reth_storage_api::NodePrimitivesProvider;
-use reth_transaction_pool::PoolTransaction;
-use serde::de::DeserializeOwned;
 use std::{path::PathBuf, sync::Arc};
 use tracing::info;
 

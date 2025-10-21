@@ -6115,8 +6115,6 @@ dependencies = [
  "clap",
  "eyre",
  "futures-util",
- "jsonrpsee-types",
- "op-alloy-consensus",
  "reth-chainspec",
  "reth-cli-util",
  "reth-db",
@@ -6133,10 +6131,6 @@ dependencies = [
  "reth-optimism-primitives",
  "reth-optimism-rpc",
  "reth-optimism-trie",
- "reth-rpc-eth-api",
- "reth-storage-api",
- "reth-transaction-pool",
- "serde",
  "tracing",
 ]
 

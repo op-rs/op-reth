@@ -23,18 +23,11 @@ reth-optimism-exex.workspace = true
 reth-optimism-trie.workspace = true
 reth-node-builder.workspace = true
 reth-db-api.workspace = true
-reth-storage-api.workspace = true
-reth-rpc-eth-api.workspace = true
-reth-transaction-pool.workspace = true
 reth-chainspec.workspace = true
 reth-db.workspace = true
 
-op-alloy-consensus.workspace = true
-
-jsonrpsee-types.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 tracing.workspace = true
-serde.workspace = true
 eyre.workspace = true
 futures-util.workspace = true
 
@@ -50,7 +43,10 @@ tracy-allocator = ["reth-cli-util/tracy-allocator"]
 
 asm-keccak = ["reth-optimism-cli/asm-keccak", "reth-optimism-node/asm-keccak"]
 
-dev = ["reth-optimism-cli/dev", "reth-optimism-primitives/arbitrary"]
+dev = [
+    "reth-optimism-cli/dev",
+    "reth-optimism-primitives/arbitrary",
+]
 
 min-error-logs = ["tracing/release_max_level_error"]
 min-warn-logs = ["tracing/release_max_level_warn"]

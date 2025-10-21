@@ -12,7 +12,6 @@ use derive_more::Constructor;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee_core::RpcResult;
 use jsonrpsee_types::error::ErrorObject;
-use op_alloy_consensus::OpPooledTransaction;
 use reth_basic_payload_builder::PayloadConfig;
 use reth_evm::ConfigureEvm;
 use reth_node_api::{BuildNextEnv, NodePrimitives, PayloadBuilderError};
