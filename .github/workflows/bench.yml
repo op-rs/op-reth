@@ -19,9 +19,15 @@ jobs:
     # Set the CODSPEED_TOKEN as an environment variable at the job level
     env:
       CODSPEED_TOKEN: ${{ secrets.CODSPEED_TOKEN }}
-    # Skip the entire job if CODSPEED_TOKEN is not available
-    if: env.CODSPEED_TOKEN != ''
     steps:
+      # Check token early and exit if not available
+      - name: Check CODSPEED_TOKEN availability
+        run: |
+          if [ -z "$CODSPEED_TOKEN" ]; then
+            echo "::notice::CODSPEED_TOKEN is not set, skipping benchmarks"
+            echo "This is expected for forks. Benchmarks only run in the upstream repository."
+            exit 0
+          fi
       - uses: actions/checkout@v5
         with:
           submodules: true
