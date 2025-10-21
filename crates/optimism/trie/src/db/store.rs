@@ -1,8 +1,9 @@
 use crate::{
     db::{
         models::{
-            AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
-            MaybeDeleted, StorageTrieHistory, StorageTrieKey, StorageValue, VersionedValue,
+            AccountTrieHistory, BlockPruningIndex, HashedAccountHistory, HashedStorageHistory,
+            HashedStorageKey, MaybeDeleted, PruningKey, PruningTableName, StorageTrieHistory,
+            StorageTrieKey, StorageValue, VersionedValue,
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
@@ -11,7 +12,8 @@ use crate::{
 use alloy_primitives::{map::HashMap, B256, U256};
 use itertools::Itertools;
 use reth_db::{
-    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRW},
+    table::{Encode, Decode},
+    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRW, DbDupCursorRO},
     mdbx::{init_db_for, DatabaseArguments},
     transaction::DbTx,
     Database, DatabaseEnv,
@@ -227,10 +229,19 @@ impl OpProofsStorage for MdbxProofsStorage {
             .collect::<Vec<_>>();
 
         self.env.update(|tx| {
+            let mut pruning_cursor = tx.new_cursor::<BlockPruningIndex>()?;
+
             let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
             for (path, node) in sorted_account_nodes {
+                let key: StoredNibbles = path.into();
                 let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                account_trie_cursor.append_dup(path.into(), vv)?;
+                account_trie_cursor.append_dup(key.clone(), vv)?;
+
+                let pruning_key = PruningKey {
+                    table: PruningTableName::AccountTrieHistory,
+                    key: key.encode(),
+                };
+                pruning_cursor.append_dup(block_number, pruning_key)?;
             }
 
             let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
@@ -239,7 +250,13 @@ impl OpProofsStorage for MdbxProofsStorage {
                 for (path, node) in nodes.storage_nodes {
                     let key = StorageTrieKey::new(hashed_address, path.into());
                     let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                    storage_trie_cursor.append_dup(key, vv)?;
+                    storage_trie_cursor.append_dup(key.clone(), vv)?;
+
+                    let pruning_key = PruningKey {
+                        table: PruningTableName::StorageTrieHistory,
+                        key: key.encode(),
+                    };
+                    pruning_cursor.append_dup(block_number, pruning_key)?;
                 }
             }
 
@@ -247,6 +264,12 @@ impl OpProofsStorage for MdbxProofsStorage {
             for (hashed_address, account) in sorted_accounts {
                 let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
                 account_cursor.append_dup(hashed_address, vv)?;
+
+                let pruning_key = PruningKey {
+                    table: PruningTableName::HashedAccountHistory,
+                    key: hashed_address.encode().to_vec(),
+                };
+                pruning_cursor.append_dup(block_number, pruning_key)?;
             }
 
             let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
@@ -259,7 +282,13 @@ impl OpProofsStorage for MdbxProofsStorage {
                         value: MaybeDeleted(Some(StorageValue(storage_value))),
                     };
                     let key = HashedStorageKey::new(*hashed_address, storage_key);
-                    storage_cursor.append_dup(key, vv)?;
+                    storage_cursor.append_dup(key.clone(), vv)?;
+
+                    let pruning_key = PruningKey {
+                        table: PruningTableName::HashedStorageHistory,
+                        key: key.encode().into(),
+                    };
+                    pruning_cursor.append_dup(block_number, pruning_key)?;
                 }
             }
 
@@ -276,10 +305,73 @@ impl OpProofsStorage for MdbxProofsStorage {
 
     async fn prune_earliest_state(
         &self,
-        _new_earliest_block_number: u64,
+        new_earliest_block_number: u64,
         _diff: BlockStateDiff,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!()
+        let earliest_block = self.get_earliest_block_number().await?;
+        let start_block = if let Some((block, _)) = earliest_block {
+            if block >= new_earliest_block_number {
+                return Ok(()) // Nothing to prune
+            }
+            block
+        } else {
+            return Ok(()) // Nothing to prune
+        };
+
+        self.env.update(|tx| {
+            // Collect keys to prune first to avoid borrow checker issues with cursors.
+            let keys_to_prune: Vec<(u64, PruningKey)> = {
+                let mut pruning_cursor = tx.new_cursor::<BlockPruningIndex>()?;
+                pruning_cursor
+                    .walk_range(start_block..new_earliest_block_number)?
+                    .collect::<Result<Vec<_>, _>>()?
+            };
+
+            if !keys_to_prune.is_empty() {
+                let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+                let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+                let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+                let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+
+                let mut pruning_cursor_write = tx.new_cursor::<BlockPruningIndex>()?;
+
+                for (block_number, pruning_key) in keys_to_prune.clone() {
+                    match pruning_key.table {
+                        PruningTableName::AccountTrieHistory => {
+                            let key = StoredNibbles::decode(&mut pruning_key.key.as_slice())?;
+                            if account_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some() {
+                                account_trie_cursor.delete_current()?;
+                            }
+                        }
+                        PruningTableName::StorageTrieHistory => {
+                            let key = StorageTrieKey::decode(&mut pruning_key.key.as_slice())?;
+                            if storage_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some() {
+                                storage_trie_cursor.delete_current()?;
+                            }
+                        }
+                        PruningTableName::HashedAccountHistory => {
+                            let key = B256::decode(&mut pruning_key.key.as_slice())?;
+                            if hashed_account_cursor.seek_by_key_subkey(key, block_number)?.is_some() {
+                                hashed_account_cursor.delete_current()?;
+                            }
+                        }
+                        PruningTableName::HashedStorageHistory => {
+                            let key = HashedStorageKey::decode(&mut pruning_key.key.as_slice())?;
+                            if hashed_storage_cursor
+                                .seek_by_key_subkey(key, block_number)?
+                                .is_some()
+                            {
+                                hashed_storage_cursor.delete_current()?;
+                            }
+                        }
+                    }
+
+                    pruning_cursor_write.seek_exact(block_number)?;
+                    pruning_cursor_write.delete_current_duplicates()?;
+                }
+            }
+            Ok(())
+        })?
     }
 
     async fn replace_updates(
