@@ -1,7 +1,6 @@
 //! End-to-end test of the live trie collector.
 
-#![cfg(not(feature = "metrics"))] // todo: this can be removed with smol fixes
-#![expect(unused_crate_dependencies)]
+#![cfg(not(feature = "metrics"))]
 
 use alloy_consensus::{constants::ETH_TO_WEI, BlockHeader, Header, TxEip2930};
 use alloy_genesis::{Genesis, GenesisAccount};
