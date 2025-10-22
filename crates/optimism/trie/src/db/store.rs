@@ -366,6 +366,7 @@ impl OpProofsStore for MdbxProofsStorage {
                 let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
                 let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
                 let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+                // TODO: abstract walker logic into cursor methods to avoid code duplication
 
                 for (block_number, change_set) in &keys_to_prune {
                     match change_set.name {
@@ -450,7 +451,7 @@ mod tests {
         StorageTrieKey,
     };
     use alloy_primitives::B256;
-    use reth_db::{cursor::DbDupCursorRO, transaction::DbTx};
+    use reth_db::{cursor::DbDupCursorRO, transaction::{DbTx, DbTxMut}};
     use reth_trie::{
         updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles, StoredNibbles,
     };
@@ -1163,6 +1164,44 @@ mod tests {
         store.prune_earliest_state(10, diff).await.unwrap();
 
         // Nothing should have been pruned, this call should not panic or error
+    }
+
+    #[test]
+    fn test_block_change_set_crud_operations() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        let tx = store.env.tx_mut().expect("rw tx");
+        let mut cursor = tx.cursor_dup_write::<BlockChangeSet>().expect("cursor");
+
+        let block = 42u64;
+        let entry1 = TableChangeSet { name: TableName::AccountTrieHistory, table_key: vec![1] };
+        let entry2 = TableChangeSet { name: TableName::StorageTrieHistory, table_key: vec![2] };
+
+        // Insert
+        cursor.append_dup(block, entry1.clone()).unwrap();
+        cursor.append_dup(block, entry2.clone()).unwrap();
+
+        // Read
+        let mut walker = cursor.walk_dup(Some(block), None).unwrap();
+        let mut entries = vec![walker.next().unwrap().unwrap().1, walker.next().unwrap().unwrap().1];
+        entries.sort();
+        let mut expected = vec![entry1.clone(), entry2.clone()];
+        expected.sort();
+        assert_eq!(entries, expected);
+
+        // Delete entry1
+        let mut walker = cursor.walk_dup(Some(block), None).unwrap();
+        while let Some(Ok((_, val))) = walker.next() {
+            if val == entry1 {
+                walker.delete_current().unwrap();
+                break;
+            }
+        }
+
+        // Verify delete
+        let mut walker = cursor.walk_dup(Some(block), None).unwrap();
+        assert_eq!(walker.next().unwrap().unwrap().1, entry2);
+        assert!(walker.next().is_none());
     }
 
     #[tokio::test]
