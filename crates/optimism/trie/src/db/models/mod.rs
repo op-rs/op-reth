@@ -11,8 +11,8 @@ mod version;
 pub use version::*;
 mod storage;
 pub use storage::*;
-mod index;
-pub use index::*;
+mod change_set;
+pub use change_set::*;
 
 use alloy_primitives::B256;
 use reth_db::{
