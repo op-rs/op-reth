@@ -1,6 +1,5 @@
 use super::{BlockNumberHash, ProofWindow, ProofWindowKey};
 use crate::{
-    api::OpProofsStorage,
     db::{
         cursor::Dup,
         models::{
@@ -10,7 +9,7 @@ use crate::{
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
-    BlockStateDiff, OpProofsStorageError, OpProofsStorageResult,
+    BlockStateDiff, OpProofsStorageError, OpProofsStorageResult, OpProofsStore,
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use itertools::Itertools;
@@ -25,14 +24,14 @@ use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
 use std::{collections::HashSet, path::Path};
 
-/// MDBX implementation of `OpProofsStorage`.
+/// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
 pub struct MdbxProofsStorage {
     env: DatabaseEnv,
 }
 
 impl MdbxProofsStorage {
-    /// Creates a new `MdbxProofsStorage` instance with the given path.
+    /// Creates a new [`MdbxProofsStorage`] instance with the given path.
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())
             .map_err(OpProofsStorageError::Other)?;
@@ -65,7 +64,7 @@ impl MdbxProofsStorage {
     }
 }
 
-impl OpProofsStorage for MdbxProofsStorage {
+impl OpProofsStore for MdbxProofsStorage {
     type StorageTrieCursor<'tx>
         = MdbxTrieCursor<StorageTrieHistory, Dup<'tx, StorageTrieHistory>>
     where

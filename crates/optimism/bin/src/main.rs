@@ -10,10 +10,11 @@ use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
 use reth_optimism_exex::OpProofsExEx;
 use reth_optimism_node::{args::RollupArgs, OpNode};
 use reth_optimism_rpc::eth::proofs::{EthApiExt, EthApiOverrideServer};
-use reth_optimism_trie::{db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage};
-use tracing::info;
-
+use reth_optimism_trie::{
+    db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage, OpProofsStore,
+};
 use std::{path::PathBuf, sync::Arc};
+use tracing::info;
 
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
@@ -68,10 +69,10 @@ struct Args {
 async fn launch_node_with_storage<S>(
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>,
     args: Args,
-    storage: S,
+    storage: OpProofsStorage<S>,
 ) -> eyre::Result<(), ErrReport>
 where
-    S: OpProofsStorage + Clone + 'static,
+    S: OpProofsStore + Clone + 'static,
 {
     let storage_clone = storage.clone();
     let proofs_history_enabled = args.proofs_history;
@@ -106,7 +107,9 @@ fn main() {
         info!(target: "reth::cli", "Launching node");
 
         if args.proofs_history_storage_in_mem {
-            let storage = Arc::new(InMemoryProofsStorage::new());
+            // todo: enable launch without metrics
+            let storage = Arc::new(InMemoryProofsStorage::new()).into();
+
             launch_node_with_storage(builder, args.clone(), storage).await?;
         } else {
             let path = args
@@ -115,10 +118,13 @@ fn main() {
                 .expect("Path must be provided if not using in-memory storage");
             info!(target: "reth::cli", "Using on-disk storage for proofs history");
 
+            // todo: enable launch without metrics
             let storage = Arc::new(
                 MdbxProofsStorage::new(&path)
                     .map_err(|e| eyre::eyre!("Failed to create MdbxProofsStorage: {e}"))?,
-            );
+            )
+            .into();
+
             launch_node_with_storage(builder, args.clone(), storage).await?;
         }
 

@@ -1,12 +1,13 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-    api::{BlockStateDiff, OpProofsStorage, OpProofsStorageError},
+    api::{BlockStateDiff, OpProofsStorageError, OpProofsStore},
     provider::OpProofsStateProviderRef,
+    OpProofsStorage,
 };
+use derive_more::Constructor;
 use reth_evm::{execute::Executor, ConfigureEvm};
-use reth_node_api::{FullNodeComponents, NodePrimitives, NodeTypes};
-use reth_primitives_traits::{AlloyBlockHeader, RecoveredBlock};
+use reth_primitives_traits::{AlloyBlockHeader, BlockTy, RecoveredBlock};
 use reth_provider::{
     DatabaseProviderFactory, HashedPostStateProvider, StateProviderFactory, StateReader,
     StateRootProvider,
@@ -16,32 +17,27 @@ use std::time::Instant;
 use tracing::debug;
 
 /// Live trie collector for external proofs storage.
-#[derive(Debug)]
-pub struct LiveTrieCollector<'tx, Node, PreimageStore>
+#[derive(Debug, Constructor)]
+pub struct LiveTrieCollector<'tx, Evm, Provider, PreimageStore>
 where
-    Node: FullNodeComponents,
-    Node::Provider: StateReader + DatabaseProviderFactory + StateProviderFactory,
+    Evm: ConfigureEvm,
+    Provider: StateReader + DatabaseProviderFactory + StateProviderFactory,
 {
-    evm_config: Node::Evm,
-    provider: Node::Provider,
-    storage: &'tx PreimageStore,
+    evm_config: Evm,
+    provider: Provider,
+    storage: &'tx OpProofsStorage<PreimageStore>,
 }
 
-impl<'tx, Node, Store, Primitives> LiveTrieCollector<'tx, Node, Store>
+impl<'tx, Evm, Provider, Store> LiveTrieCollector<'tx, Evm, Provider, Store>
 where
-    Node: FullNodeComponents<Types: NodeTypes<Primitives = Primitives>>,
-    Primitives: NodePrimitives,
-    Store: 'tx + OpProofsStorage + Clone + 'static,
+    Evm: ConfigureEvm,
+    Provider: StateReader + DatabaseProviderFactory + StateProviderFactory,
+    Store: 'tx + OpProofsStore + Clone + 'static,
 {
-    /// Create a new `LiveTrieCollector` instance
-    pub const fn new(evm_config: Node::Evm, provider: Node::Provider, storage: &'tx Store) -> Self {
-        Self { evm_config, provider, storage }
-    }
-
     /// Execute a block and store the updates in the storage.
     pub async fn execute_and_store_block_updates(
         &self,
-        block: &RecoveredBlock<Primitives::Block>,
+        block: &RecoveredBlock<BlockTy<Evm::Primitives>>,
     ) -> eyre::Result<()> {
         let start = Instant::now();
         // ensure that we have the state of the parent block
