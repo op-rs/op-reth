@@ -366,7 +366,8 @@ impl OpProofsStore for MdbxProofsStorage {
                 let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
                 let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
                 let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
-                // TODO: abstract walker logic into cursor methods to avoid code duplication
+
+                // TODO: abstract walker and delete logic into cursor methods to avoid code duplication
 
                 for (block_number, change_set) in &keys_to_prune {
                     match change_set.name {
