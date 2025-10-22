@@ -4,9 +4,9 @@ use reth_db::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Key for pruning entries from historical trie tables
+/// Subkey for identifying tables in `BlockChangeSet`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum PruningTableName {
+pub enum TableName {
     /// [`AccountTrieHistory`](super::AccountTrieHistory) table.
     AccountTrieHistory,
     /// [`StorageTrieHistory`](super::StorageTrieHistory) table.
@@ -17,55 +17,70 @@ pub enum PruningTableName {
     HashedStorageHistory,
 }
 
-/// Composite key for pruning: (table name, key)
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct PruningKey {
-    /// The name of the table where the key is located.
-    pub table: PruningTableName,
-    /// The key of the entry to be pruned.
-    pub key: Vec<u8>,
+impl Encode for TableName {
+    type Encoded = Vec<u8>;
+
+    fn encode(self) -> Self::Encoded {
+        match self {
+            Self::AccountTrieHistory => vec![0u8],
+            Self::StorageTrieHistory => vec![1u8],
+            Self::HashedAccountHistory => vec![2u8],
+            Self::HashedStorageHistory => vec![3u8],
+        }
+    }
 }
 
-impl Encode for PruningKey {
+impl Decode for TableName {
+    fn decode(value: &[u8]) -> Result<Self, DatabaseError> {
+        match value.first() {
+            Some(&0) => Ok(Self::AccountTrieHistory),
+            Some(&1) => Ok(Self::StorageTrieHistory),
+            Some(&2) => Ok(Self::HashedAccountHistory),
+            Some(&3) => Ok(Self::HashedStorageHistory),
+            _ => Err(DatabaseError::Decode),
+        }
+    }
+}
+
+/// All keys changed at a specific block for a given table.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct TableChangeSet {
+    /// The name of the table where the key is located.
+    pub name: TableName,
+    /// The key of the entry in the table.
+    /// Mdbx stores encoded keys so we can store them as raw bytes
+    /// And avoid dealing with different key types here.
+    pub table_key: Vec<u8>,
+}
+
+impl Encode for TableChangeSet {
     type Encoded = Vec<u8>;
 
     fn encode(self) -> Self::Encoded {
         let mut buf = Vec::new();
-        // Encode table name as a single byte
-        let table_byte = match self.table {
-            PruningTableName::AccountTrieHistory => 0u8,
-            PruningTableName::StorageTrieHistory => 1u8,
-            PruningTableName::HashedAccountHistory => 2u8,
-            PruningTableName::HashedStorageHistory => 3u8,
-        };
-        buf.push(table_byte);
+        // Encode table name as a single byte (encoded as Vec<u8>)
+        let table_bytes = self.name.encode();
+        buf.extend_from_slice(&table_bytes);
         // Append the key bytes
-        buf.extend_from_slice(&self.key);
+        buf.extend_from_slice(&self.table_key);
         buf
     }
 }
 
-impl Decode for PruningKey {
+impl Decode for TableChangeSet {
     fn decode(value: &[u8]) -> Result<Self, DatabaseError> {
         if value.is_empty() {
             return Err(DatabaseError::Decode);
         }
 
-        let table = match value[0] {
-            0 => PruningTableName::AccountTrieHistory,
-            1 => PruningTableName::StorageTrieHistory,
-            2 => PruningTableName::HashedAccountHistory,
-            3 => PruningTableName::HashedStorageHistory,
-            _ => return Err(DatabaseError::Decode),
-        };
+        let name = TableName::decode(&value[..1])?;
+        let table_key = value[1..].to_vec();
 
-        let key = value[1..].to_vec();
-
-        Ok(Self { table, key })
+        Ok(Self { name, table_key })
     }
 }
 
-impl Compress for PruningKey {
+impl Compress for TableChangeSet {
     type Compressed = Vec<u8>;
 
     fn compress_to_buf<B: bytes::BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
@@ -74,7 +89,7 @@ impl Compress for PruningKey {
     }
 }
 
-impl Decompress for PruningKey {
+impl Decompress for TableChangeSet {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
         Self::decode(value)
     }
@@ -85,26 +100,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pruning_key_roundtrip() {
-        let test_cases = vec![
-            PruningKey { table: PruningTableName::AccountTrieHistory, key: vec![1, 2, 3] },
-            PruningKey { table: PruningTableName::StorageTrieHistory, key: vec![4, 5, 6] },
-            PruningKey { table: PruningTableName::AccountTrieHistory, key: vec![] },
+    fn test_table_change_set_roundtrip() {
+        let test_cases: Vec<_> = vec![
+            TableChangeSet { name: TableName::AccountTrieHistory, table_key: vec![1, 2, 3] },
+            TableChangeSet { name: TableName::StorageTrieHistory, table_key: vec![4, 5, 6] },
+            TableChangeSet { name: TableName::AccountTrieHistory, table_key: vec![] },
         ];
 
         for original in test_cases {
             let encoded = original.clone().encode();
-            let decoded = PruningKey::decode(&encoded).unwrap();
+            let decoded = TableChangeSet::decode(&encoded).unwrap();
             assert_eq!(original, decoded);
         }
     }
 
     #[test]
-    fn test_pruning_key_decode_error() {
+    fn test_table_change_set_decode_error() {
         // Test decoding an empty slice
-        assert!(PruningKey::decode(&[]).is_err());
+        assert!(TableChangeSet::decode(&[]).is_err());
 
         // Test decoding a slice with an invalid table identifier
-        assert!(PruningKey::decode(&[4, 1, 2, 3]).is_err());
+        assert!(TableChangeSet::decode(&[4, 1, 2, 3]).is_err());
     }
 }

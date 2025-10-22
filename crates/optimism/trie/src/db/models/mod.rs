@@ -74,10 +74,10 @@ tables! {
     }
 
     /// An index that maps block numbers to a composite key of the table and the key of the entry.
-    /// This is used for efficient pruning of data by block number.
-    table BlockPruningIndex {
+    /// This is used for efficiently locating data by block number.
+    table BlockChangeSet {
         type Key = u64; // Block number
-        type Value = PruningKey;
-        type SubKey = u64;
+        type Value = TableChangeSet;
+        type SubKey = TableName;
     }
 }

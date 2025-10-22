@@ -3,9 +3,9 @@ use crate::{
     db::{
         cursor::Dup,
         models::{
-            AccountTrieHistory, BlockPruningIndex, HashedAccountHistory, HashedStorageHistory,
-            HashedStorageKey, MaybeDeleted, PruningKey, PruningTableName, StorageTrieHistory,
-            StorageTrieKey, StorageValue, VersionedValue,
+            AccountTrieHistory, BlockChangeSet, HashedAccountHistory, HashedStorageHistory,
+            HashedStorageKey, MaybeDeleted, StorageTrieHistory, StorageTrieKey, StorageValue,
+            TableChangeSet, TableName, VersionedValue,
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
@@ -262,7 +262,8 @@ impl OpProofsStore for MdbxProofsStorage {
             .collect::<Vec<_>>();
 
         self.env.update(|tx| {
-            let mut pruning_cursor = tx.new_cursor::<BlockPruningIndex>()?;
+            // Cursor for recording all changes made in this block for all history tables
+            let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
 
             let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
             for (path, node) in sorted_account_nodes {
@@ -270,9 +271,9 @@ impl OpProofsStore for MdbxProofsStorage {
                 let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
                 account_trie_cursor.append_dup(key.clone(), vv)?;
 
-                let pruning_key =
-                    PruningKey { table: PruningTableName::AccountTrieHistory, key: key.encode() };
-                pruning_cursor.append_dup(block_number, pruning_key)?;
+                let change_set =
+                    TableChangeSet { name: TableName::AccountTrieHistory, table_key: key.encode() };
+                change_set_cursor.append_dup(block_number, change_set)?;
             }
 
             let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
@@ -283,11 +284,11 @@ impl OpProofsStore for MdbxProofsStorage {
                     let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
                     storage_trie_cursor.append_dup(key.clone(), vv)?;
 
-                    let pruning_key = PruningKey {
-                        table: PruningTableName::StorageTrieHistory,
-                        key: key.encode(),
+                    let change_set = TableChangeSet {
+                        name: TableName::StorageTrieHistory,
+                        table_key: key.encode(),
                     };
-                    pruning_cursor.append_dup(block_number, pruning_key)?;
+                    change_set_cursor.append_dup(block_number, change_set)?;
                 }
             }
 
@@ -296,11 +297,11 @@ impl OpProofsStore for MdbxProofsStorage {
                 let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
                 account_cursor.append_dup(hashed_address, vv)?;
 
-                let pruning_key = PruningKey {
-                    table: PruningTableName::HashedAccountHistory,
-                    key: hashed_address.encode().to_vec(),
+                let change_set = TableChangeSet {
+                    name: TableName::HashedAccountHistory,
+                    table_key: hashed_address.encode().to_vec(),
                 };
-                pruning_cursor.append_dup(block_number, pruning_key)?;
+                change_set_cursor.append_dup(block_number, change_set)?;
             }
 
             let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
@@ -315,11 +316,11 @@ impl OpProofsStore for MdbxProofsStorage {
                     let key = HashedStorageKey::new(*hashed_address, storage_key);
                     storage_cursor.append_dup(key.clone(), vv)?;
 
-                    let pruning_key = PruningKey {
-                        table: PruningTableName::HashedStorageHistory,
-                        key: key.encode().into(),
+                    let change_set = TableChangeSet {
+                        name: TableName::HashedStorageHistory,
+                        table_key: key.encode().into(),
                     };
-                    pruning_cursor.append_dup(block_number, pruning_key)?;
+                    change_set_cursor.append_dup(block_number, change_set)?;
                 }
             }
 
@@ -334,6 +335,8 @@ impl OpProofsStore for MdbxProofsStorage {
         unimplemented!()
     }
 
+    /// Prune all historical trie data prior to `new_earliest_block_number` using
+    /// the [`BlockChangeSet`](super::BlockChangeSet) index.
     async fn prune_earliest_state(
         &self,
         new_earliest_block_number: u64,
@@ -351,9 +354,9 @@ impl OpProofsStore for MdbxProofsStorage {
 
         self.env.update(|tx| {
             // Collect keys to prune first to avoid borrow checker issues with cursors.
-            let keys_to_prune: Vec<(u64, PruningKey)> = {
-                let mut pruning_cursor = tx.new_cursor::<BlockPruningIndex>()?;
-                pruning_cursor
+            let keys_to_prune: Vec<(u64, TableChangeSet)> = {
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+                change_set_cursor
                     .walk_range(start_block..new_earliest_block_number)?
                     .collect::<Result<Vec<_>, _>>()?
             };
@@ -364,49 +367,57 @@ impl OpProofsStore for MdbxProofsStorage {
                 let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
                 let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
 
-                for (block_number, pruning_key) in &keys_to_prune {
-                    match pruning_key.table {
-                        PruningTableName::AccountTrieHistory => {
-                            let key = StoredNibbles::decode(pruning_key.key.as_slice())?;
-                            if account_trie_cursor.seek_by_key_subkey(key, *block_number)?.is_some()
-                            {
-                                account_trie_cursor.delete_current()?;
+                for (block_number, change_set) in &keys_to_prune {
+                    match change_set.name {
+                        TableName::AccountTrieHistory => {
+                            let key = StoredNibbles::decode(change_set.table_key.as_slice())?;
+                            // Walk duplicates starting exactly at (key, block_number). walk_dup will
+                            // position the walker at the first entry >= (key, block_number). We only
+                            // want to delete when the entry matches both key and block_number.
+                            let mut walker = account_trie_cursor.walk_dup(Some(key.clone()), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
+                                if *found_key == key && found_val.block_number == *block_number {
+                                    // delete only the specific duplicate entry
+                                    walker.delete_current()?;
+                                }
                             }
                         }
-                        PruningTableName::StorageTrieHistory => {
-                            let key = StorageTrieKey::decode(pruning_key.key.as_slice())?;
-                            if storage_trie_cursor.seek_by_key_subkey(key, *block_number)?.is_some()
-                            {
-                                storage_trie_cursor.delete_current()?;
+                        TableName::StorageTrieHistory => {
+                            let key = StorageTrieKey::decode(change_set.table_key.as_slice())?;
+                            let mut walker = storage_trie_cursor.walk_dup(Some(key.clone()), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
+                                if *found_key == key && found_val.block_number == *block_number {
+                                    walker.delete_current()?;
+                                }
                             }
                         }
-                        PruningTableName::HashedAccountHistory => {
-                            let key = B256::decode(pruning_key.key.as_slice())?;
-                            if hashed_account_cursor
-                                .seek_by_key_subkey(key, *block_number)?
-                                .is_some()
-                            {
-                                hashed_account_cursor.delete_current()?;
+                        TableName::HashedAccountHistory => {
+                            let key = B256::decode(change_set.table_key.as_slice())?;
+                            let mut walker = hashed_account_cursor.walk_dup(Some(key), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
+                                if *found_key == key && found_val.block_number == *block_number {
+                                    walker.delete_current()?;
+                                }
                             }
                         }
-                        PruningTableName::HashedStorageHistory => {
-                            let key = HashedStorageKey::decode(pruning_key.key.as_slice())?;
-                            if hashed_storage_cursor
-                                .seek_by_key_subkey(key, *block_number)?
-                                .is_some()
-                            {
-                                hashed_storage_cursor.delete_current()?;
+                        TableName::HashedStorageHistory => {
+                            let key = HashedStorageKey::decode(change_set.table_key.as_slice())?;
+                            let mut walker = hashed_storage_cursor.walk_dup(Some(key.clone()), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
+                                if *found_key == key && found_val.block_number == *block_number {
+                                    walker.delete_current()?;
+                                }
                             }
                         }
                     }
                 }
 
-                let mut pruning_cursor_write = tx.new_cursor::<BlockPruningIndex>()?;
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
                 let unique_block_numbers: HashSet<_> =
                     keys_to_prune.iter().map(|(k, _)| *k).collect();
                 for block_number in unique_block_numbers {
-                    if pruning_cursor_write.seek_exact(block_number)?.is_some() {
-                        pruning_cursor_write.delete_current_duplicates()?;
+                    if change_set_cursor.seek_exact(block_number)?.is_some() {
+                        change_set_cursor.delete_current_duplicates()?;
                     }
                 }
             }
@@ -1002,12 +1013,12 @@ mod tests {
             assert_eq!(inner2.0, val2);
         }
 
-        // Verify pruning index entries
+        // Verify BlockChangeSet entries
         {
             let tx = store.env.tx().expect("tx");
-            let mut cur = tx.new_cursor::<BlockPruningIndex>().expect("cursor");
+            let mut cur = tx.new_cursor::<BlockChangeSet>().expect("cursor");
             let entries: Vec<_> = cur.walk(Some(BLOCK)).expect("walk").collect();
-            assert_eq!(entries.len(), 9, "Expected 9 pruning entries");
+            assert_eq!(entries.len(), 9, "Expected 9 BlockChangeSet entries");
         }
     }
 
@@ -1039,7 +1050,7 @@ mod tests {
         let mut cur4 = tx.new_cursor::<HashedStorageHistory>().expect("cursor");
         assert!(cur4.next_dup_val().expect("first").is_none(), "Hashed storage should be empty");
 
-        let mut cur5 = tx.new_cursor::<BlockPruningIndex>().expect("cursor");
+        let mut cur5 = tx.new_cursor::<BlockChangeSet>().expect("cursor");
         assert!(cur5.next().expect("first").is_none(), "Pruning index should be empty");
     }
 
@@ -1064,7 +1075,7 @@ mod tests {
         let tx = store.env.tx().unwrap();
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
         assert!(cur.seek_by_key_subkey(addr, block_number).unwrap().is_none());
-        let mut pruning_cur = tx.new_cursor::<BlockPruningIndex>().unwrap();
+        let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
         assert!(pruning_cur.seek_exact(block_number).unwrap().is_none());
     }
 
@@ -1092,7 +1103,7 @@ mod tests {
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
         assert!(cur.seek_by_key_subkey(addr1, block_number).unwrap().is_none());
         assert!(cur.seek_by_key_subkey(addr2, block_number).unwrap().is_none());
-        let mut pruning_cur = tx.new_cursor::<BlockPruningIndex>().unwrap();
+        let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
         assert!(pruning_cur.seek_exact(block_number).unwrap().is_none());
     }
 
@@ -1122,7 +1133,7 @@ mod tests {
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
         assert!(cur.seek_by_key_subkey(addr1, 1).unwrap().is_none());
         assert!(cur.seek_by_key_subkey(addr2, 2).unwrap().is_none());
-        let mut pruning_cur = tx.new_cursor::<BlockPruningIndex>().unwrap();
+        let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
         assert!(pruning_cur.seek_exact(1).unwrap().is_none());
         assert!(pruning_cur.seek_exact(2).unwrap().is_none());
     }
