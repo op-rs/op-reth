@@ -275,7 +275,7 @@ impl<C: OpProofsHashedCursorRO> OpProofsHashedCursorRO for OpProofsHashedCursorW
     }
 }
 
-/// Wrapper around [`OpProofsStore] type that records metrics for all operations.
+/// Wrapper around [`OpProofsStore`] type that records metrics for all operations.
 #[derive(Debug, Clone)]
 pub struct OpProofsStorageWithMetrics<S> {
     storage: S,
