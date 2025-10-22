@@ -1,5 +1,7 @@
 //! Common test suite for `OpProofsStorage` implementations.
 
+#![cfg_attr(feature = "metrics", expect(unused_crate_dependencies))]
+
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_optimism_trie::{
     BlockStateDiff, InMemoryProofsStorage, OpProofsHashedCursorRO, OpProofsStorageError,

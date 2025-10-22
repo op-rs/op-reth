@@ -10,7 +10,7 @@
     issue_tracker_base_url = "https://github.com/paradigmxyz/reth/issues/"
 )]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(not(any(test, feature = "metrics")), warn(unused_crate_dependencies))]
+#![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 pub mod api;
 pub use api::{
