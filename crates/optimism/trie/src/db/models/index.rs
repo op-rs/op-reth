@@ -7,13 +7,13 @@ use serde::{Deserialize, Serialize};
 /// Key for pruning entries from historical trie tables
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum PruningTableName {
-    /// `AccountTrieHistory` table.
+    /// [`AccountTrieHistory`](super::AccountTrieHistory) table.
     AccountTrieHistory,
-    /// `StorageTrieHistory` table.
+    /// [`StorageTrieHistory`](super::StorageTrieHistory) table.
     StorageTrieHistory,
-    /// `HashedAccountHistory` table.
+    /// [`HashedAccountHistory`](super::HashedAccountHistory) table.
     HashedAccountHistory,
-    /// `HashedStorageHistory` table.
+    /// [`HashedStorageHistory`](super::HashedStorageHistory) table.
     HashedStorageHistory,
 }
 
@@ -77,5 +77,34 @@ impl Compress for PruningKey {
 impl Decompress for PruningKey {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
         Self::decode(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pruning_key_roundtrip() {
+        let test_cases = vec![
+            PruningKey { table: PruningTableName::AccountTrieHistory, key: vec![1, 2, 3] },
+            PruningKey { table: PruningTableName::StorageTrieHistory, key: vec![4, 5, 6] },
+            PruningKey { table: PruningTableName::AccountTrieHistory, key: vec![] },
+        ];
+
+        for original in test_cases {
+            let encoded = original.clone().encode();
+            let decoded = PruningKey::decode(&encoded).unwrap();
+            assert_eq!(original, decoded);
+        }
+    }
+
+    #[test]
+    fn test_pruning_key_decode_error() {
+        // Test decoding an empty slice
+        assert!(PruningKey::decode(&[]).is_err());
+
+        // Test decoding a slice with an invalid table identifier
+        assert!(PruningKey::decode(&[4, 1, 2, 3]).is_err());
     }
 }

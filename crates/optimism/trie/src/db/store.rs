@@ -23,7 +23,7 @@ use reth_db::{
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
-use std::path::Path;
+use std::{collections::HashSet, path::Path};
 
 /// MDBX implementation of `OpProofsStorage`.
 #[derive(Debug)]
@@ -365,20 +365,18 @@ impl OpProofsStorage for MdbxProofsStorage {
                 let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
                 let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
 
-                let mut pruning_cursor_write = tx.new_cursor::<BlockPruningIndex>()?;
-
-                for (block_number, pruning_key) in keys_to_prune {
+                for (block_number, pruning_key) in &keys_to_prune {
                     match pruning_key.table {
                         PruningTableName::AccountTrieHistory => {
                             let key = StoredNibbles::decode(pruning_key.key.as_slice())?;
-                            if account_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some()
+                            if account_trie_cursor.seek_by_key_subkey(key, *block_number)?.is_some()
                             {
                                 account_trie_cursor.delete_current()?;
                             }
                         }
                         PruningTableName::StorageTrieHistory => {
                             let key = StorageTrieKey::decode(pruning_key.key.as_slice())?;
-                            if storage_trie_cursor.seek_by_key_subkey(key, block_number)?.is_some()
+                            if storage_trie_cursor.seek_by_key_subkey(key, *block_number)?.is_some()
                             {
                                 storage_trie_cursor.delete_current()?;
                             }
@@ -386,7 +384,7 @@ impl OpProofsStorage for MdbxProofsStorage {
                         PruningTableName::HashedAccountHistory => {
                             let key = B256::decode(pruning_key.key.as_slice())?;
                             if hashed_account_cursor
-                                .seek_by_key_subkey(key, block_number)?
+                                .seek_by_key_subkey(key, *block_number)?
                                 .is_some()
                             {
                                 hashed_account_cursor.delete_current()?;
@@ -395,16 +393,22 @@ impl OpProofsStorage for MdbxProofsStorage {
                         PruningTableName::HashedStorageHistory => {
                             let key = HashedStorageKey::decode(pruning_key.key.as_slice())?;
                             if hashed_storage_cursor
-                                .seek_by_key_subkey(key, block_number)?
+                                .seek_by_key_subkey(key, *block_number)?
                                 .is_some()
                             {
                                 hashed_storage_cursor.delete_current()?;
                             }
                         }
                     }
+                }
 
-                    pruning_cursor_write.seek_exact(block_number)?;
-                    pruning_cursor_write.delete_current_duplicates()?;
+                let mut pruning_cursor_write = tx.new_cursor::<BlockPruningIndex>()?;
+                let unique_block_numbers: HashSet<_> =
+                    keys_to_prune.iter().map(|(k, _)| *k).collect();
+                for block_number in unique_block_numbers {
+                    if pruning_cursor_write.seek_exact(block_number)?.is_some() {
+                        pruning_cursor_write.delete_current_duplicates()?;
+                    }
                 }
             }
             Ok(())
@@ -998,6 +1002,14 @@ mod tests {
             let inner2 = vv2.value.0.as_ref().expect("Some(StorageValue)");
             assert_eq!(inner2.0, val2);
         }
+
+        // Verify pruning index entries
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<BlockPruningIndex>().expect("cursor");
+            let entries: Vec<_> = cur.walk(Some(BLOCK)).expect("walk").collect();
+            assert_eq!(entries.len(), 9, "Expected 9 pruning entries");
+        }
     }
 
     #[tokio::test]
@@ -1027,6 +1039,120 @@ mod tests {
 
         let mut cur4 = tx.new_cursor::<HashedStorageHistory>().expect("cursor");
         assert!(cur4.next_dup_val().expect("first").is_none(), "Hashed storage should be empty");
+
+        let mut cur5 = tx.new_cursor::<BlockPruningIndex>().expect("cursor");
+        assert!(cur5.next().expect("first").is_none(), "Pruning index should be empty");
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_single_entry() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        let block_number = 1;
+        let diff = BlockStateDiff::default();
+        store.set_earliest_block_number(block_number, B256::random()).await.unwrap();
+
+        // Insert a single entry to be pruned
+        let addr = B256::random();
+        let mut state_diff = BlockStateDiff::default();
+        state_diff.post_state.accounts.insert(addr, Some(Account::default()));
+        store.store_trie_updates(block_number, state_diff).await.unwrap();
+
+        // Prune the entry
+        store.prune_earliest_state(block_number + 1, diff).await.unwrap();
+
+        // Verify the entry was pruned
+        let tx = store.env.tx().unwrap();
+        let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
+        assert!(cur.seek_by_key_subkey(addr, block_number).unwrap().is_none());
+        let mut pruning_cur = tx.new_cursor::<BlockPruningIndex>().unwrap();
+        assert!(pruning_cur.seek_exact(block_number).unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_multiple_entries_same_block() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        let block_number = 1;
+        let diff = BlockStateDiff::default();
+        store.set_earliest_block_number(block_number, B256::random()).await.unwrap();
+
+        // Insert multiple entries for the same block
+        let addr1 = B256::random();
+        let addr2 = B256::random();
+        let mut state_diff = BlockStateDiff::default();
+        state_diff.post_state.accounts.insert(addr1, Some(Account::default()));
+        state_diff.post_state.accounts.insert(addr2, Some(Account::default()));
+        store.store_trie_updates(block_number, state_diff).await.unwrap();
+
+        // Prune the entries
+        store.prune_earliest_state(block_number + 1, diff).await.unwrap();
+
+        // Verify the entries were pruned
+        let tx = store.env.tx().unwrap();
+        let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
+        assert!(cur.seek_by_key_subkey(addr1, block_number).unwrap().is_none());
+        assert!(cur.seek_by_key_subkey(addr2, block_number).unwrap().is_none());
+        let mut pruning_cur = tx.new_cursor::<BlockPruningIndex>().unwrap();
+        assert!(pruning_cur.seek_exact(block_number).unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_multiple_blocks() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        let diff = BlockStateDiff::default();
+        store.set_earliest_block_number(1, B256::random()).await.unwrap();
+
+        // Insert entries for multiple blocks
+        let addr1 = B256::random();
+        let addr2 = B256::random();
+        let mut state_diff1 = BlockStateDiff::default();
+        state_diff1.post_state.accounts.insert(addr1, Some(Account::default()));
+        store.store_trie_updates(1, state_diff1).await.unwrap();
+
+        let mut state_diff2 = BlockStateDiff::default();
+        state_diff2.post_state.accounts.insert(addr2, Some(Account::default()));
+        store.store_trie_updates(2, state_diff2).await.unwrap();
+
+        // Prune up to block 3 (should remove blocks 1 and 2)
+        store.prune_earliest_state(3, diff).await.unwrap();
+
+        // Verify the entries were pruned
+        let tx = store.env.tx().unwrap();
+        let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
+        assert!(cur.seek_by_key_subkey(addr1, 1).unwrap().is_none());
+        assert!(cur.seek_by_key_subkey(addr2, 2).unwrap().is_none());
+        let mut pruning_cur = tx.new_cursor::<BlockPruningIndex>().unwrap();
+        assert!(pruning_cur.seek_exact(1).unwrap().is_none());
+        assert!(pruning_cur.seek_exact(2).unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_no_op() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        let diff = BlockStateDiff::default();
+        store.set_earliest_block_number(1, B256::random()).await.unwrap();
+
+        // Attempt to prune with a new earliest block that is not newer
+        store.prune_earliest_state(1, diff.clone()).await.unwrap();
+        store.prune_earliest_state(0, diff).await.unwrap();
+
+        // Nothing should have been pruned, this call should not panic or error
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_no_entries_to_prune() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        let diff = BlockStateDiff::default();
+        store.set_earliest_block_number(1, B256::random()).await.unwrap();
+
+        // Prune a range where no entries exist
+        store.prune_earliest_state(10, diff).await.unwrap();
+
+        // Nothing should have been pruned, this call should not panic or error
     }
 
     #[tokio::test]
