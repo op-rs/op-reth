@@ -3,15 +3,19 @@
 //! This module defines composite key types used for efficient indexing in MDBX tables.
 
 use alloy_primitives::B256;
+use bytes::{Buf, BufMut};
 use reth_db_api::{
-    table::{Decode, Encode},
+    table::{Compress, Decode, Decompress, Encode},
     DatabaseError,
 };
-use reth_trie_common::StoredNibbles;
+use reth_primitives_traits::Account;
+use reth_trie::{BranchNodeCompact, StoredNibbles};
 use serde::{Deserialize, Serialize};
 
+use super::codec::MaybeDeleted;
+
 // ============================================================================
-// Composite Keys
+// Composite Keys for History Tables
 // ============================================================================
 
 /// Composite key: (hashed_address, path) for storage trie branches
@@ -138,6 +142,179 @@ impl Decode for MetadataKey {
             Some(&1) => Ok(Self::LatestBlock),
             _ => Err(DatabaseError::Decode),
         }
+    }
+}
+
+// ============================================================================
+// Composite Values for Changeset Tables
+// ============================================================================
+
+/// Changeset value: (StoredNibbles, MaybeDeleted<BranchNodeCompact>) for account branches
+///
+/// Used in ExternalAccountBranchesChangeset DupSort table.
+/// Contains the path + branch data since SubKey is not stored in MDBX DupSort.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredNibblesWithBranch(pub StoredNibbles, pub MaybeDeleted<BranchNodeCompact>);
+
+impl Compress for StoredNibblesWithBranch {
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        // Store path with length prefix: [length_byte][nibbles...]
+        let nibbles_vec = self.0 .0.to_vec();
+        buf.put_u8(nibbles_vec.len() as u8);
+        buf.put_slice(&nibbles_vec);
+        // Then store the branch
+        self.1.compress_to_buf(buf);
+    }
+}
+
+impl Decompress for StoredNibblesWithBranch {
+    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+        if value.is_empty() {
+            return Err(DatabaseError::Decode);
+        }
+
+        // Read length prefix
+        let mut buf = value;
+        let len = buf.get_u8() as usize;
+
+        if buf.len() < len {
+            return Err(DatabaseError::Decode);
+        }
+
+        // Read the nibbles
+        let nibbles_bytes = &buf[..len];
+        let path = StoredNibbles::from(nibbles_bytes.to_vec());
+        buf = &buf[len..];
+
+        // Remaining bytes are the branch
+        let branch = MaybeDeleted::<BranchNodeCompact>::decompress(buf)?;
+
+        Ok(Self(path, branch))
+    }
+}
+
+/// Changeset value: (StorageBranchSubKey, MaybeDeleted<BranchNodeCompact>) for storage branches
+///
+/// Used in ExternalStorageBranchesChangeset DupSort table.
+/// Contains the (address, path) + branch data since SubKey is not stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageBranchEntry(pub StorageBranchSubKey, pub MaybeDeleted<BranchNodeCompact>);
+
+impl Compress for StorageBranchEntry {
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        // Encode address (32 bytes)
+        buf.put_slice(self.0.hashed_address.as_slice());
+        // Encode path with length prefix
+        let nibbles_vec = self.0.path.0.to_vec();
+        buf.put_u8(nibbles_vec.len() as u8);
+        buf.put_slice(&nibbles_vec);
+        // Then encode the branch (MaybeDeleted)
+        self.1.compress_to_buf(buf);
+    }
+}
+
+impl Decompress for StorageBranchEntry {
+    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+        if value.len() < 33 {
+            // At least 32 bytes for address + 1 byte for length
+            return Err(DatabaseError::Decode);
+        }
+
+        // Decode address (first 32 bytes)
+        let hashed_address = B256::from_slice(&value[..32]);
+
+        // Read path length
+        let mut buf = &value[32..];
+        let path_len = buf.get_u8() as usize;
+
+        if buf.len() < path_len {
+            return Err(DatabaseError::Decode);
+        }
+
+        // Read path nibbles
+        let nibbles_bytes = &buf[..path_len];
+        let path = StoredNibbles::from(nibbles_bytes.to_vec());
+        buf = &buf[path_len..];
+
+        let key = StorageBranchSubKey::new(hashed_address, path);
+
+        // Remaining bytes are the branch
+        let branch = MaybeDeleted::<BranchNodeCompact>::decompress(buf)?;
+
+        Ok(Self(key, branch))
+    }
+}
+
+/// Changeset value: (B256, MaybeDeleted<Account>) for hashed accounts
+///
+/// Used in ExternalHashedAccountsChangeset DupSort table.
+/// Contains the address + account data since SubKey is not stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HashedAccountEntry(pub B256, pub MaybeDeleted<Account>);
+
+impl Compress for HashedAccountEntry {
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        // Encode address first (32 bytes)
+        buf.put_slice(self.0.as_slice());
+        // Then encode the account (MaybeDeleted)
+        self.1.compress_to_buf(buf);
+    }
+}
+
+impl Decompress for HashedAccountEntry {
+    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+        if value.len() < 32 {
+            return Err(DatabaseError::Decode);
+        }
+
+        // First 32 bytes are the address
+        let address = B256::from_slice(&value[..32]);
+
+        // Remaining bytes are the account
+        let account = MaybeDeleted::<Account>::decompress(&value[32..])?;
+
+        Ok(Self(address, account))
+    }
+}
+
+/// Changeset value: (HashedStorageSubKey, MaybeDeleted<B256>) for hashed storage
+///
+/// Used in ExternalHashedStoragesChangeset DupSort table.
+/// Contains the (address, storage_key) + storage_value since SubKey is not stored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HashedStorageEntry(pub HashedStorageSubKey, pub MaybeDeleted<B256>);
+
+impl Compress for HashedStorageEntry {
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        // Encode the composite key first (64 bytes)
+        let key_bytes = self.0.clone().encode();
+        buf.put_slice(&key_bytes);
+        // Then encode the storage value (MaybeDeleted<B256>)
+        self.1.compress_to_buf(buf);
+    }
+}
+
+impl Decompress for HashedStorageEntry {
+    fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
+        if value.len() < 64 {
+            return Err(DatabaseError::Decode);
+        }
+
+        // First 64 bytes are the composite key
+        let key = HashedStorageSubKey::decode(&value[..64])?;
+
+        // Remaining bytes are the storage value
+        let storage_value = MaybeDeleted::<B256>::decompress(&value[64..])?;
+
+        Ok(Self(key, storage_value))
     }
 }
 

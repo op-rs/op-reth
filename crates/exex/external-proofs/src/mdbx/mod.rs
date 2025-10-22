@@ -9,18 +9,14 @@ pub mod cursor;
 pub mod models;
 pub mod tables;
 
-use crate::{
-    mdbx::cursor::{MdbxAccountCursor, MdbxStorageCursor},
-    storage::{BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult},
-};
+use crate::storage::{BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStorageResult};
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::{
-    cursor::DbDupCursorRW,
     mdbx::{init_db_for, DatabaseArguments},
     ClientVersion, DatabaseEnv, DatabaseError,
 };
 use reth_db_api::{
-    cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO},
+    cursor::{DbCursorRO, DbCursorRW},
     database::Database,
     transaction::{DbTx, DbTxMut},
 };
@@ -28,9 +24,12 @@ use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
 use std::path::Path;
 
-pub use codec::{BlockNumberHash, MaybeDeleted, VersionedValue};
-pub use cursor::{BlockNumberVersionedCursor, MdbxOpProofsStorageTrieCursor};
-pub use models::{HashedStorageSubKey, MetadataKey, StorageBranchSubKey};
+pub use codec::{BlockNumberHash, MaybeDeleted};
+pub use cursor::MdbxOpProofsStorageTrieCursor;
+pub use models::{
+    HashedAccountEntry, HashedStorageEntry, HashedStorageSubKey, MetadataKey, StorageBranchEntry,
+    StorageBranchSubKey, StoredNibblesWithBranch,
+};
 pub use tables::Tables as ExternalTables;
 
 impl From<DatabaseError> for OpProofsStorageError {
@@ -104,30 +103,27 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         updates: Vec<(Nibbles, Option<BranchNodeCompact>)>,
         append: bool,
     ) -> OpProofsStorageResult<()> {
-        // Store branches using DupSort (key=path, value=VersionedValue with block_number)
+        // 1. Append to changeset table (DupSort with block_number as Key)
         {
-            let mut cursor = tx.cursor_dup_write::<tables::ExternalAccountBranches>()?;
+            let mut cursor = tx.cursor_dup_write::<tables::ExternalAccountBranchesChangeset>()?;
 
             for (path, branch) in &updates {
-                let key: StoredNibbles = path.clone().into();
-
-                let maybe_deleted = codec::MaybeDeleted::from(branch.clone());
-                let value = codec::VersionedValue::new(block_number, maybe_deleted);
+                let stored_nibbles: StoredNibbles = path.clone().into();
+                let maybe_deleted = MaybeDeleted::from(branch.clone());
+                let value = StoredNibblesWithBranch(stored_nibbles.clone(), maybe_deleted);
 
                 if append {
-                    cursor.append_dup(key, value)?;
+                    // Use append since block_number always increases
+                    cursor.append(block_number, &value)?;
                 } else {
-                    // For DupSort tables, seek first to position cursor at the primary key
-                    // This allows upsert to insert the duplicate value in sorted order by
-                    // block_number
-                    cursor.upsert(key, &value)?;
+                    cursor.upsert(block_number, &value)?;
                 }
             }
         }
 
-        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        // 2. Update history table (upsert IntegerList) - skip for block 0 during initial backfill
         if block_number > 0 {
-            let mut cursor = tx.cursor_write::<tables::ExternalAccountBranchesIndex>()?;
+            let mut cursor = tx.cursor_write::<tables::ExternalAccountBranchesHistory>()?;
 
             for (path, _) in updates {
                 let key: StoredNibbles = path.into();
@@ -139,7 +135,7 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
                 // Add block number to list (using inner RoaringTreemap)
                 list.0.insert(block_number);
 
-                // Update the index
+                // Update the history table
                 cursor.upsert(key, &list)?;
             }
         }
@@ -155,36 +151,30 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         items: Vec<(Nibbles, Option<BranchNodeCompact>)>,
         append: bool,
     ) -> OpProofsStorageResult<()> {
-        // Store branches using DupSort (key=(address, path), value=VersionedValue with
-        // block_number)
+        // 1. Append to changeset table (DupSort with block_number as Key)
         {
-            let mut cursor = tx.cursor_dup_write::<tables::ExternalStorageBranches>()?;
+            let mut cursor = tx.cursor_dup_write::<tables::ExternalStorageBranchesChangeset>()?;
 
             for (path, branch) in &items {
-                let key =
-                    models::StorageBranchSubKey::new(hashed_address, StoredNibbles(path.clone()));
-
-                let maybe_deleted = codec::MaybeDeleted::from(branch.clone());
-                let value = codec::VersionedValue::new(block_number, maybe_deleted);
+                let subkey = StorageBranchSubKey::new(hashed_address, StoredNibbles(path.clone()));
+                let maybe_deleted = MaybeDeleted::from(branch.clone());
+                let value = StorageBranchEntry(subkey.clone(), maybe_deleted);
 
                 if append {
-                    cursor.append_dup(key, value)?;
+                    // Use append since block_number always increases
+                    cursor.append(block_number, &value)?;
                 } else {
-                    // For DupSort tables, seek first to position cursor at the primary key
-                    // This allows upsert to insert the duplicate value in sorted order by
-                    // block_number
-                    cursor.upsert(key, &value)?;
+                    cursor.upsert(block_number, &value)?;
                 }
             }
         }
 
-        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        // 2. Update history table (upsert IntegerList) - skip for block 0 during initial backfill
         if block_number > 0 {
-            let mut cursor = tx.cursor_write::<tables::ExternalStorageBranchesIndex>()?;
+            let mut cursor = tx.cursor_write::<tables::ExternalStorageBranchesHistory>()?;
 
             for (path, _) in items {
-                let key =
-                    models::StorageBranchSubKey::new(hashed_address, StoredNibbles(path.clone()));
+                let key = StorageBranchSubKey::new(hashed_address, StoredNibbles(path));
 
                 // Get existing list or create new
                 let mut list =
@@ -193,7 +183,7 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
                 // Add block number to list (using inner RoaringTreemap)
                 list.0.insert(block_number);
 
-                // Update the index
+                // Update the history table
                 cursor.upsert(key, &list)?;
             }
         }
@@ -208,27 +198,26 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         block_number: u64,
         append: bool,
     ) -> OpProofsStorageResult<()> {
-        // Store accounts using DupSort (key=hashed_address, value=VersionedValue with block_number)
+        // 1. Append to changeset table (DupSort with block_number as Key)
         {
-            let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedAccounts>()?;
+            let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedAccountsChangeset>()?;
 
             for (address, account) in &accounts {
-                let maybe_deleted = codec::MaybeDeleted::from(account.clone());
-                let value = codec::VersionedValue::new(block_number, maybe_deleted);
+                let maybe_deleted = MaybeDeleted::from(account.clone());
+                let value = HashedAccountEntry(*address, maybe_deleted);
+
                 if append {
-                    cursor.append_dup(*address, value)?;
+                    // Use append since block_number always increases
+                    cursor.append(block_number, &value)?;
                 } else {
-                    // For DupSort tables, seek first to position cursor at the primary key
-                    // This allows upsert to insert the duplicate value in sorted order by
-                    // block_number
-                    cursor.upsert(*address, &value)?;
+                    cursor.upsert(block_number, &value)?;
                 }
             }
         }
 
-        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        // 2. Update history table (upsert IntegerList) - skip for block 0 during initial backfill
         if block_number > 0 {
-            let mut cursor = tx.cursor_write::<tables::ExternalHashedAccountsIndex>()?;
+            let mut cursor = tx.cursor_write::<tables::ExternalHashedAccountsHistory>()?;
 
             for (address, _) in accounts {
                 // Get existing list or create new
@@ -238,7 +227,7 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
                 // Add block number to list (using inner RoaringTreemap)
                 list.0.insert(block_number);
 
-                // Update the index
+                // Update the history table
                 cursor.upsert(address, &list)?;
             }
         }
@@ -254,40 +243,38 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
         block_number: u64,
         append: bool,
     ) -> OpProofsStorageResult<()> {
-        // Store storage values using DupSort (key=(address, storage_key), value=VersionedValue with
-        // block_number)
+        // 1. Append to changeset table (DupSort with block_number as Key)
         {
-            let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedStorages>()?;
+            let mut cursor = tx.cursor_dup_write::<tables::ExternalHashedStoragesChangeset>()?;
 
             for (storage_key, value) in &storages {
-                let key = models::HashedStorageSubKey::new(hashed_address, *storage_key);
+                let subkey = HashedStorageSubKey::new(hashed_address, *storage_key);
 
                 // Convert U256 to B256 for storage
                 // Zero values are treated as deletions in Ethereum
                 let maybe_deleted = if value.is_zero() {
-                    codec::MaybeDeleted::from(None)
+                    MaybeDeleted::from(None)
                 } else {
                     let value_b256 = B256::from(value.to_be_bytes());
-                    codec::MaybeDeleted::from(Some(value_b256))
+                    MaybeDeleted::from(Some(value_b256))
                 };
-                let value = codec::VersionedValue::new(block_number, maybe_deleted);
+                let value = HashedStorageEntry(subkey.clone(), maybe_deleted);
+
                 if append {
-                    cursor.append_dup(key, value)?;
+                    // Use append since block_number always increases
+                    cursor.append(block_number, &value)?;
                 } else {
-                    // For DupSort tables, seek first to position cursor at the primary key
-                    // This allows upsert to insert the duplicate value in sorted order by
-                    // block_number
-                    cursor.upsert(key, &value)?;
+                    cursor.upsert(block_number, &value)?;
                 }
             }
         }
 
-        // Update index (skip for block 0 during initial backfill to avoid massive index bloat)
+        // 2. Update history table (upsert IntegerList) - skip for block 0 during initial backfill
         if block_number > 0 {
-            let mut cursor = tx.cursor_write::<tables::ExternalHashedStoragesIndex>()?;
+            let mut cursor = tx.cursor_write::<tables::ExternalHashedStoragesHistory>()?;
 
             for (storage_key, _) in storages {
-                let key = models::HashedStorageSubKey::new(hashed_address, storage_key);
+                let key = HashedStorageSubKey::new(hashed_address, storage_key);
 
                 // Get existing list or create new
                 let mut list =
@@ -296,7 +283,7 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
                 // Add block number to list (using inner RoaringTreemap)
                 list.0.insert(block_number);
 
-                // Update the index
+                // Update the history table
                 cursor.upsert(key, &list)?;
             }
         }
@@ -309,16 +296,16 @@ impl<TX: DbTxMut + DbTx, DB: Database<TXMut = TX>> MdbxOpProofsStorage<DB> {
 impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpProofsStorage
     for MdbxOpProofsStorage<DB>
 {
-    type AccountTrieCursor = BlockNumberVersionedCursor<
-        tables::ExternalAccountBranches,
-        TX::DupCursor<tables::ExternalAccountBranches>,
-    >;
+    type AccountTrieCursor =
+        cursor::AccountTrieCursor<TX::DupCursor<tables::ExternalAccountBranchesChangeset>>;
     type StorageTrieCursor = MdbxOpProofsStorageTrieCursor<
-        tables::ExternalStorageBranches,
-        TX::DupCursor<tables::ExternalStorageBranches>,
+        tables::ExternalStorageBranchesChangeset,
+        TX::DupCursor<tables::ExternalStorageBranchesChangeset>,
     >;
-    type AccountHashedCursor = MdbxAccountCursor<TX::DupCursor<tables::ExternalHashedAccounts>>;
-    type StorageCursor = MdbxStorageCursor<TX::DupCursor<tables::ExternalHashedStorages>>;
+    type AccountHashedCursor =
+        cursor::MdbxAccountCursor<TX::DupCursor<tables::ExternalHashedAccountsChangeset>>;
+    type StorageCursor =
+        cursor::MdbxStorageCursor<TX::DupCursor<tables::ExternalHashedStoragesChangeset>>;
 
     async fn store_account_branches(
         &self,
@@ -513,7 +500,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
     ) -> OpProofsStorageResult<Self::StorageTrieCursor> {
         let txn = self.db.tx()?;
         Ok(MdbxOpProofsStorageTrieCursor::new(
-            txn.cursor_dup_read::<tables::ExternalStorageBranches>()?,
+            txn.cursor_dup_read::<tables::ExternalStorageBranchesChangeset>()?,
             hashed_address,
             max_block_number,
         ))
@@ -524,8 +511,8 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::AccountTrieCursor> {
         let txn = self.db.tx()?;
-        Ok(BlockNumberVersionedCursor::new(
-            txn.cursor_dup_read::<tables::ExternalAccountBranches>()?,
+        Ok(cursor::AccountTrieCursor::new(
+            txn.cursor_dup_read::<tables::ExternalAccountBranchesChangeset>()?,
             max_block_number,
         ))
     }
@@ -536,8 +523,8 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
     ) -> OpProofsStorageResult<Self::AccountHashedCursor> {
         let txn = self.db.tx()?;
         // Create a lazy cursor that queries MDBX on-demand
-        Ok(MdbxAccountCursor::new(
-            txn.cursor_dup_read::<tables::ExternalHashedAccounts>()?,
+        Ok(cursor::MdbxAccountCursor::new(
+            txn.cursor_dup_read::<tables::ExternalHashedAccountsChangeset>()?,
             max_block_number,
         ))
     }
@@ -549,8 +536,8 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
     ) -> OpProofsStorageResult<Self::StorageCursor> {
         let txn = self.db.tx()?;
         // Create a lazy cursor that queries MDBX on-demand
-        Ok(MdbxStorageCursor::new(
-            txn.cursor_dup_read::<tables::ExternalHashedStorages>()?,
+        Ok(cursor::MdbxStorageCursor::new(
+            txn.cursor_dup_read::<tables::ExternalHashedStoragesChangeset>()?,
             max_block_number,
             hashed_address,
         ))
@@ -685,19 +672,19 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
 
     async fn get_last_stored_account_branch(&self) -> OpProofsStorageResult<Option<Nibbles>> {
         let tx = self.db.tx()?;
-        let mut cursor = tx.cursor_read::<tables::ExternalAccountBranches>()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalAccountBranchesChangeset>()?;
         cursor.last()?;
 
         loop {
-            let Some((nibbles, VersionedValue { value, .. })) = cursor.current()? else {
+            let Some((_block, value)) = cursor.current()? else {
                 return Ok(None);
             };
-            let Some(value) = value.0 else {
+            let Some(_branch) = value.1 .0 else {
                 cursor.prev()?;
                 continue;
             };
 
-            return Ok(Some(nibbles.0));
+            return Ok(Some(value.0 .0));
         }
     }
 
@@ -705,64 +692,58 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
         &self,
     ) -> OpProofsStorageResult<Option<(B256, Nibbles)>> {
         let tx = self.db.tx()?;
-        let mut cursor = tx.cursor_read::<tables::ExternalStorageBranches>()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalStorageBranchesChangeset>()?;
         cursor.last()?;
 
         loop {
-            let Some((StorageBranchSubKey { hashed_address, path }, VersionedValue { value, .. })) =
-                cursor.current()?
-            else {
+            let Some((_block, value)) = cursor.current()? else {
                 return Ok(None);
             };
 
-            let Some(value) = value.0 else {
+            let Some(_branch) = value.1 .0 else {
                 cursor.prev()?;
                 continue;
             };
 
-            return Ok(Some((hashed_address, path.0)));
+            return Ok(Some((value.0.hashed_address, value.0.path.0)));
         }
     }
 
     async fn get_last_stored_hashed_account(&self) -> OpProofsStorageResult<Option<B256>> {
         let tx = self.db.tx()?;
-        let mut cursor = tx.cursor_read::<tables::ExternalHashedAccounts>()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalHashedAccountsChangeset>()?;
         cursor.last()?;
 
         loop {
-            let Some((hashed_address, VersionedValue { value, .. })) = cursor.current()? else {
+            let Some((_block, value)) = cursor.current()? else {
                 return Ok(None);
             };
 
-            let Some(value) = value.0 else {
+            let Some(_account) = value.1 .0 else {
                 cursor.prev()?;
                 continue;
             };
 
-            return Ok(Some(hashed_address));
+            return Ok(Some(value.0));
         }
     }
 
     async fn get_last_stored_hashed_storage(&self) -> OpProofsStorageResult<Option<(B256, B256)>> {
         let tx = self.db.tx()?;
-        let mut cursor = tx.cursor_read::<tables::ExternalHashedStorages>()?;
+        let mut cursor = tx.cursor_read::<tables::ExternalHashedStoragesChangeset>()?;
         cursor.last()?;
 
         loop {
-            let Some((
-                HashedStorageSubKey { hashed_address, hashed_storage_key },
-                VersionedValue { value, .. },
-            )) = cursor.current()?
-            else {
+            let Some((_block, value)) = cursor.current()? else {
                 return Ok(None);
             };
 
-            let Some(value) = value.0 else {
+            let Some(_storage) = value.1 .0 else {
                 cursor.prev()?;
                 continue;
             };
 
-            return Ok(Some((hashed_address, hashed_storage_key)));
+            return Ok(Some((value.0.hashed_address, value.0.hashed_storage_key)));
         }
     }
 }

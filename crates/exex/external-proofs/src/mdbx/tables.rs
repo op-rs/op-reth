@@ -3,174 +3,181 @@
 //! This module defines all database tables used to store external proofs data.
 //! Each table is completely independent from Reth's main database tables.
 
-use super::{codec::BlockNumberHash, codec::VersionedValue, models::MetadataKey};
+use super::{
+    codec::BlockNumberHash,
+    models::{
+        HashedAccountEntry, HashedStorageEntry, HashedStorageSubKey, MetadataKey,
+        StorageBranchEntry, StorageBranchSubKey, StoredNibblesWithBranch,
+    },
+};
 use crate::models::IntegerList;
 use alloy_primitives::B256;
 use reth_db_api::table::{DupSort, Table};
 use reth_trie_common::StoredNibbles;
 
 // ============================================================================
-// Main Data Tables (store actual trie/state data)
+// Changeset Tables (DupSort, sorted by block_number for fast appends)
 // ============================================================================
 
-/// Account trie branches by path and block (DupSort)
+/// Account trie branches changeset (DupSort by block_number)
+///
+/// Key: block_number (u64)
+/// SubKey: path (StoredNibbles) - for DupSort ordering within block
+/// Value: (StoredNibbles, MaybeDeleted<BranchNodeCompact>) - path + branch data
+///
+/// This structure allows fast appends since all inserts are sorted by block_number.
+#[derive(Debug, Clone)]
+pub struct ExternalAccountBranchesChangeset;
+
+impl Table for ExternalAccountBranchesChangeset {
+    const NAME: &'static str = "ExternalAccountBranchesChangeset";
+    const DUPSORT: bool = true;
+
+    type Key = u64; // block_number
+    type Value = StoredNibblesWithBranch;
+}
+
+impl DupSort for ExternalAccountBranchesChangeset {
+    type SubKey = StoredNibbles; // path
+}
+
+/// Storage trie branches changeset (DupSort by block_number)
+///
+/// Key: block_number (u64)
+/// SubKey: (hashed_address, path) - for DupSort ordering within block
+/// Value: (StorageBranchSubKey, MaybeDeleted<BranchNodeCompact>) - (address, path) + branch
+///
+/// This structure allows fast appends since all inserts are sorted by block_number.
+#[derive(Debug, Clone)]
+pub struct ExternalStorageBranchesChangeset;
+
+impl Table for ExternalStorageBranchesChangeset {
+    const NAME: &'static str = "ExternalStorageBranchesChangeset";
+    const DUPSORT: bool = true;
+
+    type Key = u64; // block_number
+    type Value = StorageBranchEntry;
+}
+
+impl DupSort for ExternalStorageBranchesChangeset {
+    type SubKey = StorageBranchSubKey; // (hashed_address, path)
+}
+
+/// Hashed accounts changeset (DupSort by block_number)
+///
+/// Key: block_number (u64)
+/// SubKey: hashed_address (B256) - for DupSort ordering within block
+/// Value: (B256, MaybeDeleted<Account>) - address + account data
+///
+/// This structure allows fast appends since all inserts are sorted by block_number.
+#[derive(Debug, Clone)]
+pub struct ExternalHashedAccountsChangeset;
+
+impl Table for ExternalHashedAccountsChangeset {
+    const NAME: &'static str = "ExternalHashedAccountsChangeset";
+    const DUPSORT: bool = true;
+
+    type Key = u64; // block_number
+    type Value = HashedAccountEntry;
+}
+
+impl DupSort for ExternalHashedAccountsChangeset {
+    type SubKey = B256; // hashed_address
+}
+
+/// Hashed storage values changeset (DupSort by block_number)
+///
+/// Key: block_number (u64)
+/// SubKey: (hashed_address, hashed_storage_key) - for DupSort ordering within block
+/// Value: (HashedStorageSubKey, MaybeDeleted<B256>) - (address, storage_key) + storage_value
+///
+/// This structure allows fast appends since all inserts are sorted by block_number.
+/// Zero values are represented as MaybeDeleted::None (deleted).
+#[derive(Debug, Clone)]
+pub struct ExternalHashedStoragesChangeset;
+
+impl Table for ExternalHashedStoragesChangeset {
+    const NAME: &'static str = "ExternalHashedStoragesChangeset";
+    const DUPSORT: bool = true;
+
+    type Key = u64; // block_number
+    type Value = HashedStorageEntry;
+}
+
+impl DupSort for ExternalHashedStoragesChangeset {
+    type SubKey = HashedStorageSubKey; // (hashed_address, hashed_storage_key)
+}
+
+// ============================================================================
+// History Tables (track which blocks modified each key)
+// ============================================================================
+
+/// Account trie branches history: path → list of block numbers
+///
+/// Tracks which block numbers modified each account trie path.
+/// Allows efficient lookups to find the latest value for a path at a given block.
 ///
 /// Key: path (StoredNibbles)
-/// SubKey: block_number (u64)
-/// Value: VersionedValue<BranchNodeCompact> (contains block_number + MaybeDeleted value)
-///
-/// This structure allows efficient iteration by path, with block versioning as secondary sort
+/// Value: IntegerList (compressed list of block numbers)
 #[derive(Debug, Clone)]
-pub struct ExternalAccountBranches;
+pub struct ExternalAccountBranchesHistory;
 
-impl Table for ExternalAccountBranches {
-    const NAME: &'static str = "ExternalAccountBranches";
-    const DUPSORT: bool = true;
-
-    type Key = StoredNibbles;
-    type Value = VersionedValue<reth_trie::BranchNodeCompact>;
-}
-
-impl DupSort for ExternalAccountBranches {
-    type SubKey = u64; // block_number
-}
-
-/// Storage trie branches by address, path, and block (DupSort)
-///
-/// Key: (hashed_address, path)
-/// SubKey: block_number (u64)
-/// Value: VersionedValue<BranchNodeCompact> (contains block_number + MaybeDeleted value)
-///
-/// This structure allows efficient iteration by address and path, with block versioning
-#[derive(Debug, Clone)]
-pub struct ExternalStorageBranches;
-
-impl Table for ExternalStorageBranches {
-    const NAME: &'static str = "ExternalStorageBranches";
-    const DUPSORT: bool = true;
-
-    type Key = super::models::StorageBranchSubKey;
-    type Value = VersionedValue<reth_trie::BranchNodeCompact>;
-}
-
-impl DupSort for ExternalStorageBranches {
-    type SubKey = u64; // block_number
-}
-
-/// Hashed accounts by address and block (DupSort)
-///
-/// Key: hashed_address (B256)
-/// SubKey: block_number (u64)
-/// Value: VersionedValue<Account> (contains block_number + MaybeDeleted value)
-///
-/// This structure allows efficient iteration by address, with block versioning as secondary sort
-#[derive(Debug, Clone)]
-pub struct ExternalHashedAccounts;
-
-impl Table for ExternalHashedAccounts {
-    const NAME: &'static str = "ExternalHashedAccounts";
-    const DUPSORT: bool = true;
-
-    type Key = B256;
-    type Value = VersionedValue<reth_primitives_traits::Account>;
-}
-
-impl DupSort for ExternalHashedAccounts {
-    type SubKey = u64; // block_number
-}
-
-/// Hashed storage values by address, storage_key, and block (DupSort)
-///
-/// Key: (hashed_address, storage_key) - HashedStorageSubKey
-/// SubKey: block_number (u64)
-/// Value: VersionedValue<B256> (contains block_number + MaybeDeleted value, zero values NOT stored)
-///
-/// This structure allows efficient iteration by address and storage_key, with block versioning
-#[derive(Debug, Clone)]
-pub struct ExternalHashedStorages;
-
-impl Table for ExternalHashedStorages {
-    const NAME: &'static str = "ExternalHashedStorages";
-    const DUPSORT: bool = true;
-
-    type Key = super::models::HashedStorageSubKey;
-    type Value = VersionedValue<B256>;
-}
-
-impl DupSort for ExternalHashedStorages {
-    type SubKey = u64; // block_number
-}
-
-// ============================================================================
-// Index Tables (for efficient pruning and reorg operations)
-// ============================================================================
-
-/// Index: Account trie path → list of block numbers that modified it
-///
-/// This allows us to efficiently find all blocks that need to be cleaned up
-/// when pruning or handling reorgs for a specific account branch path.
-///
-/// Key: path (StoredNibbles)
-/// Value: BlockNumberList (compressed list of block numbers)
-#[derive(Debug, Clone)]
-pub struct ExternalAccountBranchesIndex;
-
-impl Table for ExternalAccountBranchesIndex {
-    const NAME: &'static str = "ExternalAccountBranchesIndex";
+impl Table for ExternalAccountBranchesHistory {
+    const NAME: &'static str = "ExternalAccountBranchesHistory";
     const DUPSORT: bool = false;
 
     type Key = StoredNibbles;
     type Value = IntegerList;
 }
 
-/// Index: (address, path) → list of block numbers that modified it
+/// Storage trie branches history: (address, path) → list of block numbers
 ///
-/// This allows efficient cleanup of storage branches during pruning/reorgs.
+/// Tracks which block numbers modified each storage trie branch.
 ///
 /// Key: (hashed_address, path) - StorageBranchSubKey
-/// Value: BlockNumberList
+/// Value: IntegerList
 #[derive(Debug, Clone)]
-pub struct ExternalStorageBranchesIndex;
+pub struct ExternalStorageBranchesHistory;
 
-impl Table for ExternalStorageBranchesIndex {
-    const NAME: &'static str = "ExternalStorageBranchesIndex";
+impl Table for ExternalStorageBranchesHistory {
+    const NAME: &'static str = "ExternalStorageBranchesHistory";
     const DUPSORT: bool = false;
 
-    type Key = super::models::StorageBranchSubKey;
+    type Key = StorageBranchSubKey;
     type Value = IntegerList;
 }
 
-/// Index: hashed_address → list of block numbers that modified it
+/// Hashed accounts history: address → list of block numbers
 ///
-/// This allows efficient cleanup of account data during pruning/reorgs.
+/// Tracks which block numbers modified each account.
 ///
-/// Key: hashed_address
-/// Value: BlockNumberList
+/// Key: hashed_address (B256)
+/// Value: IntegerList
 #[derive(Debug, Clone)]
-pub struct ExternalHashedAccountsIndex;
+pub struct ExternalHashedAccountsHistory;
 
-impl Table for ExternalHashedAccountsIndex {
-    const NAME: &'static str = "ExternalHashedAccountsIndex";
+impl Table for ExternalHashedAccountsHistory {
+    const NAME: &'static str = "ExternalHashedAccountsHistory";
     const DUPSORT: bool = false;
 
     type Key = B256;
     type Value = IntegerList;
 }
 
-/// Index: (address, storage_key) → list of block numbers that modified it
+/// Hashed storage history: (address, storage_key) → list of block numbers
 ///
-/// This allows efficient cleanup of storage values during pruning/reorgs.
+/// Tracks which block numbers modified each storage slot.
 ///
-/// Key: (hashed_address, storage_key) - HashedStorageSubKey
-/// Value: BlockNumberList (IntegerList)
+/// Key: (hashed_address, hashed_storage_key) - HashedStorageSubKey
+/// Value: IntegerList
 #[derive(Debug, Clone)]
-pub struct ExternalHashedStoragesIndex;
+pub struct ExternalHashedStoragesHistory;
 
-impl Table for ExternalHashedStoragesIndex {
-    const NAME: &'static str = "ExternalHashedStoragesIndex";
+impl Table for ExternalHashedStoragesHistory {
+    const NAME: &'static str = "ExternalHashedStoragesHistory";
     const DUPSORT: bool = false;
 
-    type Key = super::models::HashedStorageSubKey;
+    type Key = HashedStorageSubKey;
     type Value = IntegerList;
 }
 
@@ -202,22 +209,22 @@ impl Table for ExternalBlockMetadata {
 /// This is used to initialize the database with all required tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tables {
-    /// Account trie branches
-    ExternalAccountBranches,
-    /// Storage trie branches  
-    ExternalStorageBranches,
-    /// Hashed accounts
-    ExternalHashedAccounts,
-    /// Hashed storage values
-    ExternalHashedStorages,
-    /// Account branches index
-    ExternalAccountBranchesIndex,
-    /// Storage branches index
-    ExternalStorageBranchesIndex,
-    /// Hashed accounts index
-    ExternalHashedAccountsIndex,
-    /// Hashed storages index
-    ExternalHashedStoragesIndex,
+    /// Account trie branches changeset
+    ExternalAccountBranchesChangeset,
+    /// Storage trie branches changeset
+    ExternalStorageBranchesChangeset,
+    /// Hashed accounts changeset
+    ExternalHashedAccountsChangeset,
+    /// Hashed storage values changeset
+    ExternalHashedStoragesChangeset,
+    /// Account branches history
+    ExternalAccountBranchesHistory,
+    /// Storage branches history
+    ExternalStorageBranchesHistory,
+    /// Hashed accounts history
+    ExternalHashedAccountsHistory,
+    /// Hashed storages history
+    ExternalHashedStoragesHistory,
     /// Block metadata
     ExternalBlockMetadata,
 }
@@ -225,28 +232,28 @@ pub enum Tables {
 impl Tables {
     /// All external tables
     pub const ALL: &'static [Self] = &[
-        Self::ExternalAccountBranches,
-        Self::ExternalStorageBranches,
-        Self::ExternalHashedAccounts,
-        Self::ExternalHashedStorages,
-        Self::ExternalAccountBranchesIndex,
-        Self::ExternalStorageBranchesIndex,
-        Self::ExternalHashedAccountsIndex,
-        Self::ExternalHashedStoragesIndex,
+        Self::ExternalAccountBranchesChangeset,
+        Self::ExternalStorageBranchesChangeset,
+        Self::ExternalHashedAccountsChangeset,
+        Self::ExternalHashedStoragesChangeset,
+        Self::ExternalAccountBranchesHistory,
+        Self::ExternalStorageBranchesHistory,
+        Self::ExternalHashedAccountsHistory,
+        Self::ExternalHashedStoragesHistory,
         Self::ExternalBlockMetadata,
     ];
 
     /// Get the table name
     pub const fn name(&self) -> &'static str {
         match self {
-            Self::ExternalAccountBranches => ExternalAccountBranches::NAME,
-            Self::ExternalStorageBranches => ExternalStorageBranches::NAME,
-            Self::ExternalHashedAccounts => ExternalHashedAccounts::NAME,
-            Self::ExternalHashedStorages => ExternalHashedStorages::NAME,
-            Self::ExternalAccountBranchesIndex => ExternalAccountBranchesIndex::NAME,
-            Self::ExternalStorageBranchesIndex => ExternalStorageBranchesIndex::NAME,
-            Self::ExternalHashedAccountsIndex => ExternalHashedAccountsIndex::NAME,
-            Self::ExternalHashedStoragesIndex => ExternalHashedStoragesIndex::NAME,
+            Self::ExternalAccountBranchesChangeset => ExternalAccountBranchesChangeset::NAME,
+            Self::ExternalStorageBranchesChangeset => ExternalStorageBranchesChangeset::NAME,
+            Self::ExternalHashedAccountsChangeset => ExternalHashedAccountsChangeset::NAME,
+            Self::ExternalHashedStoragesChangeset => ExternalHashedStoragesChangeset::NAME,
+            Self::ExternalAccountBranchesHistory => ExternalAccountBranchesHistory::NAME,
+            Self::ExternalStorageBranchesHistory => ExternalStorageBranchesHistory::NAME,
+            Self::ExternalHashedAccountsHistory => ExternalHashedAccountsHistory::NAME,
+            Self::ExternalHashedStoragesHistory => ExternalHashedStoragesHistory::NAME,
             Self::ExternalBlockMetadata => ExternalBlockMetadata::NAME,
         }
     }
@@ -254,10 +261,10 @@ impl Tables {
     /// Check if the table is a DUPSORT table
     pub const fn is_dupsort(&self) -> bool {
         match self {
-            Self::ExternalAccountBranches
-            | Self::ExternalStorageBranches
-            | Self::ExternalHashedAccounts
-            | Self::ExternalHashedStorages => true,
+            Self::ExternalAccountBranchesChangeset
+            | Self::ExternalStorageBranchesChangeset
+            | Self::ExternalHashedAccountsChangeset
+            | Self::ExternalHashedStoragesChangeset => true,
             _ => false,
         }
     }
