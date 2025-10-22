@@ -1,112 +1,137 @@
 //! MDBX cursor implementations for external storage
 //!
 //! This module provides efficient cursors that work with the changeset + history table pattern.
-//! Cursors scan through changesets by block_number and track the latest values for each key.
+//! Cursors use history indices to find the latest value for keys at a specific block number
+//! without collecting all data into memory.
 
 use alloy_primitives::{B256, U256};
 use reth_db_api::{
     cursor::{DbCursorRO, DbDupCursorRO},
+    models::IntegerList,
     table::{DupSort, Table},
+    transaction::DbTx,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{BranchNodeCompact, Nibbles};
-use std::collections::BTreeMap;
+use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
 
-use super::tables;
-use crate::storage::{
-    OpProofsHashedCursor, OpProofsStorageError, OpProofsStorageResult, OpProofsTrieCursor,
-};
+use super::{models::*, tables};
+use crate::storage::{OpProofsHashedCursor, OpProofsStorageResult, OpProofsTrieCursor};
 
-/// Account trie cursor that works with changeset table
+// ============================================================================
+// Account Trie Cursor
+// ============================================================================
+
+/// Account trie cursor that works with history + changeset tables
+///
+/// Uses the ExternalAccountBranchesHistory table to efficiently find which block
+/// last modified a path, then looks up the value in ExternalAccountBranchesChangeset.
 #[derive(Debug)]
-pub struct AccountTrieCursor<Cursor> {
-    cursor: Cursor,
+pub struct AccountTrieCursor<TX> {
+    tx: TX,
     max_block_number: u64,
-    cached_paths: Option<BTreeMap<Nibbles, BranchNodeCompact>>,
     current_path: Option<Nibbles>,
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalAccountBranchesChangeset>
-            + DbDupCursorRO<tables::ExternalAccountBranchesChangeset>
-            + Send
-            + Sync,
-    > AccountTrieCursor<Cursor>
-{
+impl<TX: DbTx> AccountTrieCursor<TX> {
     /// Create a new account trie cursor with the given max block number
-    pub fn new(cursor: Cursor, max_block_number: u64) -> Self {
-        Self { cursor, max_block_number, cached_paths: None, current_path: None }
+    pub fn new(tx: TX, max_block_number: u64) -> Self {
+        Self { tx, max_block_number, current_path: None }
     }
 
-    /// Collect all paths with their latest values
-    fn collect_all_paths(&mut self) -> OpProofsStorageResult<BTreeMap<Nibbles, BranchNodeCompact>> {
-        let mut path_values: BTreeMap<Nibbles, (u64, Option<BranchNodeCompact>)> = BTreeMap::new();
+    /// Find the latest value for a specific path by using history index
+    fn find_path_value(
+        &self,
+        target_path: &Nibbles,
+    ) -> OpProofsStorageResult<Option<BranchNodeCompact>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalAccountBranchesHistory>()?;
 
-        // Scan through all blocks <= max_block_number
-        if let Some((_block, _)) =
-            self.cursor.first().map_err(|e| OpProofsStorageError::Other(e.into()))?
-        {
+        let stored_path = StoredNibbles(target_path.clone());
+
+        // Look up the history index for this path
+        let Some((_key, list)) = history_cursor.seek_exact(stored_path)? else {
+            // Path never modified
+            return Ok(None);
+        };
+
+        // Find the last block <= max_block_number where this path was modified
+        let block_number = find_last_block_in_list(&list, self.max_block_number)?;
+
+        let Some(block_number) = block_number else {
+            // No modifications at or before max_block_number
+            return Ok(None);
+        };
+
+        // Look up the value in the changeset table at that block
+        let mut changeset_cursor =
+            self.tx.cursor_dup_read::<tables::ExternalAccountBranchesChangeset>()?;
+
+        // Seek to the block and find the entry for this path
+        if changeset_cursor.seek_exact(block_number)?.is_some() {
+            // Iterate through all entries at this block to find our path
             loop {
-                let Some((block, value)) =
-                    self.cursor.current().map_err(|e| OpProofsStorageError::Other(e.into()))?
-                else {
+                let Some((block, value)) = changeset_cursor.current()? else {
                     break;
                 };
 
-                if block > self.max_block_number {
+                if block != block_number {
                     break;
                 }
 
-                let path = value.0 .0.clone();
-                let branch_opt = value.1 .0.clone();
+                if &value.0 .0 == target_path {
+                    // Found it! Return the branch (or None if deleted)
+                    return Ok(value.1 .0.clone());
+                }
 
-                // Keep the latest (highest block number) value for each path
-                path_values
-                    .entry(path)
-                    .and_modify(|(latest_block, latest_branch)| {
-                        if block > *latest_block {
-                            *latest_block = block;
-                            *latest_branch = branch_opt.clone();
-                        }
-                    })
-                    .or_insert((block, branch_opt));
-
-                if self.cursor.next().map_err(|e| OpProofsStorageError::Other(e.into()))?.is_none()
-                {
+                if changeset_cursor.next_dup()?.is_none() {
                     break;
                 }
             }
         }
 
-        // Filter out deleted entries (None) and return only the branches
-        Ok(path_values
-            .into_iter()
-            .filter_map(|(path, (_block, branch_opt))| branch_opt.map(|branch| (path, branch)))
-            .collect())
+        Ok(None)
     }
 
-    /// Get or initialize cached paths
-    fn get_cached_paths(&mut self) -> OpProofsStorageResult<&BTreeMap<Nibbles, BranchNodeCompact>> {
-        if self.cached_paths.is_none() {
-            self.cached_paths = Some(self.collect_all_paths()?);
+    /// Find the first path >= target_path with a non-deleted value
+    fn find_next_path(
+        &self,
+        target_path: &Nibbles,
+    ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalAccountBranchesHistory>()?;
+
+        let stored_target = StoredNibbles(target_path.clone());
+
+        // Seek to the first path >= target_path in the history table
+        let Some((key, _list)) = history_cursor.seek(stored_target)? else {
+            return Ok(None);
+        };
+
+        let mut current_key = key;
+
+        // Iterate through paths until we find one with a non-deleted value
+        loop {
+            let path = current_key.0.clone();
+
+            // Try to get the value for this path
+            if let Some(branch) = self.find_path_value(&path)? {
+                return Ok(Some((path, branch)));
+            }
+
+            // Move to next path
+            let Some((next_key, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+
+            current_key = next_key;
         }
-        Ok(self.cached_paths.as_ref().unwrap())
     }
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalAccountBranchesChangeset>
-            + DbDupCursorRO<tables::ExternalAccountBranchesChangeset>
-            + Send
-            + Sync,
-    > OpProofsTrieCursor for AccountTrieCursor<Cursor>
-{
+impl<TX: DbTx> OpProofsTrieCursor for AccountTrieCursor<TX> {
     fn seek_exact(
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let paths = self.get_cached_paths()?;
-        let result = paths.get(&target_path).map(|branch| (target_path.clone(), branch.clone()));
+        let result = self.find_path_value(&target_path)?.map(|branch| (target_path.clone(), branch));
         if result.is_some() {
             self.current_path = Some(target_path);
         }
@@ -117,12 +142,7 @@ impl<
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let paths = self.get_cached_paths()?;
-        // Find first path >= target_path
-        let result = paths
-            .range(target_path..)
-            .next()
-            .map(|(path, branch)| (path.clone(), branch.clone()));
+        let result = self.find_next_path(&target_path)?;
         if let Some((ref path, _)) = result {
             self.current_path = Some(path.clone());
         }
@@ -133,7 +153,6 @@ impl<
         let next_path = if let Some(current) = &self.current_path {
             // Find next path after current
             let mut next = current.clone();
-            // Simple increment: append a nibble or increase last nibble
             next.push(0);
             next
         } else {
@@ -148,111 +167,124 @@ impl<
     }
 }
 
-/// Storage trie cursor that works with changeset table
+// ============================================================================
+// Storage Trie Cursor
+// ============================================================================
+
+/// Storage trie cursor that works with history + changeset tables
 #[derive(Debug)]
-pub struct MdbxOpProofsStorageTrieCursor<T: Table + DupSort, Cursor> {
+pub struct MdbxOpProofsStorageTrieCursor<T: Table + DupSort, TX> {
     hashed_address: B256,
-    cursor: Cursor,
+    tx: TX,
     max_block_number: u64,
-    cached_paths: Option<BTreeMap<Nibbles, BranchNodeCompact>>,
     current_path: Option<Nibbles>,
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: Table<Key = u64> + DupSort, Cursor: DbCursorRO<T> + DbDupCursorRO<T>>
-    MdbxOpProofsStorageTrieCursor<T, Cursor>
-{
-    pub(crate) fn new(cursor: Cursor, hashed_address: B256, max_block_number: u64) -> Self {
+impl<T: Table<Key = u64> + DupSort, TX: DbTx> MdbxOpProofsStorageTrieCursor<T, TX> {
+    pub(crate) fn new(tx: TX, hashed_address: B256, max_block_number: u64) -> Self {
         Self {
             hashed_address,
-            cursor,
+            tx,
             max_block_number,
-            cached_paths: None,
             current_path: None,
             _phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalStorageBranchesChangeset>
-            + DbDupCursorRO<tables::ExternalStorageBranchesChangeset>
-            + Send
-            + Sync,
-    > MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChangeset, Cursor>
-{
-    /// Collect all paths for this address with their latest values
-    fn collect_paths(&mut self) -> OpProofsStorageResult<BTreeMap<Nibbles, BranchNodeCompact>> {
-        let mut path_values: BTreeMap<Nibbles, (u64, Option<BranchNodeCompact>)> = BTreeMap::new();
+impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChangeset, TX> {
+    /// Find the latest value for a specific path using history index
+    fn find_path_value(&self, target_path: &Nibbles) -> OpProofsStorageResult<Option<BranchNodeCompact>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalStorageBranchesHistory>()?;
 
-        if let Some((_block, _)) =
-            self.cursor.first().map_err(|e| OpProofsStorageError::Other(e.into()))?
-        {
+        let history_key = StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
+
+        // Look up the history index for this (address, path)
+        let Some((_key, list)) = history_cursor.seek_exact(history_key)? else {
+            return Ok(None);
+        };
+
+        // Find the last block <= max_block_number
+        let block_number = find_last_block_in_list(&list, self.max_block_number)?;
+
+        let Some(block_number) = block_number else {
+            return Ok(None);
+        };
+
+        // Look up the value in the changeset table
+        let mut changeset_cursor = self.tx.cursor_dup_read::<tables::ExternalStorageBranchesChangeset>()?;
+
+        if changeset_cursor.seek_exact(block_number)?.is_some() {
+            // Find the entry for this address and path
             loop {
-                let Some((block, value)) =
-                    self.cursor.current().map_err(|e| OpProofsStorageError::Other(e.into()))?
-                else {
+                let Some((block, value)) = changeset_cursor.current()? else {
                     break;
                 };
 
-                if block > self.max_block_number {
+                if block != block_number {
                     break;
                 }
 
-                // Only collect entries for our address
-                if value.0.hashed_address == self.hashed_address {
-                    let path = value.0.path.0.clone();
-                    let branch_opt = value.1 .0.clone();
-
-                    // Keep the latest (highest block number) value for each path
-                    path_values
-                        .entry(path)
-                        .and_modify(|(latest_block, latest_branch)| {
-                            if block > *latest_block {
-                                *latest_block = block;
-                                *latest_branch = branch_opt.clone();
-                            }
-                        })
-                        .or_insert((block, branch_opt));
+                if value.0.hashed_address == self.hashed_address && &value.0.path.0 == target_path {
+                    return Ok(value.1 .0.clone());
                 }
 
-                if self.cursor.next().map_err(|e| OpProofsStorageError::Other(e.into()))?.is_none()
-                {
+                if changeset_cursor.next_dup()?.is_none() {
                     break;
                 }
             }
         }
 
-        // Filter out deleted entries and return
-        Ok(path_values
-            .into_iter()
-            .filter_map(|(path, (_block, branch_opt))| branch_opt.map(|branch| (path, branch)))
-            .collect())
+        Ok(None)
     }
 
-    /// Get or initialize cached paths
-    fn get_cached_paths(&mut self) -> OpProofsStorageResult<&BTreeMap<Nibbles, BranchNodeCompact>> {
-        if self.cached_paths.is_none() {
-            self.cached_paths = Some(self.collect_paths()?);
+    /// Find the first path >= target_path for this address with a non-deleted value
+    fn find_next_path(
+        &self,
+        target_path: &Nibbles,
+    ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalStorageBranchesHistory>()?;
+
+        let start_key = StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
+
+        // Seek to first entry >= (address, path)
+        let Some((key, _list)) = history_cursor.seek(start_key)? else {
+            return Ok(None);
+        };
+
+        let mut current_key = key;
+
+        // Iterate through paths for this address
+        loop {
+            // Check if still the same address
+            if current_key.hashed_address != self.hashed_address {
+                return Ok(None);
+            }
+
+            let path = current_key.path.0.clone();
+
+            // Try to get the value for this path
+            if let Some(branch) = self.find_path_value(&path)? {
+                return Ok(Some((path, branch)));
+            }
+
+            // Move to next path
+            let Some((next_key, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+
+            current_key = next_key;
         }
-        Ok(self.cached_paths.as_ref().unwrap())
     }
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalStorageBranchesChangeset>
-            + DbDupCursorRO<tables::ExternalStorageBranchesChangeset>
-            + Send
-            + Sync,
-    > OpProofsTrieCursor
-    for MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChangeset, Cursor>
-{
+impl<TX: DbTx> OpProofsTrieCursor for MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChangeset, TX> {
     fn seek_exact(
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let paths = self.get_cached_paths()?;
-        let result = paths.get(&target_path).map(|branch| (target_path.clone(), branch.clone()));
+        let result = self.find_path_value(&target_path)?.map(|branch| (target_path.clone(), branch));
         if result.is_some() {
             self.current_path = Some(target_path);
         }
@@ -263,12 +295,7 @@ impl<
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let paths = self.get_cached_paths()?;
-        // Find first path >= target_path
-        let result = paths
-            .range(target_path..)
-            .next()
-            .map(|(path, branch)| (path.clone(), branch.clone()));
+        let result = self.find_next_path(&target_path)?;
         if let Some((ref path, _)) = result {
             self.current_path = Some(path.clone());
         }
@@ -277,7 +304,6 @@ impl<
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         let next_path = if let Some(current) = &self.current_path {
-            // Find next path after current
             let mut next = current.clone();
             next.push(0);
             next
@@ -293,97 +319,99 @@ impl<
     }
 }
 
-/// Account hashed cursor that works with changeset table
+// ============================================================================
+// Hashed Account Cursor
+// ============================================================================
+
+/// Account hashed cursor that works with history + changeset tables
 #[derive(Debug)]
-pub struct MdbxAccountCursor<Cursor> {
-    cursor: Cursor,
+pub struct MdbxAccountCursor<TX> {
+    tx: TX,
     max_block_number: u64,
-    cached_addresses: Option<BTreeMap<B256, Account>>,
     current_address: Option<B256>,
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalHashedAccountsChangeset>
-            + DbDupCursorRO<tables::ExternalHashedAccountsChangeset>
-            + Send
-            + Sync,
-    > MdbxAccountCursor<Cursor>
-{
-    pub(crate) fn new(cursor: Cursor, max_block_number: u64) -> Self {
-        Self { cursor, max_block_number, cached_addresses: None, current_address: None }
+impl<TX: DbTx> MdbxAccountCursor<TX> {
+    pub(crate) fn new(tx: TX, max_block_number: u64) -> Self {
+        Self { tx, max_block_number, current_address: None }
     }
 
-    /// Collect all addresses with their latest values
-    fn collect_all_addresses(&mut self) -> OpProofsStorageResult<BTreeMap<B256, Account>> {
-        let mut address_values: BTreeMap<B256, (u64, Option<Account>)> = BTreeMap::new();
+    /// Find the latest account value using history index
+    fn find_account(&self, address: B256) -> OpProofsStorageResult<Option<Account>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedAccountsHistory>()?;
 
-        if let Some((_block, _)) =
-            self.cursor.first().map_err(|e| OpProofsStorageError::Other(e.into()))?
-        {
+        // Look up the history index for this address
+        let Some((_key, list)) = history_cursor.seek_exact(address)? else {
+            return Ok(None);
+        };
+
+        // Find the last block <= max_block_number
+        let block_number = find_last_block_in_list(&list, self.max_block_number)?;
+
+        let Some(block_number) = block_number else {
+            return Ok(None);
+        };
+
+        // Look up the value in the changeset table
+        let mut changeset_cursor = self.tx.cursor_dup_read::<tables::ExternalHashedAccountsChangeset>()?;
+
+        if changeset_cursor.seek_exact(block_number)?.is_some() {
+            // Find the entry for this address
             loop {
-                let Some((block, value)) =
-                    self.cursor.current().map_err(|e| OpProofsStorageError::Other(e.into()))?
-                else {
+                let Some((block, value)) = changeset_cursor.current()? else {
                     break;
                 };
 
-                if block > self.max_block_number {
+                if block != block_number {
                     break;
                 }
 
-                let address = value.0;
-                let account_opt = value.1 .0.clone();
+                if value.0 == address {
+                    return Ok(value.1 .0.clone());
+                }
 
-                // Keep the latest (highest block number) value for each address
-                address_values
-                    .entry(address)
-                    .and_modify(|(latest_block, latest_account)| {
-                        if block > *latest_block {
-                            *latest_block = block;
-                            *latest_account = account_opt.clone();
-                        }
-                    })
-                    .or_insert((block, account_opt));
-
-                if self.cursor.next().map_err(|e| OpProofsStorageError::Other(e.into()))?.is_none()
-                {
+                if changeset_cursor.next_dup()?.is_none() {
                     break;
                 }
             }
         }
 
-        // Filter out deleted entries and return
-        Ok(address_values
-            .into_iter()
-            .filter_map(|(addr, (_block, account_opt))| account_opt.map(|account| (addr, account)))
-            .collect())
+        Ok(None)
     }
 
-    /// Get or initialize cached addresses
-    fn get_cached_addresses(&mut self) -> OpProofsStorageResult<&BTreeMap<B256, Account>> {
-        if self.cached_addresses.is_none() {
-            self.cached_addresses = Some(self.collect_all_addresses()?);
+    /// Find the first address >= target with a non-deleted value
+    fn find_next_address(&self, target: B256) -> OpProofsStorageResult<Option<(B256, Account)>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedAccountsHistory>()?;
+
+        // Seek to first address >= target
+        let Some((address, _list)) = history_cursor.seek(target)? else {
+            return Ok(None);
+        };
+
+        let mut current_address = address;
+
+        // Iterate through addresses
+        loop {
+            // Try to get the account for this address
+            if let Some(account) = self.find_account(current_address)? {
+                return Ok(Some((current_address, account)));
+            }
+
+            // Move to next address
+            let Some((next_address, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+
+            current_address = next_address;
         }
-        Ok(self.cached_addresses.as_ref().unwrap())
     }
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalHashedAccountsChangeset>
-            + DbDupCursorRO<tables::ExternalHashedAccountsChangeset>
-            + Send
-            + Sync,
-    > OpProofsHashedCursor for MdbxAccountCursor<Cursor>
-{
+impl<TX: DbTx> OpProofsHashedCursor for MdbxAccountCursor<TX> {
     type Value = Account;
 
     fn seek(&mut self, target_address: B256) -> OpProofsStorageResult<Option<(B256, Account)>> {
-        let addresses = self.get_cached_addresses()?;
-        // Find first address >= target_address
-        let result = addresses
-            .range(target_address..)
-            .next()
-            .map(|(addr, account)| (*addr, *account));
+        let result = self.find_next_address(target_address)?;
         if let Some((addr, _)) = result {
             self.current_address = Some(addr);
         }
@@ -392,18 +420,8 @@ impl<
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Account)>> {
         let next_addr = if let Some(current) = self.current_address {
-            // Find next address after current
-            let mut next_bytes = current.0;
-            // Increment by 1
-            for i in (0..32).rev() {
-                if next_bytes[i] == 255 {
-                    next_bytes[i] = 0;
-                } else {
-                    next_bytes[i] += 1;
-                    break;
-                }
-            }
-            B256::from(next_bytes)
+            // Increment address by 1
+            increment_b256(current)
         } else {
             B256::ZERO
         };
@@ -412,103 +430,118 @@ impl<
     }
 }
 
-/// Storage hashed cursor that works with changeset table
+// ============================================================================
+// Hashed Storage Cursor
+// ============================================================================
+
+/// Storage hashed cursor that works with history + changeset tables
 #[derive(Debug)]
-pub struct MdbxStorageCursor<Cursor> {
-    cursor: Cursor,
+pub struct MdbxStorageCursor<TX> {
+    tx: TX,
     max_block_number: u64,
     hashed_address: B256,
-    cached_storage: Option<BTreeMap<B256, U256>>,
     current_storage_key: Option<B256>,
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalHashedStoragesChangeset>
-            + DbDupCursorRO<tables::ExternalHashedStoragesChangeset>
-            + Send
-            + Sync,
-    > MdbxStorageCursor<Cursor>
-{
-    pub(crate) fn new(cursor: Cursor, max_block_number: u64, hashed_address: B256) -> Self {
-        Self { cursor, max_block_number, hashed_address, cached_storage: None, current_storage_key: None }
+impl<TX: DbTx> MdbxStorageCursor<TX> {
+    pub(crate) fn new(tx: TX, max_block_number: u64, hashed_address: B256) -> Self {
+        Self {
+            tx,
+            max_block_number,
+            hashed_address,
+            current_storage_key: None,
+        }
     }
 
-    /// Collect all storage keys for this address with their latest values
-    fn collect_storage(&mut self) -> OpProofsStorageResult<BTreeMap<B256, U256>> {
-        let mut storage_values: BTreeMap<B256, (u64, Option<B256>)> = BTreeMap::new();
+    /// Find the latest storage value using history index
+    fn find_storage(&self, storage_key: B256) -> OpProofsStorageResult<Option<U256>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedStoragesHistory>()?;
 
-        if let Some((_block, _)) =
-            self.cursor.first().map_err(|e| OpProofsStorageError::Other(e.into()))?
-        {
+        let history_key = HashedStorageSubKey::new(self.hashed_address, storage_key);
+
+        // Look up the history index
+        let Some((_key, list)) = history_cursor.seek_exact(history_key)? else {
+            return Ok(None);
+        };
+
+        // Find the last block <= max_block_number
+        let block_number = find_last_block_in_list(&list, self.max_block_number)?;
+
+        let Some(block_number) = block_number else {
+            return Ok(None);
+        };
+
+        // Look up the value in the changeset table
+        let mut changeset_cursor = self.tx.cursor_dup_read::<tables::ExternalHashedStoragesChangeset>()?;
+
+        if changeset_cursor.seek_exact(block_number)?.is_some() {
+            // Find the entry for this address and storage key
             loop {
-                let Some((block, value)) =
-                    self.cursor.current().map_err(|e| OpProofsStorageError::Other(e.into()))?
-                else {
+                let Some((block, value)) = changeset_cursor.current()? else {
                     break;
                 };
 
-                if block > self.max_block_number {
+                if block != block_number {
                     break;
                 }
 
-                // Only collect entries for our address
-                if value.0.hashed_address == self.hashed_address {
-                    let storage_key = value.0.hashed_storage_key;
-                    let value_opt = value.1 .0.clone();
-
-                    // Keep the latest (highest block number) value for each storage key
-                    storage_values
-                        .entry(storage_key)
-                        .and_modify(|(latest_block, latest_value)| {
-                            if block > *latest_block {
-                                *latest_block = block;
-                                *latest_value = value_opt.clone();
-                            }
-                        })
-                        .or_insert((block, value_opt));
+                if value.0.hashed_address == self.hashed_address &&
+                    value.0.hashed_storage_key == storage_key
+                {
+                    return Ok(value.1 .0.map(|v| U256::from_be_slice(v.as_slice())));
                 }
 
-                if self.cursor.next().map_err(|e| OpProofsStorageError::Other(e.into()))?.is_none()
-                {
+                if changeset_cursor.next_dup()?.is_none() {
                     break;
                 }
             }
         }
 
-        // Filter out deleted entries and convert to U256
-        Ok(storage_values
-            .into_iter()
-            .filter_map(|(key, (_block, value_opt))| {
-                value_opt.map(|v| (key, U256::from_be_slice(v.as_slice())))
-            })
-            .collect())
+        Ok(None)
     }
 
-    /// Get or initialize cached storage
-    fn get_cached_storage(&mut self) -> OpProofsStorageResult<&BTreeMap<B256, U256>> {
-        if self.cached_storage.is_none() {
-            self.cached_storage = Some(self.collect_storage()?);
+    /// Find the first storage key >= target for this address with a non-deleted value
+    fn find_next_storage(&self, target: B256) -> OpProofsStorageResult<Option<(B256, U256)>> {
+        let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedStoragesHistory>()?;
+
+        let start_key = HashedStorageSubKey::new(self.hashed_address, target);
+
+        // Seek to first entry >= (address, storage_key)
+        let Some((key, _list)) = history_cursor.seek(start_key)? else {
+            return Ok(None);
+        };
+
+        let mut current_key = key;
+
+        // Iterate through storage keys for this address
+        loop {
+            // Check if still the same address
+            if current_key.hashed_address != self.hashed_address {
+                return Ok(None);
+            }
+
+            let storage_key = current_key.hashed_storage_key;
+
+            // Try to get the value for this storage key
+            if let Some(value) = self.find_storage(storage_key)? {
+                return Ok(Some((storage_key, value)));
+            }
+
+            // Move to next storage key
+            let Some((next_key, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+
+            current_key = next_key;
         }
-        Ok(self.cached_storage.as_ref().unwrap())
     }
 }
 
-impl<
-        Cursor: DbCursorRO<tables::ExternalHashedStoragesChangeset>
-            + DbDupCursorRO<tables::ExternalHashedStoragesChangeset>
-            + Send
-            + Sync,
-    > OpProofsHashedCursor for MdbxStorageCursor<Cursor>
-{
+impl<TX: DbTx> OpProofsHashedCursor for MdbxStorageCursor<TX> {
     type Value = U256;
 
     fn seek(&mut self, target_storage_key: B256) -> OpProofsStorageResult<Option<(B256, U256)>> {
-        let storage = self.get_cached_storage()?;
-        // Find first storage key >= target_storage_key
-        let result = storage
-            .range(target_storage_key..)
-            .next()
-            .map(|(key, value)| (*key, *value));
+        let result = self.find_next_storage(target_storage_key)?;
         if let Some((key, _)) = result {
             self.current_storage_key = Some(key);
         }
@@ -517,22 +550,55 @@ impl<
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, U256)>> {
         let next_key = if let Some(current) = self.current_storage_key {
-            // Find next key after current
-            let mut next_bytes = current.0;
-            // Increment by 1
-            for i in (0..32).rev() {
-                if next_bytes[i] == 255 {
-                    next_bytes[i] = 0;
-                } else {
-                    next_bytes[i] += 1;
-                    break;
-                }
-            }
-            B256::from(next_bytes)
+            increment_b256(current)
         } else {
             B256::ZERO
         };
 
         self.seek(next_key)
     }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Find the last block number in an IntegerList that is <= max_block
+///
+/// Uses the rank/select API from RoaringTreemap to efficiently find the value
+/// without iterating through all entries.
+fn find_last_block_in_list(
+    list: &IntegerList,
+    max_block: u64,
+) -> OpProofsStorageResult<Option<u64>> {
+    let inner = &list.0;
+
+    // If the list is empty, return None
+    if inner.is_empty() {
+        return Ok(None);
+    }
+
+    // Get the rank (number of elements <= max_block)
+    let rank = inner.rank(max_block);
+
+    // If rank is 0, no elements <= max_block
+    if rank == 0 {
+        return Ok(None);
+    }
+
+    // Select the element at rank-1 (0-indexed)
+    Ok(inner.select(rank - 1))
+}
+
+/// Increment a B256 by 1 (for iterating to next key)
+fn increment_b256(mut value: B256) -> B256 {
+    for i in (0..32).rev() {
+        if value.0[i] == 255 {
+            value.0[i] = 0;
+        } else {
+            value.0[i] += 1;
+            break;
+        }
+    }
+    value
 }
