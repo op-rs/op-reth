@@ -161,7 +161,7 @@ where
     }
 }
 
-/// MDBX implementation of [`OpProofsTrieCursor`].
+/// MDBX implementation of [`OpProofsTrieCursorRO`].
 #[derive(Debug)]
 pub struct MdbxTrieCursor<T: Table + DupSort, Cursor> {
     inner: BlockNumberVersionedCursor<T, Cursor>,
