@@ -372,42 +372,51 @@ impl OpProofsStore for MdbxProofsStorage {
                     match change_set.name {
                         TableName::AccountTrieHistory => {
                             let key = StoredNibbles::decode(change_set.table_key.as_slice())?;
-                            // Walk duplicates starting exactly at (key, block_number). walk_dup will
-                            // position the walker at the first entry >= (key, block_number). We only
+                            // Walk duplicates starting exactly at (key, block_number). walk_dup
+                            // will position the walker at the first
+                            // entry >= (key, block_number). We only
                             // want to delete when the entry matches both key and block_number.
-                            let mut walker = account_trie_cursor.walk_dup(Some(key.clone()), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
-                                if *found_key == key && found_val.block_number == *block_number {
-                                    // delete only the specific duplicate entry
-                                    walker.delete_current()?;
-                                }
+                            let mut walker = account_trie_cursor
+                                .walk_dup(Some(key.clone()), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
+                                *found_key == key &&
+                                found_val.block_number == *block_number
+                            {
+                                // delete only the specific duplicate entry
+                                walker.delete_current()?;
                             }
                         }
                         TableName::StorageTrieHistory => {
                             let key = StorageTrieKey::decode(change_set.table_key.as_slice())?;
-                            let mut walker = storage_trie_cursor.walk_dup(Some(key.clone()), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
-                                if *found_key == key && found_val.block_number == *block_number {
-                                    walker.delete_current()?;
-                                }
+                            let mut walker = storage_trie_cursor
+                                .walk_dup(Some(key.clone()), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
+                                *found_key == key &&
+                                found_val.block_number == *block_number
+                            {
+                                walker.delete_current()?;
                             }
                         }
                         TableName::HashedAccountHistory => {
                             let key = B256::decode(change_set.table_key.as_slice())?;
-                            let mut walker = hashed_account_cursor.walk_dup(Some(key), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
-                                if *found_key == key && found_val.block_number == *block_number {
-                                    walker.delete_current()?;
-                                }
+                            let mut walker =
+                                hashed_account_cursor.walk_dup(Some(key), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
+                                *found_key == key &&
+                                found_val.block_number == *block_number
+                            {
+                                walker.delete_current()?;
                             }
                         }
                         TableName::HashedStorageHistory => {
                             let key = HashedStorageKey::decode(change_set.table_key.as_slice())?;
-                            let mut walker = hashed_storage_cursor.walk_dup(Some(key.clone()), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() {
-                                if *found_key == key && found_val.block_number == *block_number {
-                                    walker.delete_current()?;
-                                }
+                            let mut walker = hashed_storage_cursor
+                                .walk_dup(Some(key.clone()), Some(*block_number))?;
+                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
+                                *found_key == key &&
+                                found_val.block_number == *block_number
+                            {
+                                walker.delete_current()?;
                             }
                         }
                     }
@@ -451,7 +460,10 @@ mod tests {
         StorageTrieKey,
     };
     use alloy_primitives::B256;
-    use reth_db::{cursor::DbDupCursorRO, transaction::{DbTx, DbTxMut}};
+    use reth_db::{
+        cursor::DbDupCursorRO,
+        transaction::{DbTx, DbTxMut},
+    };
     use reth_trie::{
         updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles, StoredNibbles,
     };
@@ -1183,7 +1195,8 @@ mod tests {
 
         // Read
         let mut walker = cursor.walk_dup(Some(block), None).unwrap();
-        let mut entries = vec![walker.next().unwrap().unwrap().1, walker.next().unwrap().unwrap().1];
+        let mut entries =
+            vec![walker.next().unwrap().unwrap().1, walker.next().unwrap().unwrap().1];
         entries.sort();
         let mut expected = vec![entry1.clone(), entry2.clone()];
         expected.sort();
