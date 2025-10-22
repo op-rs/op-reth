@@ -1,11 +1,18 @@
 #![allow(missing_docs, rustdoc::missing_crate_level_docs)]
 
 use clap::{builder::ArgPredicate, Parser};
+use eyre::ErrReport;
 use futures_util::FutureExt;
+use reth_db::DatabaseEnv;
+use reth_node_builder::{NodeBuilder, WithLaunchContext};
+use reth_optimism_chainspec::OpChainSpec;
 use reth_optimism_cli::{chainspec::OpChainSpecParser, Cli};
 use reth_optimism_exex::OpProofsExEx;
 use reth_optimism_node::{args::RollupArgs, OpNode};
-use reth_optimism_trie::{db::MdbxProofsStorage, InMemoryProofsStorage};
+use reth_optimism_rpc::eth::proofs::{EthApiExt, EthApiOverrideServer};
+use reth_optimism_trie::{
+    db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage, OpProofsStore, StorageMetrics,
+};
 use tracing::info;
 
 use std::{path::PathBuf, sync::Arc};
@@ -60,6 +67,33 @@ struct Args {
     pub proofs_history_window: u64,
 }
 
+async fn launch_node_with_storage<S>(
+    builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>,
+    args: Args,
+    storage: OpProofsStorage<S>,
+) -> eyre::Result<(), ErrReport>
+where
+    S: OpProofsStore + Clone + 'static,
+{
+    let storage_clone = storage.clone();
+    let proofs_history_enabled = args.proofs_history;
+    let handle = builder
+        .node(OpNode::new(args.rollup_args))
+        .install_exex_if(proofs_history_enabled, "proofs-history", async move |exex_context| {
+            Ok(OpProofsExEx::new(exex_context, storage, args.proofs_history_window).run().boxed())
+        })
+        .extend_rpc_modules(move |ctx| {
+            if proofs_history_enabled {
+                let api_ext = EthApiExt::new(ctx.registry.eth_api().clone(), storage_clone);
+                ctx.modules.replace_configured(api_ext.into_rpc())?;
+            }
+            Ok(())
+        })
+        .launch_with_debug_capabilities()
+        .await?;
+    handle.node_exit_future.await
+}
+
 fn main() {
     reth_cli_util::sigsegv_handler::install();
 
@@ -73,42 +107,34 @@ fn main() {
     if let Err(err) = Cli::<OpChainSpecParser, Args>::parse().run(async move |builder, args| {
         info!(target: "reth::cli", "Launching node");
 
-        let rollup_args = args.rollup_args;
+        if args.proofs_history_storage_in_mem {
+            // todo: enable launch without metrics
+            let storage = OpProofsStorage::new(
+                Arc::new(InMemoryProofsStorage::new()),
+                Arc::new(StorageMetrics::default()),
+            );
 
-        let handle = builder
-            .node(OpNode::new(rollup_args))
-            .install_exex_if(args.proofs_history, "proofs-history", async move |exex_context| {
-                if args.proofs_history_storage_in_mem {
-                    info!(target: "reth::cli", "Using in-memory storage for proofs history");
+            launch_node_with_storage(builder, args.clone(), storage).await?;
+        } else {
+            let path = args
+                .proofs_history_storage_path
+                .clone()
+                .expect("Path must be provided if not using in-memory storage");
+            info!(target: "reth::cli", "Using on-disk storage for proofs history");
 
-                    let storage = InMemoryProofsStorage::new();
-                    Ok(OpProofsExEx::new(
-                        exex_context,
-                        Arc::new(storage),
-                        args.proofs_history_window,
-                    )
-                    .run()
-                    .boxed())
-                } else {
-                    let path = args
-                        .proofs_history_storage_path
-                        .expect("Path must be provided if not using in-memory storage");
-                    info!(target: "reth::cli", "Using on-disk storage for proofs history");
+            // todo: enable launch without metrics
+            let storage = OpProofsStorage::new(
+                Arc::new(
+                    MdbxProofsStorage::new(&path)
+                        .map_err(|e| eyre::eyre!("Failed to create MdbxProofsStorage: {e}"))?,
+                ),
+                Arc::new(StorageMetrics::default()),
+            );
 
-                    let storage = MdbxProofsStorage::new(&path)
-                        .map_err(|e| eyre::eyre!("Failed to create MdbxProofsStorage: {e}"))?;
-                    Ok(OpProofsExEx::new(
-                        exex_context,
-                        Arc::new(storage),
-                        args.proofs_history_window,
-                    )
-                    .run()
-                    .boxed())
-                }
-            })
-            .launch_with_debug_capabilities()
-            .await?;
-        handle.node_exit_future.await
+            launch_node_with_storage(builder, args.clone(), storage).await?;
+        }
+
+        Ok(())
     }) {
         eprintln!("Error: {err:?}");
         std::process::exit(1);
