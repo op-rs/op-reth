@@ -131,7 +131,8 @@ impl<TX: DbTx> OpProofsTrieCursor for AccountTrieCursor<TX> {
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let result = self.find_path_value(&target_path)?.map(|branch| (target_path.clone(), branch));
+        let result =
+            self.find_path_value(&target_path)?.map(|branch| (target_path.clone(), branch));
         if result.is_some() {
             self.current_path = Some(target_path);
         }
@@ -195,10 +196,14 @@ impl<T: Table<Key = u64> + DupSort, TX: DbTx> MdbxOpProofsStorageTrieCursor<T, T
 
 impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChangeset, TX> {
     /// Find the latest value for a specific path using history index
-    fn find_path_value(&self, target_path: &Nibbles) -> OpProofsStorageResult<Option<BranchNodeCompact>> {
+    fn find_path_value(
+        &self,
+        target_path: &Nibbles,
+    ) -> OpProofsStorageResult<Option<BranchNodeCompact>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalStorageBranchesHistory>()?;
 
-        let history_key = StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
+        let history_key =
+            StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
 
         // Look up the history index for this (address, path)
         let Some((_key, list)) = history_cursor.seek_exact(history_key)? else {
@@ -213,7 +218,8 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
         };
 
         // Look up the value in the changeset table
-        let mut changeset_cursor = self.tx.cursor_dup_read::<tables::ExternalStorageBranchesChangeset>()?;
+        let mut changeset_cursor =
+            self.tx.cursor_dup_read::<tables::ExternalStorageBranchesChangeset>()?;
 
         if changeset_cursor.seek_exact(block_number)?.is_some() {
             // Find the entry for this address and path
@@ -246,7 +252,8 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalStorageBranchesHistory>()?;
 
-        let start_key = StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
+        let start_key =
+            StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
 
         // Seek to first entry >= (address, path)
         let Some((key, _list)) = history_cursor.seek(start_key)? else {
@@ -279,12 +286,15 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
     }
 }
 
-impl<TX: DbTx> OpProofsTrieCursor for MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChangeset, TX> {
+impl<TX: DbTx> OpProofsTrieCursor
+    for MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChangeset, TX>
+{
     fn seek_exact(
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let result = self.find_path_value(&target_path)?.map(|branch| (target_path.clone(), branch));
+        let result =
+            self.find_path_value(&target_path)?.map(|branch| (target_path.clone(), branch));
         if result.is_some() {
             self.current_path = Some(target_path);
         }
@@ -353,7 +363,8 @@ impl<TX: DbTx> MdbxAccountCursor<TX> {
         };
 
         // Look up the value in the changeset table
-        let mut changeset_cursor = self.tx.cursor_dup_read::<tables::ExternalHashedAccountsChangeset>()?;
+        let mut changeset_cursor =
+            self.tx.cursor_dup_read::<tables::ExternalHashedAccountsChangeset>()?;
 
         if changeset_cursor.seek_exact(block_number)?.is_some() {
             // Find the entry for this address
@@ -445,12 +456,7 @@ pub struct MdbxStorageCursor<TX> {
 
 impl<TX: DbTx> MdbxStorageCursor<TX> {
     pub(crate) fn new(tx: TX, max_block_number: u64, hashed_address: B256) -> Self {
-        Self {
-            tx,
-            max_block_number,
-            hashed_address,
-            current_storage_key: None,
-        }
+        Self { tx, max_block_number, hashed_address, current_storage_key: None }
     }
 
     /// Find the latest storage value using history index
@@ -472,7 +478,8 @@ impl<TX: DbTx> MdbxStorageCursor<TX> {
         };
 
         // Look up the value in the changeset table
-        let mut changeset_cursor = self.tx.cursor_dup_read::<tables::ExternalHashedStoragesChangeset>()?;
+        let mut changeset_cursor =
+            self.tx.cursor_dup_read::<tables::ExternalHashedStoragesChangeset>()?;
 
         if changeset_cursor.seek_exact(block_number)?.is_some() {
             // Find the entry for this address and storage key

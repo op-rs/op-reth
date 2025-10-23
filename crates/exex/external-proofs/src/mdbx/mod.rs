@@ -14,7 +14,7 @@ use crate::storage::{
 };
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::{
-    mdbx::{init_db_for, DatabaseArguments},
+    mdbx::{init_db_for, DatabaseArguments, MaxReadTransactionDuration},
     ClientVersion, DatabaseEnv, DatabaseError,
 };
 use reth_db_api::{
@@ -79,7 +79,8 @@ impl MdbxOpProofsStorage<DatabaseEnv> {
         // Create a NEW database with our external tables
         // This is SEPARATE from Reth's main database
         // init_db_for will create the directory and all tables automatically
-        let args = DatabaseArguments::new(ClientVersion::default());
+        let mut args = DatabaseArguments::new(ClientVersion::default());
+        args.max_read_transaction_duration(Some(MaxReadTransactionDuration::Unbounded));
         let db = init_db_for::<_, tables::Tables>(&path, args).map_err(|e| {
             OpProofsStorageError::Other(eyre::eyre!(
                 "Failed to initialize external storage database at {}: {}",

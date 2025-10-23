@@ -261,10 +261,10 @@ impl Tables {
     /// Check if the table is a DUPSORT table
     pub const fn is_dupsort(&self) -> bool {
         match self {
-            Self::ExternalAccountBranchesChangeset
-            | Self::ExternalStorageBranchesChangeset
-            | Self::ExternalHashedAccountsChangeset
-            | Self::ExternalHashedStoragesChangeset => true,
+            Self::ExternalAccountBranchesChangeset |
+            Self::ExternalStorageBranchesChangeset |
+            Self::ExternalHashedAccountsChangeset |
+            Self::ExternalHashedStoragesChangeset => true,
             _ => false,
         }
     }
