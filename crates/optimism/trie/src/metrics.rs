@@ -21,7 +21,7 @@ use strum::{EnumCount, EnumIter, IntoEnumIterator};
 /// Alias for [`OpProofsStorageWithMetrics`].
 pub type OpProofsStorage<S> = OpProofsStorageWithMetrics<S>;
 
-/// Alias for [`OpProofsTrieCursor`](cursor::OpProofsTrieCursor) with metrics layer.
+/// Alias for [`OpProofsTrieCursorRO`](cursor::OpProofsTrieCursor) with metrics layer.
 pub type OpProofsTrieCursor<C> = cursor::OpProofsTrieCursor<OpProofsTrieCursorWithMetrics<C>>;
 
 /// Alias for [`OpProofsHashedAccountCursor`](cursor::OpProofsHashedAccountCursor) with metrics
@@ -217,7 +217,7 @@ pub struct BlockMetrics {
     pub hashed_storages_written_total: Counter,
 }
 
-/// Wrapper for [`OpProofsTrieCursor`] that records metrics.
+/// Wrapper for [`OpProofsTrieCursorRO`] that records metrics.
 #[derive(Debug, Constructor, Clone)]
 pub struct OpProofsTrieCursorWithMetrics<C> {
     cursor: C,
@@ -275,14 +275,19 @@ impl<C: OpProofsHashedCursorRO> OpProofsHashedCursorRO for OpProofsHashedCursorW
     }
 }
 
-/// Wrapper around [`OpProofsStorage`] that records metrics for all operations.
-#[derive(Debug, Clone, Constructor)]
+/// Wrapper around [`OpProofsStore`] type that records metrics for all operations.
+#[derive(Debug, Clone)]
 pub struct OpProofsStorageWithMetrics<S> {
     storage: S,
     metrics: Arc<StorageMetrics>,
 }
 
 impl<S> OpProofsStorageWithMetrics<S> {
+    /// Initializes new [`StorageMetrics`] and wraps given storage instance.
+    pub fn new(storage: S) -> Self {
+        Self { storage, metrics: Arc::new(StorageMetrics::default()) }
+    }
+
     /// Get the underlying storage.
     pub const fn inner(&self) -> &S {
         &self.storage
@@ -492,5 +497,14 @@ where
         hash: B256,
     ) -> OpProofsStorageResult<()> {
         self.storage.set_earliest_block_number(block_number, hash).await
+    }
+}
+
+impl<S> From<S> for OpProofsStorageWithMetrics<S>
+where
+    S: OpProofsStore + Clone + 'static,
+{
+    fn from(storage: S) -> Self {
+        Self::new(storage)
     }
 }
