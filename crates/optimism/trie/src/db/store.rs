@@ -336,7 +336,7 @@ impl OpProofsStore for MdbxProofsStorage {
     }
 
     /// Prune all historical trie data prior to `new_earliest_block_number` using
-    /// the [`BlockChangeSet`](super::BlockChangeSet) index.
+    /// the [`BlockChangeSet`] index.
     async fn prune_earliest_state(
         &self,
         new_earliest_block_number: u64,
@@ -367,7 +367,8 @@ impl OpProofsStore for MdbxProofsStorage {
                 let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
                 let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
 
-                // TODO: abstract walker and delete logic into cursor methods to avoid code duplication
+                // TODO: abstract walker and delete logic into cursor methods to avoid code
+                // duplication
 
                 for (block_number, change_set) in &keys_to_prune {
                     match change_set.name {
