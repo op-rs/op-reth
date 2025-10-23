@@ -13,6 +13,7 @@ use reth_db_api::{
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
+use tracing::info;
 
 use super::{models::*, tables};
 use crate::storage::{OpProofsHashedCursor, OpProofsStorageResult, OpProofsTrieCursor};
@@ -48,7 +49,7 @@ impl<TX: DbTx> AccountTrieCursor<TX> {
         let stored_path = StoredNibbles(target_path.clone());
 
         // Look up the history index for this path
-        let Some((_key, list)) = history_cursor.seek_exact(stored_path)? else {
+        let Some((_key, list)) = history_cursor.seek_exact(stored_path.clone())? else {
             // Path never modified
             return Ok(None);
         };
@@ -65,30 +66,13 @@ impl<TX: DbTx> AccountTrieCursor<TX> {
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalAccountBranchesChangeset>()?;
 
-        // Seek to the block and find the entry for this path
-        if changeset_cursor.seek_exact(block_number)?.is_some() {
-            // Iterate through all entries at this block to find our path
-            loop {
-                let Some((block, value)) = changeset_cursor.current()? else {
-                    break;
-                };
+        let Some(StoredNibblesWithBranch(_, value)) =
+            changeset_cursor.seek_by_key_subkey(block_number, stored_path)?
+        else {
+            return Ok(None);
+        };
 
-                if block != block_number {
-                    break;
-                }
-
-                if &value.0 .0 == target_path {
-                    // Found it! Return the branch (or None if deleted)
-                    return Ok(value.1 .0.clone());
-                }
-
-                if changeset_cursor.next_dup()?.is_none() {
-                    break;
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(value.0.clone())
     }
 
     /// Find the first path >= target_path with a non-deleted value
@@ -206,7 +190,7 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
             StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
 
         // Look up the history index for this (address, path)
-        let Some((_key, list)) = history_cursor.seek_exact(history_key)? else {
+        let Some((_key, list)) = history_cursor.seek_exact(history_key.clone())? else {
             return Ok(None);
         };
 
@@ -221,28 +205,13 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalStorageBranchesChangeset>()?;
 
-        if changeset_cursor.seek_exact(block_number)?.is_some() {
-            // Find the entry for this address and path
-            loop {
-                let Some((block, value)) = changeset_cursor.current()? else {
-                    break;
-                };
+        let Some(StorageBranchEntry(_, value)) =
+            changeset_cursor.seek_by_key_subkey(block_number, history_key)?
+        else {
+            return Ok(None);
+        };
 
-                if block != block_number {
-                    break;
-                }
-
-                if value.0.hashed_address == self.hashed_address && &value.0.path.0 == target_path {
-                    return Ok(value.1 .0.clone());
-                }
-
-                if changeset_cursor.next_dup()?.is_none() {
-                    break;
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(value.0.clone())
     }
 
     /// Find the first path >= target_path for this address with a non-deleted value
@@ -366,45 +335,34 @@ impl<TX: DbTx> MdbxAccountCursor<TX> {
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalHashedAccountsChangeset>()?;
 
-        if changeset_cursor.seek_exact(block_number)?.is_some() {
-            // Find the entry for this address
-            loop {
-                let Some((block, value)) = changeset_cursor.current()? else {
-                    break;
-                };
+        let Some(HashedAccountEntry(_, value)) =
+            changeset_cursor.seek_by_key_subkey(block_number, address)?
+        else {
+            return Ok(None);
+        };
 
-                if block != block_number {
-                    break;
-                }
-
-                if value.0 == address {
-                    return Ok(value.1 .0.clone());
-                }
-
-                if changeset_cursor.next_dup()?.is_none() {
-                    break;
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(value.0.clone())
     }
 
     /// Find the first address >= target with a non-deleted value
     fn find_next_address(&self, target: B256) -> OpProofsStorageResult<Option<(B256, Account)>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedAccountsHistory>()?;
 
+        info!("seeking to first address >= target");
         // Seek to first address >= target
         let Some((address, _list)) = history_cursor.seek(target)? else {
             return Ok(None);
         };
+        info!("found address: {:?}", address);
 
         let mut current_address = address;
 
         // Iterate through addresses
         loop {
             // Try to get the account for this address
+            info!("finding account for address: {:?}", current_address);
             if let Some(account) = self.find_account(current_address)? {
+                info!("found account: {:?}", account);
                 return Ok(Some((current_address, account)));
             }
 
@@ -412,6 +370,8 @@ impl<TX: DbTx> MdbxAccountCursor<TX> {
             let Some((next_address, _list)) = history_cursor.next()? else {
                 return Ok(None);
             };
+
+            info!("moving to next address: {:?}", next_address);
 
             current_address = next_address;
         }
@@ -466,7 +426,7 @@ impl<TX: DbTx> MdbxStorageCursor<TX> {
         let history_key = HashedStorageSubKey::new(self.hashed_address, storage_key);
 
         // Look up the history index
-        let Some((_key, list)) = history_cursor.seek_exact(history_key)? else {
+        let Some((_key, list)) = history_cursor.seek_exact(history_key.clone())? else {
             return Ok(None);
         };
 
@@ -481,30 +441,13 @@ impl<TX: DbTx> MdbxStorageCursor<TX> {
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalHashedStoragesChangeset>()?;
 
-        if changeset_cursor.seek_exact(block_number)?.is_some() {
-            // Find the entry for this address and storage key
-            loop {
-                let Some((block, value)) = changeset_cursor.current()? else {
-                    break;
-                };
+        let Some(HashedStorageEntry(_, value)) =
+            changeset_cursor.seek_by_key_subkey(block_number, history_key)?
+        else {
+            return Ok(None);
+        };
 
-                if block != block_number {
-                    break;
-                }
-
-                if value.0.hashed_address == self.hashed_address &&
-                    value.0.hashed_storage_key == storage_key
-                {
-                    return Ok(value.1 .0.map(|v| U256::from_be_slice(v.as_slice())));
-                }
-
-                if changeset_cursor.next_dup()?.is_none() {
-                    break;
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(value.0.map(|v| U256::from_be_slice(v.as_slice())))
     }
 
     /// Find the first storage key >= target for this address with a non-deleted value
