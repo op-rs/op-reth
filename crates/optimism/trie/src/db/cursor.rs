@@ -16,6 +16,7 @@ use reth_db::{
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
+use tracing::info;
 
 /// Generic alias for dup cursor for T
 pub(crate) type Dup<'tx, T> = <<DatabaseEnv as Database>::TX as DbTx>::DupCursor<T>;
@@ -286,11 +287,31 @@ where
 
     fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
         let storage_key = HashedStorageKey::new(self.hashed_address, key);
-        self.inner.seek(storage_key).map(|opt| opt.map(|(k, v)| (k.hashed_storage_key, v.0)))
+        let result = self
+            .inner
+            .seek(storage_key)
+            .map(|opt| {
+                opt.and_then(|(k, v)| {
+                    // Only return entries that belong to the bound address
+                    (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
+                })
+            })?;
+
+        Ok(result)
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
-        self.inner.next().map(|opt| opt.map(|(k, v)| (k.hashed_storage_key, v.0)))
+        let result = self
+            .inner
+            .next()
+            .map(|opt| {
+                opt.and_then(|(k, v)| {
+                    // Only return entries that belong to the bound address
+                    (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
+                })
+            })?;
+
+        Ok(result)
     }
 }
 
@@ -1143,6 +1164,51 @@ mod tests {
 
         let (k2, v2) = OpProofsHashedCursorRO::next(&mut cur).expect("ok").expect("some");
         assert_eq!((k2, v2), (s2, U256::from(22)));
+    }
+
+    #[test]
+    fn hashed_storage_address_boundry() {
+        let db = setup_db();
+        let addr1 = B256::from([0xAC; 32]);
+        let addr2 = B256::from([0xAD; 32]);
+        let s1 = B256::from([0x01; 32]);
+        let s2 = B256::from([0x02; 32]);
+        let s3 = B256::from([0x03; 32]);
+
+        {
+            let wtx = db.tx_mut().expect("rw");
+            append_hashed_storage(&wtx, addr1, s1, 10, Some(U256::from(11)));
+            append_hashed_storage(&wtx, addr1, s2, 10, Some(U256::from(22)));
+            wtx.commit().expect("commit");
+        }
+
+        {
+            let wtx = db.tx_mut().expect("rw");
+            append_hashed_storage(&wtx, addr2, s1, 10, Some(U256::from(33)));
+            append_hashed_storage(&wtx, addr2, s2, 10, Some(U256::from(44)));
+            wtx.commit().expect("commit");
+        }
+
+        let tx = db.tx().expect("ro");
+        let mut cur = storage_cursor(&tx, 100, addr1);
+
+        let (k1, v1) = OpProofsHashedCursorRO::next(&mut cur).expect("ok").expect("some");
+        assert_eq!((k1, v1), (s1, U256::from(11)));
+
+        let (k2, v2) = OpProofsHashedCursorRO::next(&mut cur).expect("ok").expect("some");
+        assert_eq!((k2, v2), (s2, U256::from(22)));
+
+        let out = OpProofsHashedCursorRO::next(&mut cur).expect("ok");
+        assert!(out.is_none(), "should stop at address boundary");
+
+        let (k1, v1) = OpProofsHashedCursorRO::seek(&mut cur, s1).expect("ok").expect("some");
+        assert_eq!((k1, v1), (s1, U256::from(11)));
+
+        let (k2, v2) = OpProofsHashedCursorRO::seek(&mut cur, s2).expect("ok").expect("some");
+        assert_eq!((k2, v2), (s2, U256::from(22)));
+
+        let out = OpProofsHashedCursorRO::seek(&mut cur, s3).expect("ok");
+        assert!(out.is_none(), "should not see keys from other address");
     }
 
     #[test]
