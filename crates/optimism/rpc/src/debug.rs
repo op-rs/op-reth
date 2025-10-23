@@ -1,7 +1,6 @@
 //! Historical proofs RPC server implementation for `debug_` namespace.
 
-use std::{marker::PhantomData, sync::Arc};
-
+use crate::state::OpStateProviderFactory;
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_primitives::B256;
 use alloy_rpc_types_debug::ExecutionWitness;
@@ -28,9 +27,8 @@ use reth_provider::{
 use reth_rpc_api::eth::helpers::FullEthApi;
 use reth_rpc_server_types::{result::internal_rpc_err, ToRpcResult};
 use reth_tasks::TaskSpawner;
+use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::{oneshot, Semaphore};
-
-use crate::state::OpStateProviderFactory;
 
 #[cfg_attr(not(test), rpc(server, namespace = "debug"))]
 #[cfg_attr(test, rpc(server, client, namespace = "debug"))]

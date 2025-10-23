@@ -1,5 +1,6 @@
 //! Historical proofs RPC server implementation.
 
+use crate::state::OpStateProviderFactory;
 use alloy_eips::BlockId;
 use alloy_primitives::Address;
 use alloy_rpc_types_eth::EIP1186AccountProofResponse;
@@ -11,8 +12,6 @@ use jsonrpsee_types::error::ErrorObject;
 use reth_optimism_trie::{OpProofsStorage, OpProofsStore};
 use reth_provider::StateProofProvider;
 use reth_rpc_api::eth::helpers::FullEthApi;
-
-use crate::state::OpStateProviderFactory;
 
 #[cfg_attr(not(test), rpc(server, namespace = "eth"))]
 #[cfg_attr(test, rpc(server, client, namespace = "eth"))]
