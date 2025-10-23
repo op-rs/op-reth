@@ -225,14 +225,9 @@ where
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         if let Some(address) = self.hashed_address {
             let key = StorageTrieKey::new(address, StoredNibbles(path));
-            return self
-                .inner
-                .seek_exact(key)
-                .map(|opt| {
-                    opt.and_then(|(k, node)| {
-                        (k.hashed_address == address).then_some((k.path.0, node))
-                    })
-                })
+            return self.inner.seek_exact(key).map(|opt| {
+                opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
+            })
         }
         Ok(None)
     }
@@ -243,43 +238,30 @@ where
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         if let Some(address) = self.hashed_address {
             let key = StorageTrieKey::new(address, StoredNibbles(path));
-            return self
-                .inner
-                .seek(key)
-                .map(|opt| {
-                    opt.and_then(|(k, node)| {
-                        (k.hashed_address == address).then_some((k.path.0, node))
-                    })
-                })
+            return self.inner.seek(key).map(|opt| {
+                opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
+            })
         }
         Ok(None)
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         if let Some(address) = self.hashed_address {
-            return self
-                .inner
-                .next()
-                .map(|opt| {
-                    opt.and_then(|(k, node)| {
-                        (k.hashed_address == address).then_some((k.path.0, node))
-                    })
-                })
+            return self.inner.next().map(|opt| {
+                opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
+            })
         }
         Ok(None)
     }
 
     fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
         if let Some(address) = self.hashed_address {
-            return self.inner
+            return self
+                .inner
                 .cursor
                 .current()
                 .map_err(|e| OpProofsStorageError::Other(e.into()))
-                .map(|opt| {
-                    opt.and_then(|(k, _)| {
-                        (k.hashed_address == address).then_some(k.path.0)
-                    })
-                })
+                .map(|opt| opt.and_then(|(k, _)| (k.hashed_address == address).then_some(k.path.0)))
         }
         Ok(None)
     }
@@ -310,29 +292,23 @@ where
 
     fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
         let storage_key = HashedStorageKey::new(self.hashed_address, key);
-        let result = self
-            .inner
-            .seek(storage_key)
-            .map(|opt| {
-                opt.and_then(|(k, v)| {
-                    // Only return entries that belong to the bound address
-                    (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
-                })
-            })?;
+        let result = self.inner.seek(storage_key).map(|opt| {
+            opt.and_then(|(k, v)| {
+                // Only return entries that belong to the bound address
+                (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
+            })
+        })?;
 
         Ok(result)
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
-        let result = self
-            .inner
-            .next()
-            .map(|opt| {
-                opt.and_then(|(k, v)| {
-                    // Only return entries that belong to the bound address
-                    (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
-                })
-            })?;
+        let result = self.inner.next().map(|opt| {
+            opt.and_then(|(k, v)| {
+                // Only return entries that belong to the bound address
+                (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
+            })
+        })?;
 
         Ok(result)
     }
@@ -1237,7 +1213,7 @@ mod tests {
     }
 
     #[test]
-    fn hashed_storage_address_boundry() {
+    fn hashed_storage_address_boundary() {
         let db = setup_db();
         let addr1 = B256::from([0xAC; 32]);
         let addr2 = B256::from([0xAD; 32]);
