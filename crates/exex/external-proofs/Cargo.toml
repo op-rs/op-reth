@@ -33,6 +33,7 @@ reth-storage-api.workspace = true
 reth-trie.workspace = true
 reth-trie-common.workspace = true
 reth-execution-errors.workspace = true
+reth-codecs.workspace = true
 
 # misc
 auto_impl.workspace = true

@@ -4,12 +4,13 @@
 
 use alloy_primitives::B256;
 use bytes::{Buf, BufMut};
+use reth_codecs::Compact;
 use reth_db_api::{
     table::{Compress, Decode, Decompress, Encode},
     DatabaseError,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{BranchNodeCompact, StoredNibbles};
+use reth_trie::{BranchNodeCompact, StoredNibbles, StoredNibblesSubKey};
 use serde::{Deserialize, Serialize};
 
 use super::codec::MaybeDeleted;
@@ -160,10 +161,10 @@ impl Compress for StoredNibblesWithBranch {
     type Compressed = Vec<u8>;
 
     fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
-        // Store path with length prefix: [length_byte][nibbles...]
-        let nibbles_vec = self.0 .0.to_vec();
-        buf.put_u8(nibbles_vec.len() as u8);
-        buf.put_slice(&nibbles_vec);
+        // Store path using StoredNibblesSubKey encoding (Compact, no length prefix)
+        // This ensures proper lexicographic sorting in DupSort
+        let subkey = StoredNibblesSubKey(self.0 .0.clone());
+        subkey.to_compact(buf);
         // Then store the branch
         self.1.compress_to_buf(buf);
     }
@@ -175,21 +176,12 @@ impl Decompress for StoredNibblesWithBranch {
             return Err(DatabaseError::Decode);
         }
 
-        // Read length prefix
-        let mut buf = value;
-        let len = buf.get_u8() as usize;
-
-        if buf.len() < len {
-            return Err(DatabaseError::Decode);
-        }
-
-        // Read the nibbles
-        let nibbles_bytes = &buf[..len];
-        let path = StoredNibbles::from(nibbles_bytes.to_vec());
-        buf = &buf[len..];
+        // Read the nibbles using Compact encoding (StoredNibblesSubKey)
+        let (subkey, remaining_bytes) = StoredNibblesSubKey::from_compact(value, value.len());
+        let path = StoredNibbles(subkey.0);
 
         // Remaining bytes are the branch
-        let branch = MaybeDeleted::<BranchNodeCompact>::decompress(buf)?;
+        let branch = MaybeDeleted::<BranchNodeCompact>::decompress(remaining_bytes)?;
 
         Ok(Self(path, branch))
     }
@@ -208,10 +200,10 @@ impl Compress for StorageBranchEntry {
     fn compress_to_buf<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
         // Encode address (32 bytes)
         buf.put_slice(self.0.hashed_address.as_slice());
-        // Encode path with length prefix
-        let nibbles_vec = self.0.path.0.to_vec();
-        buf.put_u8(nibbles_vec.len() as u8);
-        buf.put_slice(&nibbles_vec);
+        // Encode path using StoredNibblesSubKey (Compact, no length prefix)
+        // This ensures proper lexicographic sorting in DupSort
+        let subkey = StoredNibblesSubKey(self.0.path.0.clone());
+        subkey.to_compact(buf);
         // Then encode the branch (MaybeDeleted)
         self.1.compress_to_buf(buf);
     }
@@ -219,31 +211,23 @@ impl Compress for StorageBranchEntry {
 
 impl Decompress for StorageBranchEntry {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
-        if value.len() < 33 {
-            // At least 32 bytes for address + 1 byte for length
+        if value.len() < 32 {
+            // At least 32 bytes for address
             return Err(DatabaseError::Decode);
         }
 
         // Decode address (first 32 bytes)
         let hashed_address = B256::from_slice(&value[..32]);
 
-        // Read path length
-        let mut buf = &value[32..];
-        let path_len = buf.get_u8() as usize;
-
-        if buf.len() < path_len {
-            return Err(DatabaseError::Decode);
-        }
-
-        // Read path nibbles
-        let nibbles_bytes = &buf[..path_len];
-        let path = StoredNibbles::from(nibbles_bytes.to_vec());
-        buf = &buf[path_len..];
+        // Read path using Compact encoding (StoredNibblesSubKey)
+        let (subkey, remaining_bytes) =
+            StoredNibblesSubKey::from_compact(&value[32..], value.len() - 32);
+        let path = StoredNibbles(subkey.0);
 
         let key = StorageBranchSubKey::new(hashed_address, path);
 
         // Remaining bytes are the branch
-        let branch = MaybeDeleted::<BranchNodeCompact>::decompress(buf)?;
+        let branch = MaybeDeleted::<BranchNodeCompact>::decompress(remaining_bytes)?;
 
         Ok(Self(key, branch))
     }

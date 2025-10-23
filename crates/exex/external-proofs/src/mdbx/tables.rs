@@ -13,6 +13,7 @@ use super::{
 use crate::models::IntegerList;
 use alloy_primitives::B256;
 use reth_db_api::table::{DupSort, Table};
+use reth_trie::StoredNibblesSubKey;
 use reth_trie_common::StoredNibbles;
 
 // ============================================================================
@@ -38,7 +39,7 @@ impl Table for ExternalAccountBranchesChangeset {
 }
 
 impl DupSort for ExternalAccountBranchesChangeset {
-    type SubKey = StoredNibbles; // path
+    type SubKey = StoredNibblesSubKey; // path
 }
 
 /// Storage trie branches changeset (DupSort by block_number)

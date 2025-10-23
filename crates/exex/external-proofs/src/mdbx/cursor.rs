@@ -12,8 +12,7 @@ use reth_db_api::{
     transaction::DbTx,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
-use tracing::info;
+use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles, StoredNibblesSubKey};
 
 use super::{models::*, tables};
 use crate::storage::{OpProofsHashedCursor, OpProofsStorageResult, OpProofsTrieCursor};
@@ -66,11 +65,15 @@ impl<TX: DbTx> AccountTrieCursor<TX> {
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalAccountBranchesChangeset>()?;
 
-        let Some(StoredNibblesWithBranch(_, value)) =
-            changeset_cursor.seek_by_key_subkey(block_number, stored_path)?
+        let Some(StoredNibblesWithBranch(key, value)) = changeset_cursor
+            .seek_by_key_subkey(block_number, StoredNibblesSubKey(target_path.clone()))?
         else {
             return Ok(None);
         };
+
+        if &key.0 != target_path {
+            return Ok(None);
+        }
 
         Ok(value.0.clone())
     }
@@ -79,15 +82,24 @@ impl<TX: DbTx> AccountTrieCursor<TX> {
     fn find_next_path(
         &self,
         target_path: &Nibbles,
+        inclusive: bool,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalAccountBranchesHistory>()?;
 
         let stored_target = StoredNibbles(target_path.clone());
 
         // Seek to the first path >= target_path in the history table
-        let Some((key, _list)) = history_cursor.seek(stored_target)? else {
+        let Some((mut key, _list)) = history_cursor.seek(stored_target.clone())? else {
             return Ok(None);
         };
+
+        // if equal, call next
+        if key == stored_target && !inclusive {
+            let Some((next_key, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+            key = next_key;
+        }
 
         let mut current_key = key;
 
@@ -127,7 +139,7 @@ impl<TX: DbTx> OpProofsTrieCursor for AccountTrieCursor<TX> {
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let result = self.find_next_path(&target_path)?;
+        let result = self.find_next_path(&target_path, true)?;
         if let Some((ref path, _)) = result {
             self.current_path = Some(path.clone());
         }
@@ -135,16 +147,16 @@ impl<TX: DbTx> OpProofsTrieCursor for AccountTrieCursor<TX> {
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let next_path = if let Some(current) = &self.current_path {
-            // Find next path after current
-            let mut next = current.clone();
-            next.push(0);
-            next
+        let result = if let Some(ref current) = self.current_path {
+            self.find_next_path(current, false)?
         } else {
-            Nibbles::default()
+            self.seek(Nibbles::default())?
         };
 
-        self.seek(next_path)
+        if let Some((ref path, _)) = result {
+            self.current_path = Some(path.clone());
+        }
+        Ok(result)
     }
 
     fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
@@ -205,11 +217,15 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalStorageBranchesChangeset>()?;
 
-        let Some(StorageBranchEntry(_, value)) =
-            changeset_cursor.seek_by_key_subkey(block_number, history_key)?
+        let Some(StorageBranchEntry(key, value)) =
+            changeset_cursor.seek_by_key_subkey(block_number, history_key.clone())?
         else {
             return Ok(None);
         };
+
+        if key != history_key {
+            return Ok(None);
+        }
 
         Ok(value.0.clone())
     }
@@ -218,6 +234,7 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
     fn find_next_path(
         &self,
         target_path: &Nibbles,
+        inclusive: bool,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalStorageBranchesHistory>()?;
 
@@ -225,9 +242,17 @@ impl<TX: DbTx> MdbxOpProofsStorageTrieCursor<tables::ExternalStorageBranchesChan
             StorageBranchSubKey::new(self.hashed_address, StoredNibbles(target_path.clone()));
 
         // Seek to first entry >= (address, path)
-        let Some((key, _list)) = history_cursor.seek(start_key)? else {
+        let Some((mut key, _list)) = history_cursor.seek(start_key.clone())? else {
             return Ok(None);
         };
+
+        // if equal, call next if not inclusive
+        if key == start_key && !inclusive {
+            let Some((next_key, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+            key = next_key;
+        }
 
         let mut current_key = key;
 
@@ -274,7 +299,7 @@ impl<TX: DbTx> OpProofsTrieCursor
         &mut self,
         target_path: Nibbles,
     ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let result = self.find_next_path(&target_path)?;
+        let result = self.find_next_path(&target_path, true)?;
         if let Some((ref path, _)) = result {
             self.current_path = Some(path.clone());
         }
@@ -282,15 +307,16 @@ impl<TX: DbTx> OpProofsTrieCursor
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
-        let next_path = if let Some(current) = &self.current_path {
-            let mut next = current.clone();
-            next.push(0);
-            next
+        let result = if let Some(ref current) = self.current_path {
+            self.find_next_path(current, false)?
         } else {
-            Nibbles::default()
+            self.seek(Nibbles::default())?
         };
 
-        self.seek(next_path)
+        if let Some((ref path, _)) = result {
+            self.current_path = Some(path.clone());
+        }
+        Ok(result)
     }
 
     fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
@@ -335,23 +361,39 @@ impl<TX: DbTx> MdbxAccountCursor<TX> {
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalHashedAccountsChangeset>()?;
 
-        let Some(HashedAccountEntry(_, value)) =
+        let Some(HashedAccountEntry(key, value)) =
             changeset_cursor.seek_by_key_subkey(block_number, address)?
         else {
             return Ok(None);
         };
 
+        if key != address {
+            return Ok(None);
+        }
+
         Ok(value.0.clone())
     }
 
     /// Find the first address >= target with a non-deleted value
-    fn find_next_address(&self, target: B256) -> OpProofsStorageResult<Option<(B256, Account)>> {
+    fn find_next_address(
+        &self,
+        target: B256,
+        inclusive: bool,
+    ) -> OpProofsStorageResult<Option<(B256, Account)>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedAccountsHistory>()?;
 
         // Seek to first address >= target
-        let Some((address, _list)) = history_cursor.seek(target)? else {
+        let Some((mut address, _list)) = history_cursor.seek(target)? else {
             return Ok(None);
         };
+
+        // if equal, call next
+        if address == target && !inclusive {
+            let Some((next_address, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+            address = next_address;
+        }
 
         let mut current_address = address;
 
@@ -376,7 +418,7 @@ impl<TX: DbTx> OpProofsHashedCursor for MdbxAccountCursor<TX> {
     type Value = Account;
 
     fn seek(&mut self, target_address: B256) -> OpProofsStorageResult<Option<(B256, Account)>> {
-        let result = self.find_next_address(target_address)?;
+        let result = self.find_next_address(target_address, true)?;
         if let Some((addr, _)) = result {
             self.current_address = Some(addr);
         }
@@ -384,14 +426,16 @@ impl<TX: DbTx> OpProofsHashedCursor for MdbxAccountCursor<TX> {
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Account)>> {
-        let next_addr = if let Some(current) = self.current_address {
-            // Increment address by 1
-            increment_b256(current)
+        let result = if let Some(current) = self.current_address {
+            self.find_next_address(current, false)?
         } else {
-            B256::ZERO
+            self.seek(B256::ZERO)?
         };
 
-        self.seek(next_addr)
+        if result.is_some() {
+            self.current_address = Some(result.unwrap().0);
+        }
+        Ok(result)
     }
 }
 
@@ -435,25 +479,41 @@ impl<TX: DbTx> MdbxStorageCursor<TX> {
         let mut changeset_cursor =
             self.tx.cursor_dup_read::<tables::ExternalHashedStoragesChangeset>()?;
 
-        let Some(HashedStorageEntry(_, value)) =
-            changeset_cursor.seek_by_key_subkey(block_number, history_key)?
+        let Some(HashedStorageEntry(key, value)) =
+            changeset_cursor.seek_by_key_subkey(block_number, history_key.clone())?
         else {
             return Ok(None);
         };
+
+        if key != history_key {
+            return Ok(None);
+        }
 
         Ok(value.0.map(|v| U256::from_be_slice(v.as_slice())))
     }
 
     /// Find the first storage key >= target for this address with a non-deleted value
-    fn find_next_storage(&self, target: B256) -> OpProofsStorageResult<Option<(B256, U256)>> {
+    fn find_next_storage(
+        &self,
+        target: B256,
+        inclusive: bool,
+    ) -> OpProofsStorageResult<Option<(B256, U256)>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedStoragesHistory>()?;
 
         let start_key = HashedStorageSubKey::new(self.hashed_address, target);
 
         // Seek to first entry >= (address, storage_key)
-        let Some((key, _list)) = history_cursor.seek(start_key)? else {
+        let Some((mut key, _list)) = history_cursor.seek(start_key.clone())? else {
             return Ok(None);
         };
+
+        // if equal, call next
+        if key == start_key && !inclusive {
+            let Some((next_key, _list)) = history_cursor.next()? else {
+                return Ok(None);
+            };
+            key = next_key;
+        }
 
         let mut current_key = key;
 
@@ -485,7 +545,7 @@ impl<TX: DbTx> OpProofsHashedCursor for MdbxStorageCursor<TX> {
     type Value = U256;
 
     fn seek(&mut self, target_storage_key: B256) -> OpProofsStorageResult<Option<(B256, U256)>> {
-        let result = self.find_next_storage(target_storage_key)?;
+        let result = self.find_next_storage(target_storage_key, true)?;
         if let Some((key, _)) = result {
             self.current_storage_key = Some(key);
         }
@@ -493,13 +553,16 @@ impl<TX: DbTx> OpProofsHashedCursor for MdbxStorageCursor<TX> {
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, U256)>> {
-        let next_key = if let Some(current) = self.current_storage_key {
-            increment_b256(current)
+        let result = if let Some(current) = self.current_storage_key {
+            self.find_next_storage(current, false)?
         } else {
-            B256::ZERO
+            self.seek(B256::ZERO)?
         };
 
-        self.seek(next_key)
+        if result.is_some() {
+            self.current_storage_key = Some(result.unwrap().0);
+        }
+        Ok(result)
     }
 }
 
@@ -532,17 +595,4 @@ fn find_last_block_in_list(
 
     // Select the element at rank-1 (0-indexed)
     Ok(inner.select(rank - 1))
-}
-
-/// Increment a B256 by 1 (for iterating to next key)
-fn increment_b256(mut value: B256) -> B256 {
-    for i in (0..32).rev() {
-        if value.0[i] == 255 {
-            value.0[i] = 0;
-        } else {
-            value.0[i] += 1;
-            break;
-        }
-    }
-    value
 }
