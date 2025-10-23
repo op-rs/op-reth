@@ -78,6 +78,6 @@ tables! {
     table BlockChangeSet {
         type Key = u64; // Block number
         type Value = TableChangeSet;
-        type SubKey = TableName;
+        type SubKey = Vec<u8>; // Encoded table key
     }
 }

@@ -45,12 +45,12 @@ impl Decode for TableName {
 /// All keys changed at a specific block for a given table.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct TableChangeSet {
-    /// The name of the table where the key is located.
-    pub name: TableName,
     /// The key of the entry in the table.
     /// Mdbx stores encoded keys so we can store them as raw bytes
     /// And avoid dealing with different key types here.
     pub table_key: Vec<u8>,
+    /// The name of the table where the key is located.
+    pub name: TableName,
 }
 
 impl Encode for TableChangeSet {
