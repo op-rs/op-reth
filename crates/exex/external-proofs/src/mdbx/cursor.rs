@@ -348,21 +348,17 @@ impl<TX: DbTx> MdbxAccountCursor<TX> {
     fn find_next_address(&self, target: B256) -> OpProofsStorageResult<Option<(B256, Account)>> {
         let mut history_cursor = self.tx.cursor_read::<tables::ExternalHashedAccountsHistory>()?;
 
-        info!("seeking to first address >= target");
         // Seek to first address >= target
         let Some((address, _list)) = history_cursor.seek(target)? else {
             return Ok(None);
         };
-        info!("found address: {:?}", address);
 
         let mut current_address = address;
 
         // Iterate through addresses
         loop {
             // Try to get the account for this address
-            info!("finding account for address: {:?}", current_address);
             if let Some(account) = self.find_account(current_address)? {
-                info!("found account: {:?}", account);
                 return Ok(Some((current_address, account)));
             }
 
@@ -370,8 +366,6 @@ impl<TX: DbTx> MdbxAccountCursor<TX> {
             let Some((next_address, _list)) = history_cursor.next()? else {
                 return Ok(None);
             };
-
-            info!("moving to next address: {:?}", next_address);
 
             current_address = next_address;
         }

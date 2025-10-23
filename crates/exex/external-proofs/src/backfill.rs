@@ -337,9 +337,6 @@ where
         loop {
             let source = HashedStoragesIterWithStorageKey::new(HashedStoragesIter::new(cursor));
             let save_fn = async |entries: Vec<((B256, B256), U256)>| -> eyre::Result<()> {
-                info!("Saving {} entries for hashed storage", entries.len());
-                info!("first entry key: {:?}", entries[0].0);
-                info!("last entry key: {:?}", entries[entries.len() - 1].0);
                 // Group entries by hashed address
                 let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> =
                     HashMap::default();
