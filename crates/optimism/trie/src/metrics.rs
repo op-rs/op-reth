@@ -4,8 +4,8 @@ use crate::{
     cursor, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageResult, OpProofsStore,
     OpProofsTrieCursorRO,
 };
-use alloy_primitives::{map::HashMap, B256, U256};
 use alloy_eips::eip1898::BlockWithParent;
+use alloy_primitives::{map::HashMap, B256, U256};
 use derive_more::Constructor;
 use metrics::{Counter, Histogram};
 use reth_metrics::Metrics;

@@ -5,7 +5,7 @@ use crate::{
     provider::OpProofsStateProviderRef,
     OpProofsStorage,
 };
-use alloy_eips::{NumHash, eip1898::BlockWithParent};
+use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use derive_more::Constructor;
 use reth_evm::{execute::Executor, ConfigureEvm};
 use reth_primitives_traits::{AlloyBlockHeader, BlockTy, RecoveredBlock};
@@ -49,7 +49,6 @@ where
             return Err(OpProofsStorageError::NoBlocksFound.into());
         };
 
-
         let fetch_block_duration = start.elapsed();
 
         let parent_block_number = block.number() - 1;
@@ -66,10 +65,8 @@ where
             .into());
         }
 
-        let block_ref = BlockWithParent::new(
-            block.parent_hash(),
-            NumHash::new(block.number(), block.hash()),
-        );
+        let block_ref =
+            BlockWithParent::new(block.parent_hash(), NumHash::new(block.number(), block.hash()));
 
         // TODO: should we check block hash here?
 
@@ -115,9 +112,14 @@ where
         let execute_and_store_total_duration = start.elapsed();
 
         info!(
-            block_number = block.number(), ?execute_and_store_total_duration, ?fetch_block_duration,
-            ?init_provider_duration, ?execute_block_duration, ?calculate_state_root_duration,
-            ?write_trie_updates_duration, "Stored trie updates",
+            block_number = block.number(),
+            ?execute_and_store_total_duration,
+            ?fetch_block_duration,
+            ?init_provider_duration,
+            ?execute_block_duration,
+            ?calculate_state_root_duration,
+            ?write_trie_updates_duration,
+            "Stored trie updates",
         );
 
         Ok(())

@@ -1,7 +1,7 @@
 //! Storage API for external storage of intermediary trie nodes.
 
-use alloy_primitives::{map::HashMap, B256, U256};
 use alloy_eips::eip1898::BlockWithParent;
+use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
 use reth_db::DatabaseError;
 use reth_primitives_traits::Account;

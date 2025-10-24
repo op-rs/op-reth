@@ -629,8 +629,8 @@ impl OpProofsStore for InMemoryProofsStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::U256;
     use alloy_eips::NumHash;
+    use alloy_primitives::U256;
     use reth_primitives_traits::Account;
 
     #[tokio::test]
@@ -664,7 +664,8 @@ mod tests {
         let block_state_diff =
             BlockStateDiff { trie_updates: trie_updates.clone(), post_state: post_state.clone() };
 
-        const BLOCK: BlockWithParent = BlockWithParent::new(B256::ZERO, NumHash::new(5, B256::ZERO));
+        const BLOCK: BlockWithParent =
+            BlockWithParent::new(B256::ZERO, NumHash::new(5, B256::ZERO));
         storage.store_trie_updates(BLOCK, block_state_diff).await?;
 
         let retrieved_diff = storage.fetch_trie_updates(BLOCK.block.number).await?;

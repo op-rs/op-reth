@@ -1,7 +1,7 @@
 //! Common test suite for [`OpProofsStore`] implementations.
 
+use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
-use alloy_eips::{NumHash, eip1898::BlockWithParent};
 use reth_optimism_trie::{
     BlockStateDiff, InMemoryProofsStorage, OpProofsHashedCursorRO, OpProofsStorageError,
     OpProofsStore, OpProofsTrieCursorRO,
@@ -91,10 +91,7 @@ async fn test_earliest_block_operations<S: OpProofsStore>(
 async fn test_trie_updates_operations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
-    let block_ref = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(50, B256::repeat_byte(0x96)),
-    );
+    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
     let trie_updates = TrieUpdates::default();
     let post_state = HashedPostState::default();
     let block_state_diff =
@@ -1119,10 +1116,7 @@ async fn test_store_trie_updates_with_wiped_storage<S: OpProofsStore>(
     use reth_trie::HashedStorage;
 
     let hashed_address = B256::repeat_byte(0x01);
-    let block_ref = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(100, B256::repeat_byte(0x96)),
-    );
+    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // First, store some storage values at block 50
     let storage_slots = vec![
@@ -1207,10 +1201,7 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
 ) -> Result<(), OpProofsStorageError> {
     use reth_trie::{updates::StorageTrieUpdates, HashedStorage};
 
-    let block_ref = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(100, B256::repeat_byte(0x96)),
-    );
+    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // Create comprehensive trie updates with branches, leaves, and removals
     let mut trie_updates = TrieUpdates::default();
@@ -1290,7 +1281,8 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     assert!(removed_result.is_none(), "Removed account node should not be found");
 
     // ========== Verify Storage Branch Nodes ==========
-    let mut storage_trie_cursor = storage.storage_trie_cursor(hashed_address, block_ref.block.number + 10)?;
+    let mut storage_trie_cursor =
+        storage.storage_trie_cursor(hashed_address, block_ref.block.number + 10)?;
 
     let storage_result1 = storage_trie_cursor.seek_exact(storage_path1)?;
     assert!(storage_result1.is_some(), "Storage branch node 1 should be found");
@@ -1323,7 +1315,8 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     );
 
     // ========== Verify Storage Leaves ==========
-    let mut storage_cursor = storage.storage_hashed_cursor(storage_addr, block_ref.block.number + 10)?;
+    let mut storage_cursor =
+        storage.storage_hashed_cursor(storage_addr, block_ref.block.number + 10)?;
 
     let slot1_result = storage_cursor.seek(B256::repeat_byte(0x01))?;
     assert!(slot1_result.is_some(), "Storage slot 1 should be found");
@@ -1378,10 +1371,7 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
 ) -> Result<(), OpProofsStorageError> {
     use reth_trie::{updates::StorageTrieUpdates, HashedStorage};
 
-    let block_ref_50 = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(50, B256::repeat_byte(0x96)),
-    );
+    let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
 
     // ========== Setup: Store initial state at blocks 50, 100, 101 ==========
     let initial_account_addr = B256::repeat_byte(0x10);
@@ -1420,10 +1410,8 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
         post_state: initial_post_state_100,
     };
 
-    let block_ref_100 = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(100, B256::repeat_byte(0x97)),
-    );
+    let block_ref_100 =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x97)));
 
     storage.store_trie_updates(block_ref_100, initial_diff_100).await?;
 
@@ -1441,10 +1429,8 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
         trie_updates: initial_trie_updates_101,
         post_state: initial_post_state_101,
     };
-    let block_ref_101 = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(101, B256::repeat_byte(0x98)),
-    );
+    let block_ref_101 =
+        BlockWithParent::new(B256::ZERO, NumHash::new(101, B256::repeat_byte(0x98)));
     storage.store_trie_updates(block_ref_101, initial_diff_101).await?;
 
     // ========== Verify initial state exists ==========
@@ -1652,10 +1638,7 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    let block_ref_50 = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(50, B256::repeat_byte(0x96)),
-    );
+    let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
 
     storage.store_trie_updates(block_ref_50, initial_diff).await?;
 
@@ -1696,10 +1679,8 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    let block_ref_100 = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(100, B256::repeat_byte(0x97)),
-    );
+    let block_ref_100 =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x97)));
 
     storage.store_trie_updates(block_ref_100, deletion_diff).await?;
 
@@ -1786,10 +1767,7 @@ async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    let block_ref_50 = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(50, B256::repeat_byte(0x96)),
-    );
+    let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
 
     storage.store_trie_updates(block_ref_50, initial_diff).await?;
 
@@ -1830,10 +1808,8 @@ async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    let block_ref_100 = BlockWithParent::new(
-        B256::ZERO,
-        NumHash::new(100, B256::repeat_byte(0x97)),
-    );
+    let block_ref_100 =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x97)));
 
     storage.store_trie_updates(block_ref_100, conflicting_diff).await?;
 

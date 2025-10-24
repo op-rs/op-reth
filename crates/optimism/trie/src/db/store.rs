@@ -10,8 +10,8 @@ use crate::{
     },
     BlockStateDiff, OpProofsStorageError, OpProofsStorageResult, OpProofsStore,
 };
-use alloy_primitives::{map::HashMap, B256, U256};
 use alloy_eips::eip1898::BlockWithParent;
+use alloy_primitives::{map::HashMap, B256, U256};
 use itertools::Itertools;
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRW},
@@ -314,8 +314,10 @@ impl OpProofsStore for MdbxProofsStorage {
             }
 
             // update proof window latest block
-            proof_window_cursor
-                .append(ProofWindowKey::LatestBlock, &BlockNumberHash::new(block_number, block_ref.block.hash))?;
+            proof_window_cursor.append(
+                ProofWindowKey::LatestBlock,
+                &BlockNumberHash::new(block_number, block_ref.block.hash),
+            )?;
             Ok(())
         })?
     }
@@ -359,8 +361,8 @@ mod tests {
         models::{AccountTrieHistory, StorageTrieHistory},
         StorageTrieKey,
     };
-    use alloy_primitives::B256;
     use alloy_eips::NumHash;
+    use alloy_primitives::B256;
     use reth_db::{cursor::DbDupCursorRO, transaction::DbTx};
     use reth_trie::{
         updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles, StoredNibbles,
@@ -782,7 +784,8 @@ mod tests {
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
         // Sample block number
-        const BLOCK: BlockWithParent = BlockWithParent::new(B256::ZERO, NumHash::new(42, B256::ZERO));
+        const BLOCK: BlockWithParent =
+            BlockWithParent::new(B256::ZERO, NumHash::new(42, B256::ZERO));
 
         // Sample addresses and keys
         let addr1 = B256::from([0x11; 32]);
@@ -850,14 +853,18 @@ mod tests {
             let mut cur = tx.new_cursor::<AccountTrieHistory>().expect("cursor");
 
             // Check first node
-            let vv1 =
-                cur.seek_by_key_subkey(account_path1.into(), BLOCK.block.number).expect("seek").expect("exists");
+            let vv1 = cur
+                .seek_by_key_subkey(account_path1.into(), BLOCK.block.number)
+                .expect("seek")
+                .expect("exists");
             assert_eq!(vv1.block_number, BLOCK.block.number);
             assert!(vv1.value.0.is_some());
 
             // Check second node
-            let vv2 =
-                cur.seek_by_key_subkey(account_path2.into(), BLOCK.block.number).expect("seek").expect("exists");
+            let vv2 = cur
+                .seek_by_key_subkey(account_path2.into(), BLOCK.block.number)
+                .expect("seek")
+                .expect("exists");
             assert_eq!(vv2.block_number, BLOCK.block.number);
             assert!(vv2.value.0.is_some());
 
@@ -877,13 +884,15 @@ mod tests {
 
             // Check node for addr1
             let key1 = StorageTrieKey::new(addr1, storage_path1.into());
-            let vv1 = cur.seek_by_key_subkey(key1, BLOCK.block.number).expect("seek").expect("exists");
+            let vv1 =
+                cur.seek_by_key_subkey(key1, BLOCK.block.number).expect("seek").expect("exists");
             assert_eq!(vv1.block_number, BLOCK.block.number);
             assert!(vv1.value.0.is_some());
 
             // Check node for addr2
             let key2 = StorageTrieKey::new(addr2, storage_path2.into());
-            let vv2 = cur.seek_by_key_subkey(key2, BLOCK.block.number).expect("seek").expect("exists");
+            let vv2 =
+                cur.seek_by_key_subkey(key2, BLOCK.block.number).expect("seek").expect("exists");
             assert_eq!(vv2.block_number, BLOCK.block.number);
             assert!(vv2.value.0.is_some());
         }
@@ -894,12 +903,14 @@ mod tests {
             let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
 
             // Check account1 (exists)
-            let vv1 = cur.seek_by_key_subkey(addr1, BLOCK.block.number).expect("seek").expect("exists");
+            let vv1 =
+                cur.seek_by_key_subkey(addr1, BLOCK.block.number).expect("seek").expect("exists");
             assert_eq!(vv1.block_number, BLOCK.block.number);
             assert_eq!(vv1.value.0, Some(acc1));
 
             // Check account2 (deletion)
-            let vv2 = cur.seek_by_key_subkey(addr2, BLOCK.block.number).expect("seek").expect("exists");
+            let vv2 =
+                cur.seek_by_key_subkey(addr2, BLOCK.block.number).expect("seek").expect("exists");
             assert_eq!(vv2.block_number, BLOCK.block.number);
             assert!(vv2.value.0.is_none(), "Expected account deletion");
         }
@@ -911,14 +922,16 @@ mod tests {
 
             // Check storage for addr1
             let key1 = HashedStorageKey::new(addr1, slot1);
-            let vv1 = cur.seek_by_key_subkey(key1, BLOCK.block.number).expect("seek").expect("exists");
+            let vv1 =
+                cur.seek_by_key_subkey(key1, BLOCK.block.number).expect("seek").expect("exists");
             assert_eq!(vv1.block_number, BLOCK.block.number);
             let inner1 = vv1.value.0.as_ref().expect("Some(StorageValue)");
             assert_eq!(inner1.0, val1);
 
             // Check storage for addr2
             let key2 = HashedStorageKey::new(addr2, slot2);
-            let vv2 = cur.seek_by_key_subkey(key2, BLOCK.block.number).expect("seek").expect("exists");
+            let vv2 =
+                cur.seek_by_key_subkey(key2, BLOCK.block.number).expect("seek").expect("exists");
             assert_eq!(vv2.block_number, BLOCK.block.number);
             let inner2 = vv2.value.0.as_ref().expect("Some(StorageValue)");
             assert_eq!(inner2.0, val2);
@@ -944,11 +957,15 @@ mod tests {
 
         // set latest to some hash H1
         let existing_block = BlockWithParent::new(B256::random(), NumHash::new(1, B256::random()));
-        store.set_earliest_block_number(existing_block.block.number, existing_block.block.hash).await.expect("set");
+        store
+            .set_earliest_block_number(existing_block.block.number, existing_block.block.hash)
+            .await
+            .expect("set");
 
         // incoming block whose parent != existing latest
         let bad_parent = B256::from([0xFF; 32]);
-        let bad_block: BlockWithParent = BlockWithParent::new(bad_parent, NumHash::new(2, B256::ZERO));
+        let bad_block: BlockWithParent =
+            BlockWithParent::new(bad_parent, NumHash::new(2, B256::ZERO));
         let diff = BlockStateDiff::default();
 
         let res = store.store_trie_updates(bad_block, diff).await;
@@ -981,8 +998,10 @@ mod tests {
         // verify we can retrieve entries for both block numbers
         let tx = store.env.tx().expect("tx");
         let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
-        let v_a = cur.seek_by_key_subkey(addr, block_a.block.number).expect("seek").expect("exists");
-        let v_b = cur.seek_by_key_subkey(addr, block_b.block.number).expect("seek").expect("exists");
+        let v_a =
+            cur.seek_by_key_subkey(addr, block_a.block.number).expect("seek").expect("exists");
+        let v_b =
+            cur.seek_by_key_subkey(addr, block_b.block.number).expect("seek").expect("exists");
         assert_eq!(v_a.block_number, block_a.block.number);
         assert_eq!(v_b.block_number, block_b.block.number);
     }
@@ -992,7 +1011,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
-        const BLOCK: BlockWithParent = BlockWithParent::new(B256::ZERO, NumHash::new(42, B256::ZERO));
+        const BLOCK: BlockWithParent =
+            BlockWithParent::new(B256::ZERO, NumHash::new(42, B256::ZERO));
 
         // Create BlockStateDiff with empty collections
         let block_state_diff = BlockStateDiff::default();
