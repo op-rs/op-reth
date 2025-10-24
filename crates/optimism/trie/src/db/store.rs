@@ -263,11 +263,8 @@ impl OpProofsStore for MdbxProofsStorage {
 
         // check latest stored block is the parent of incoming block
         // todo: move this check inside the update transaction
-        let latest_hash = self
-            .get_latest_block_number()
-            .await?
-            .map(|(_, hash)| hash)
-            .unwrap_or(B256::ZERO);
+        let latest_hash =
+            self.get_latest_block_number().await?.map(|(_, hash)| hash).unwrap_or(B256::ZERO);
         if latest_hash != block_ref.parent {
             return Err(OpProofsStorageError::OutOfOrder(
                 block_number,
