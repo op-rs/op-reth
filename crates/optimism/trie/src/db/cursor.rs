@@ -308,7 +308,7 @@ where
             return self.next();
         }
 
-        return Ok(result);
+        Ok(result)
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
