@@ -286,7 +286,7 @@ impl OpProofsStore for MdbxProofsStorage {
 
             let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
             for (hashed_address, storage) in sorted_storage {
-                // Handle whipped - mark all storage slots as deleted at the current block number
+                // Handle wiped - mark all storage slots as deleted at the current block number
                 if storage.is_wiped() {
                     // Yet to have any update for the current block number - So just using up to
                     // previous block number
