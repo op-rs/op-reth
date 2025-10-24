@@ -967,7 +967,7 @@ mod tests {
         let diff = BlockStateDiff::default();
 
         let res = store.store_trie_updates(bad_block, diff).await;
-        assert!(matches!(res, Err(OpProofsStorageError::OutOfOrder(..) | _)));
+        assert!(matches!(res, Err(OpProofsStorageError::OutOfOrder(..))));
         // verify nothing written: proof window still unchanged
         let latest = store.get_latest_block_number().await.expect("get latest");
         assert_eq!(latest.unwrap().1, existing_block.block.hash);
