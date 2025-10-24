@@ -261,22 +261,22 @@ impl OpProofsStore for MdbxProofsStorage {
             .sorted_by_key(|(hashed_address, _)| *hashed_address)
             .collect::<Vec<_>>();
 
-        self.env.update(|tx| {
-            // check latest stored block is the parent of incoming block
-            let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
-            let latest_hash = proof_window_cursor
-                .seek_exact(ProofWindowKey::LatestBlock)?
-                .map(|(_, v)| *v.hash())
-                .unwrap_or(B256::ZERO);
-            if latest_hash != block_ref.parent {
-                return Err(OpProofsStorageError::OutOfOrder(
-                    block_number,
-                    block_ref.parent,
-                    latest_hash,
-                )
-                .into());
-            }
+        // check latest stored block is the parent of incoming block
+        // todo: move this check inside the update transaction
+        let latest_hash = self
+            .get_latest_block_number()
+            .await?
+            .map(|(_, hash)| hash)
+            .unwrap_or(B256::ZERO);
+        if latest_hash != block_ref.parent {
+            return Err(OpProofsStorageError::OutOfOrder(
+                block_number,
+                block_ref.parent,
+                latest_hash,
+            ));
+        }
 
+        self.env.update(|tx| {
             let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
             for (path, node) in sorted_account_nodes {
                 let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
@@ -314,6 +314,7 @@ impl OpProofsStore for MdbxProofsStorage {
             }
 
             // update proof window latest block
+            let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
             proof_window_cursor.append(
                 ProofWindowKey::LatestBlock,
                 &BlockNumberHash::new(block_number, block_ref.block.hash),
