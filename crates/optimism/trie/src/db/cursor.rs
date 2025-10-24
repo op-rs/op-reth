@@ -295,22 +295,20 @@ where
 
         // hashed storage values can be zero, which means the storage slot is deleted, so we should
         // skip those
-        loop {
-            let result = self.inner.seek(storage_key.clone()).map(|opt| {
-                opt.and_then(|(k, v)| {
-                    // Only return entries that belong to the bound address
-                    (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
-                })
-            })?;
+        let result = self.inner.seek(storage_key).map(|opt| {
+            opt.and_then(|(k, v)| {
+                // Only return entries that belong to the bound address
+                (k.hashed_address == self.hashed_address).then_some((k.hashed_storage_key, v.0))
+            })
+        })?;
 
-            if let Some((_, v)) = result &&
-                v.is_zero()
-            {
-                return self.next();
-            }
-
-            return Ok(result);
+        if let Some((_, v)) = result &&
+            v.is_zero()
+        {
+            return self.next();
         }
+
+        return Ok(result);
     }
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
