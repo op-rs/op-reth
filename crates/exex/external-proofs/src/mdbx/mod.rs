@@ -405,7 +405,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
             let mut account_updates: Vec<_> = account_updates_map.into_iter().collect();
             account_updates.sort_unstable_by(|a, b| a.0.cmp(&b.0));
             account_trie_updates_written += account_updates.len();
-            self.store_account_branches_inner(&tx, block_number, account_updates, false).await?;
+            self.store_account_branches_inner(&tx, block_number, account_updates, true).await?;
         }
 
         // Store storage trie branches
@@ -437,7 +437,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
                     block_number,
                     address,
                     storage_updates,
-                    false,
+                    true,
                 )
                 .await?;
             }
@@ -447,7 +447,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
         if !post_state.accounts.is_empty() {
             let accounts: Vec<_> = post_state.accounts.into_iter().collect();
             hashed_accounts_written += accounts.len();
-            self.store_hashed_accounts_inner(&tx, accounts, block_number, false).await?;
+            self.store_hashed_accounts_inner(&tx, accounts, block_number, true).await?;
         }
 
         // Store hashed storage
@@ -455,7 +455,7 @@ impl<TX: DbTx, TXMut: DbTxMut + DbTx, DB: Database<TX = TX, TXMut = TXMut>> OpPr
             if !storage.storage.is_empty() {
                 let storages: Vec<_> = storage.storage.into_iter().collect();
                 hashed_storages_written += storages.len();
-                self.store_hashed_storages_inner(&tx, address, storages, block_number, false)
+                self.store_hashed_storages_inner(&tx, address, storages, block_number, true)
                     .await?;
             }
         }
