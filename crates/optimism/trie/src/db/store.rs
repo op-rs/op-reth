@@ -968,4 +968,52 @@ mod tests {
             "Latest block should fall back to earliest when not explicitly set"
         );
     }
+
+    #[tokio::test]
+    async fn test_store_out_of_order_storages() {
+        // store path = 0x0, number = 0
+        // store path = 0x1, number = 0
+        // store path = 0x0, number = 1
+        // store_trie_updates
+
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        let hashed_address = B256::random();
+        let path1 = Nibbles::from_nibbles_unchecked([0x00]);
+        let path2 = Nibbles::from_nibbles_unchecked([0x01]);
+
+        fn block_state_diff_with_storages(
+            hashed_address: B256,
+            storages: Vec<(Nibbles, BranchNodeCompact)>,
+        ) -> BlockStateDiff {
+            let mut block_state_diff = BlockStateDiff::default();
+            block_state_diff
+                .trie_updates
+                .storage_tries
+                .insert(hashed_address, StorageTrieUpdates::default());
+            for (path, branch) in storages {
+                block_state_diff
+                    .trie_updates
+                    .storage_tries
+                    .get_mut(&hashed_address)
+                    .unwrap()
+                    .storage_nodes
+                    .insert(path, branch);
+            }
+            block_state_diff
+        }
+
+        let block_state_diff = block_state_diff_with_storages(
+            hashed_address,
+            vec![(path1, BranchNodeCompact::default()), (path2, BranchNodeCompact::default())],
+        );
+        store.store_trie_updates(1, block_state_diff).await.expect("store");
+
+        let block_state_diff = block_state_diff_with_storages(
+            hashed_address,
+            vec![(path1, BranchNodeCompact::default()), (path2, BranchNodeCompact::default())],
+        );
+        store.store_trie_updates(2, block_state_diff).await.expect("store");
+    }
 }
