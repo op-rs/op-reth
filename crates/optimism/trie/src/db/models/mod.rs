@@ -73,11 +73,10 @@ tables! {
       type Value = BlockNumberHash;
     }
 
-    /// An index that maps block numbers to a composite key of the table and the key of the entry.
+    /// An reverse mapping of block numbers to a keys of the tables.
     /// This is used for efficiently locating data by block number.
     table BlockChangeSet {
         type Key = u64; // Block number
-        type Value = TableChangeSet;
-        type SubKey = Vec<u8>; // Encoded table key
+        type Value = ChangeSet;
     }
 }

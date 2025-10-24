@@ -1,86 +1,43 @@
+use crate::db::HashedStorageKey;
+use alloy_primitives::B256;
 use reth_db::{
     table::{Compress, Decode, Decompress, Encode},
     DatabaseError,
 };
+
+use reth_trie::StoredNibbles;
 use serde::{Deserialize, Serialize};
 
-/// Subkey for identifying tables in `BlockChangeSet`.
+use crate::db::StorageTrieKey;
+
+/// The keys of the entries in the history tables.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum TableName {
-    /// [`AccountTrieHistory`](super::AccountTrieHistory) table.
-    AccountTrieHistory,
-    /// [`StorageTrieHistory`](super::StorageTrieHistory) table.
-    StorageTrieHistory,
-    /// [`HashedAccountHistory`](super::HashedAccountHistory) table.
-    HashedAccountHistory,
-    /// [`HashedStorageHistory`](super::HashedStorageHistory) table.
-    HashedStorageHistory,
+pub struct ChangeSet {
+    /// Keys changed in `AccountTrieHistory` table.
+    pub account_trie_keys: Vec<StoredNibbles>,
+    /// Keys changed in `StorageTrieHistory` table.
+    pub storage_trie_keys: Vec<StorageTrieKey>,
+    /// Keys changed in `HashedAccountHistory` table.
+    pub hashed_account_keys: Vec<B256>,
+    /// Keys changed in `HashedStorageHistory` table.
+    pub hashed_storage_keys: Vec<HashedStorageKey>,
 }
 
-impl Encode for TableName {
+impl Encode for ChangeSet {
     type Encoded = Vec<u8>;
 
     fn encode(self) -> Self::Encoded {
-        match self {
-            Self::AccountTrieHistory => vec![0u8],
-            Self::StorageTrieHistory => vec![1u8],
-            Self::HashedAccountHistory => vec![2u8],
-            Self::HashedStorageHistory => vec![3u8],
-        }
+        bincode::serialize(&self).expect("ChangeSet serialization should not fail")
     }
 }
 
-impl Decode for TableName {
+impl Decode for ChangeSet {
     fn decode(value: &[u8]) -> Result<Self, DatabaseError> {
-        match value.first() {
-            Some(&0) => Ok(Self::AccountTrieHistory),
-            Some(&1) => Ok(Self::StorageTrieHistory),
-            Some(&2) => Ok(Self::HashedAccountHistory),
-            Some(&3) => Ok(Self::HashedStorageHistory),
-            _ => Err(DatabaseError::Decode),
-        }
+        bincode::deserialize(value).map_err(|_| DatabaseError::Decode)
     }
 }
 
-/// All keys changed at a specific block for a given table.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct TableChangeSet {
-    /// The key of the entry in the table.
-    /// Mdbx stores encoded keys so we can store them as raw bytes
-    /// And avoid dealing with different key types here.
-    pub table_key: Vec<u8>,
-    /// The name of the table where the key is located.
-    pub name: TableName,
-}
-
-impl Encode for TableChangeSet {
-    type Encoded = Vec<u8>;
-
-    fn encode(self) -> Self::Encoded {
-        let mut buf = Vec::new();
-        // Encode table name as a single byte (encoded as Vec<u8>)
-        let table_bytes = self.name.encode();
-        buf.extend_from_slice(&table_bytes);
-        // Append the key bytes
-        buf.extend_from_slice(&self.table_key);
-        buf
-    }
-}
-
-impl Decode for TableChangeSet {
-    fn decode(value: &[u8]) -> Result<Self, DatabaseError> {
-        if value.is_empty() {
-            return Err(DatabaseError::Decode);
-        }
-
-        let name = TableName::decode(&value[..1])?;
-        let table_key = value[1..].to_vec();
-
-        Ok(Self { name, table_key })
-    }
-}
-
-impl Compress for TableChangeSet {
+impl Compress for ChangeSet {
     type Compressed = Vec<u8>;
 
     fn compress_to_buf<B: bytes::BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
@@ -89,7 +46,7 @@ impl Compress for TableChangeSet {
     }
 }
 
-impl Decompress for TableChangeSet {
+impl Decompress for ChangeSet {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
         Self::decode(value)
     }
@@ -98,28 +55,73 @@ impl Decompress for TableChangeSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_primitives::B256;
 
     #[test]
-    fn test_table_change_set_roundtrip() {
-        let test_cases: Vec<_> = vec![
-            TableChangeSet { name: TableName::AccountTrieHistory, table_key: vec![1, 2, 3] },
-            TableChangeSet { name: TableName::StorageTrieHistory, table_key: vec![4, 5, 6] },
-            TableChangeSet { name: TableName::AccountTrieHistory, table_key: vec![] },
-        ];
+    fn test_encode_decode_empty_change_set() {
+        let change_set = ChangeSet {
+            account_trie_keys: vec![],
+            storage_trie_keys: vec![],
+            hashed_account_keys: vec![],
+            hashed_storage_keys: vec![],
+        };
 
-        for original in test_cases {
-            let encoded = original.clone().encode();
-            let decoded = TableChangeSet::decode(&encoded).unwrap();
-            assert_eq!(original, decoded);
-        }
+        let encoded = change_set.clone().encode();
+        let decoded = ChangeSet::decode(&encoded).expect("Failed to decode");
+        assert_eq!(change_set, decoded);
     }
 
     #[test]
-    fn test_table_change_set_decode_error() {
-        // Test decoding an empty slice
-        assert!(TableChangeSet::decode(&[]).is_err());
+    fn test_encode_decode_populated_change_set() {
+        let account_key = StoredNibbles::from(vec![1, 2, 3, 4]);
+        let storage_key = StorageTrieKey {
+            hashed_address: B256::repeat_byte(0x11),
+            path: StoredNibbles::from(vec![5, 6, 7, 8]),
+        };
+        let hashed_storage_key = HashedStorageKey {
+            hashed_address: B256::repeat_byte(0x22),
+            hashed_storage_key: B256::repeat_byte(0x33),
+        };
 
-        // Test decoding a slice with an invalid table identifier
-        assert!(TableChangeSet::decode(&[4, 1, 2, 3]).is_err());
+        let change_set = ChangeSet {
+            account_trie_keys: vec![account_key],
+            storage_trie_keys: vec![storage_key],
+            hashed_account_keys: vec![B256::repeat_byte(0x44)],
+            hashed_storage_keys: vec![hashed_storage_key],
+        };
+
+        let encoded = change_set.clone().encode();
+        let decoded = ChangeSet::decode(&encoded).expect("Failed to decode");
+        assert_eq!(change_set, decoded);
+    }
+
+    #[test]
+    fn test_decode_invalid_data() {
+        let invalid_data = vec![0xFF; 32];
+        let result = ChangeSet::decode(&invalid_data);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), DatabaseError::Decode));
+    }
+
+    #[test]
+    fn test_compress_decompress() {
+        let change_set = ChangeSet {
+            account_trie_keys: vec![StoredNibbles::from(vec![1, 2, 3])],
+            storage_trie_keys: vec![StorageTrieKey {
+                hashed_address: B256::ZERO,
+                path: StoredNibbles::from(vec![4, 5, 6]),
+            }],
+            hashed_account_keys: vec![B256::ZERO],
+            hashed_storage_keys: vec![HashedStorageKey {
+                hashed_address: B256::ZERO,
+                hashed_storage_key: B256::repeat_byte(0x42),
+            }],
+        };
+
+        let mut buf = Vec::new();
+        change_set.compress_to_buf(&mut buf);
+
+        let decompressed = ChangeSet::decompress(&buf).expect("Failed to decompress");
+        assert_eq!(change_set, decompressed);
     }
 }

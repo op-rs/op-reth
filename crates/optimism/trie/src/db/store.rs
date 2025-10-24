@@ -3,9 +3,9 @@ use crate::{
     db::{
         cursor::Dup,
         models::{
-            AccountTrieHistory, BlockChangeSet, HashedAccountHistory, HashedStorageHistory,
-            HashedStorageKey, MaybeDeleted, StorageTrieHistory, StorageTrieKey, StorageValue,
-            TableChangeSet, TableName, VersionedValue,
+            AccountTrieHistory, BlockChangeSet, ChangeSet, HashedAccountHistory,
+            HashedStorageHistory, HashedStorageKey, MaybeDeleted, StorageTrieHistory,
+            StorageTrieKey, StorageValue, VersionedValue,
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
@@ -16,13 +16,12 @@ use itertools::Itertools;
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
     mdbx::{init_db_for, DatabaseArguments},
-    table::{Decode, Encode},
     transaction::DbTx,
     Database, DatabaseEnv,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
-use std::{collections::HashSet, path::Path};
+use std::path::Path;
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
@@ -262,66 +261,79 @@ impl OpProofsStore for MdbxProofsStorage {
             .collect::<Vec<_>>();
 
         self.env.update(|tx| {
-            // Cursor for recording all changes made in this block for all history tables
-            let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+            let account_trie_len = sorted_account_nodes.len();
+            let storage_trie_len = sorted_storage_nodes.len();
+            let hashed_account_len = sorted_accounts.size_hint().0;
+            let hashed_storage_len = sorted_storage.len();
 
-            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
-            for (path, node) in sorted_account_nodes {
-                let key: StoredNibbles = path.into();
-                let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                account_trie_cursor.append_dup(key.clone(), vv)?;
+            if account_trie_len > 0 ||
+                storage_trie_len > 0 ||
+                hashed_account_len > 0 ||
+                hashed_storage_len > 0
+            {
+                // Preparing the entries for the `BlockChangeSet` table
+                let mut account_trie_keys = Vec::<StoredNibbles>::with_capacity(account_trie_len);
+                let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
+                let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
+                let mut hashed_storage_keys =
+                    Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
 
-                let change_set =
-                    TableChangeSet { name: TableName::AccountTrieHistory, table_key: key.encode() };
-                change_set_cursor.append_dup(block_number, change_set)?;
-            }
-
-            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
-            for (hashed_address, nodes) in sorted_storage_nodes {
-                // todo: handle is_deleted scenario
-                for (path, node) in nodes.storage_nodes {
-                    let key = StorageTrieKey::new(hashed_address, path.into());
+                let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+                for (path, node) in sorted_account_nodes {
+                    let key: StoredNibbles = path.into();
                     let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                    storage_trie_cursor.append_dup(key.clone(), vv)?;
+                    account_trie_cursor.append_dup(key.clone(), vv)?;
 
-                    let change_set = TableChangeSet {
-                        name: TableName::StorageTrieHistory,
-                        table_key: key.encode(),
-                    };
-                    change_set_cursor.append_dup(block_number, change_set)?;
+                    account_trie_keys.push(key);
                 }
-            }
 
-            let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
-            for (hashed_address, account) in sorted_accounts {
-                let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
-                account_cursor.append_dup(hashed_address, vv)?;
+                let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+                for (hashed_address, nodes) in sorted_storage_nodes {
+                    // todo: handle is_deleted scenario
+                    for (path, node) in nodes.storage_nodes {
+                        let key = StorageTrieKey::new(hashed_address, path.into());
+                        let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+                        storage_trie_cursor.append_dup(key.clone(), vv)?;
 
-                let change_set = TableChangeSet {
-                    name: TableName::HashedAccountHistory,
-                    table_key: hashed_address.encode().to_vec(),
-                };
-                change_set_cursor.append_dup(block_number, change_set)?;
-            }
-
-            let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
-            for (hashed_address, storage) in sorted_storage {
-                // todo: handle wiped storage scenario
-                let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
-                for (storage_key, storage_value) in storage_items {
-                    let vv = VersionedValue {
-                        block_number,
-                        value: MaybeDeleted(Some(StorageValue(storage_value))),
-                    };
-                    let key = HashedStorageKey::new(*hashed_address, storage_key);
-                    storage_cursor.append_dup(key.clone(), vv)?;
-
-                    let change_set = TableChangeSet {
-                        name: TableName::HashedStorageHistory,
-                        table_key: key.encode().into(),
-                    };
-                    change_set_cursor.append_dup(block_number, change_set)?;
+                        storage_trie_keys.push(key);
+                    }
                 }
+
+                let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+                for (hashed_address, account) in sorted_accounts {
+                    let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
+                    account_cursor.append_dup(hashed_address, vv)?;
+
+                    hashed_account_keys.push(hashed_address);
+                }
+
+                let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+                for (hashed_address, storage) in sorted_storage {
+                    // todo: handle wiped storage scenario
+                    let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
+                    for (storage_key, storage_value) in storage_items {
+                        let vv = VersionedValue {
+                            block_number,
+                            value: MaybeDeleted(Some(StorageValue(storage_value))),
+                        };
+                        let key = HashedStorageKey::new(*hashed_address, storage_key);
+                        storage_cursor.append_dup(key.clone(), vv)?;
+
+                        hashed_storage_keys.push(key);
+                    }
+                }
+
+                // Cursor for recording all changes made in this block for all history tables
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+                change_set_cursor.append(
+                    block_number,
+                    &ChangeSet {
+                        account_trie_keys,
+                        storage_trie_keys,
+                        hashed_account_keys,
+                        hashed_storage_keys,
+                    },
+                )?;
             }
 
             Ok(())
@@ -354,7 +366,7 @@ impl OpProofsStore for MdbxProofsStorage {
 
         self.env.update(|tx| {
             // Collect keys to prune first to avoid borrow checker issues with cursors.
-            let keys_to_prune: Vec<(u64, TableChangeSet)> = {
+            let keys_to_prune: Vec<(u64, ChangeSet)> = {
                 let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
                 change_set_cursor
                     .walk_range(start_block..new_earliest_block_number)?
@@ -366,71 +378,51 @@ impl OpProofsStore for MdbxProofsStorage {
                 let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
                 let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
                 let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
-
-                // TODO: abstract walker and delete logic into cursor methods to avoid code
-                // duplication
-
-                for (block_number, change_set) in &keys_to_prune {
-                    match change_set.name {
-                        TableName::AccountTrieHistory => {
-                            let key = StoredNibbles::decode(change_set.table_key.as_slice())?;
-                            // Walk duplicates starting exactly at (key, block_number). walk_dup
-                            // will position the walker at the first
-                            // entry >= (key, block_number). We only
-                            // want to delete when the entry matches both key and block_number.
-                            let mut walker = account_trie_cursor
-                                .walk_dup(Some(key.clone()), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
-                                *found_key == key &&
-                                found_val.block_number == *block_number
-                            {
-                                // delete only the specific duplicate entry
-                                walker.delete_current()?;
-                            }
-                        }
-                        TableName::StorageTrieHistory => {
-                            let key = StorageTrieKey::decode(change_set.table_key.as_slice())?;
-                            let mut walker = storage_trie_cursor
-                                .walk_dup(Some(key.clone()), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
-                                *found_key == key &&
-                                found_val.block_number == *block_number
-                            {
-                                walker.delete_current()?;
-                            }
-                        }
-                        TableName::HashedAccountHistory => {
-                            let key = B256::decode(change_set.table_key.as_slice())?;
-                            let mut walker =
-                                hashed_account_cursor.walk_dup(Some(key), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
-                                *found_key == key &&
-                                found_val.block_number == *block_number
-                            {
-                                walker.delete_current()?;
-                            }
-                        }
-                        TableName::HashedStorageHistory => {
-                            let key = HashedStorageKey::decode(change_set.table_key.as_slice())?;
-                            let mut walker = hashed_storage_cursor
-                                .walk_dup(Some(key.clone()), Some(*block_number))?;
-                            if let Some(Ok((found_key, found_val))) = walker.start.as_ref() &&
-                                *found_key == key &&
-                                found_val.block_number == *block_number
-                            {
-                                walker.delete_current()?;
-                            }
-                        }
-                    }
-                }
-
                 let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
-                let unique_block_numbers: HashSet<_> =
-                    keys_to_prune.iter().map(|(k, _)| *k).collect();
-                for block_number in unique_block_numbers {
-                    if change_set_cursor.seek_exact(block_number)?.is_some() {
-                        change_set_cursor.delete_current_duplicates()?;
+
+                // Process already sorted entries directly
+                for (block_number, change_set) in &keys_to_prune {
+                    // Process account trie entries
+                    for key in &change_set.account_trie_keys {
+                        if account_trie_cursor
+                            .seek_by_key_subkey(key.clone(), *block_number)?
+                            .is_some()
+                        {
+                            account_trie_cursor.delete_current()?;
+                        }
                     }
+
+                    // Process storage trie entries
+                    for key in &change_set.storage_trie_keys {
+                        if storage_trie_cursor
+                            .seek_by_key_subkey(key.clone(), *block_number)?
+                            .is_some()
+                        {
+                            storage_trie_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process hashed account entries
+                    for key in &change_set.hashed_account_keys {
+                        if hashed_account_cursor.seek_by_key_subkey(*key, *block_number)?.is_some()
+                        {
+                            hashed_account_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process hashed storage entries
+                    for key in &change_set.hashed_storage_keys {
+                        if hashed_storage_cursor
+                            .seek_by_key_subkey(key.clone(), *block_number)?
+                            .is_some()
+                        {
+                            hashed_storage_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Delete the change set immediately
+                    change_set_cursor.seek_exact(*block_number)?;
+                    change_set_cursor.delete_current()?;
                 }
             }
             Ok(())
@@ -1033,7 +1025,7 @@ mod tests {
             let tx = store.env.tx().expect("tx");
             let mut cur = tx.new_cursor::<BlockChangeSet>().expect("cursor");
             let entries: Vec<_> = cur.walk(Some(BLOCK)).expect("walk").collect();
-            assert_eq!(entries.len(), 9, "Expected 9 BlockChangeSet entries");
+            assert_eq!(entries.len(), 1, "Expected 1 BlockChangeSet entry");
         }
     }
 
@@ -1185,27 +1177,41 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
         let tx = store.env.tx_mut().expect("rw tx");
-        let mut cursor = tx.cursor_dup_write::<BlockChangeSet>().expect("cursor");
+        let mut cursor = tx.cursor_write::<BlockChangeSet>().expect("cursor");
 
-        let block = 42u64;
-        let entry1 = TableChangeSet { name: TableName::AccountTrieHistory, table_key: vec![1] };
-        let entry2 = TableChangeSet { name: TableName::StorageTrieHistory, table_key: vec![2] };
+        let block_1 = 42u64;
+        let block_2 = 43u64;
 
-        // Insert
-        cursor.append_dup(block, entry1.clone()).unwrap();
-        cursor.append_dup(block, entry2.clone()).unwrap();
+        let entry1 = ChangeSet {
+            account_trie_keys: vec![StoredNibbles::default()],
+            storage_trie_keys: vec![],
+            hashed_account_keys: vec![B256::ZERO],
+            hashed_storage_keys: vec![],
+        };
+        let entry2 = ChangeSet {
+            account_trie_keys: vec![],
+            storage_trie_keys: vec![StorageTrieKey::new(B256::ZERO, StoredNibbles::default())],
+            hashed_account_keys: vec![],
+            hashed_storage_keys: vec![HashedStorageKey::new(B256::ZERO, B256::ZERO)],
+        };
 
-        // Read
-        let mut walker = cursor.walk_dup(Some(block), None).unwrap();
-        let mut entries =
-            vec![walker.next().unwrap().unwrap().1, walker.next().unwrap().unwrap().1];
+        // Insert entries
+        cursor.insert(block_1, &entry1).unwrap();
+        cursor.insert(block_2, &entry2).unwrap();
+
+        // Read entries
+        let mut walker = cursor.walk(Some(block_1)).unwrap();
+        let mut entries = vec![walker.next().unwrap().unwrap().1];
+        if let Some(Ok((_, val))) = walker.next() {
+            entries.push(val);
+        }
         entries.sort();
         let mut expected = vec![entry1.clone(), entry2.clone()];
         expected.sort();
         assert_eq!(entries, expected);
 
         // Delete entry1
-        let mut walker = cursor.walk_dup(Some(block), None).unwrap();
+        let mut walker = cursor.walk(Some(block_1)).unwrap();
         while let Some(Ok((_, val))) = walker.next() {
             if val == entry1 {
                 walker.delete_current().unwrap();
@@ -1214,7 +1220,7 @@ mod tests {
         }
 
         // Verify delete
-        let mut walker = cursor.walk_dup(Some(block), None).unwrap();
+        let mut walker = cursor.walk(Some(block_1)).unwrap();
         assert_eq!(walker.next().unwrap().unwrap().1, entry2);
         assert!(walker.next().is_none());
     }
