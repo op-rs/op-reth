@@ -28,6 +28,9 @@ pub enum OpProofsStorageError {
         /// block hash of the latest stored block
         latest_block_hash: B256,
     },
+    /// No change set for block
+    #[error("No change set found for block {0}")]
+    NoChangeSetForBlock(u64),
     /// Block update failed since parent state
     #[error("Cannot execute block updates for block {0} without parent state {1} (latest stored block number: {2})")]
     BlockUpdateFailed(u64, u64, u64),
