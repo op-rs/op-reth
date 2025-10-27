@@ -103,7 +103,7 @@ where
                             None => {
                                 error!(
                                     block_number,
-                                    "Missing block in committed chain; stopping incremental application",
+                                    "Missing block in committed chain, stopping incremental application",
                                 );
                                 return Err(eyre::eyre!(
                                     "Missing block {} in committed chain",
