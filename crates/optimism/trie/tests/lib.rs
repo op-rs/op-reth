@@ -1784,7 +1784,7 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
     };
 
     let block_ref_100 =
-        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x97)));
+        BlockWithParent::new(B256::repeat_byte(0x96), NumHash::new(100, B256::repeat_byte(0x97)));
 
     storage.store_trie_updates(block_ref_100, deletion_diff).await?;
 
@@ -1915,7 +1915,7 @@ async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
     };
 
     let block_ref_100 =
-        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x97)));
+        BlockWithParent::new(B256::repeat_byte(0x96), NumHash::new(100, B256::repeat_byte(0x97)));
 
     storage.store_trie_updates(block_ref_100, conflicting_diff).await?;
 
