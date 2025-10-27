@@ -121,7 +121,7 @@ where
                         new_block_hash = ?new.tip().hash(),
                         "ChainReorged notification received",
                     );
-                    unimplemented!();
+                    unimplemented!("Chain reorg handling not yet implemented in OpProofsExEx");
                 }
                 ExExNotification::ChainReverted { old } => {
                     debug!(
