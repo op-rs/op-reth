@@ -73,7 +73,7 @@ tables! {
       type Value = BlockNumberHash;
     }
 
-    /// An reverse mapping of block numbers to a keys of the tables.
+    /// A reverse mapping of block numbers to a keys of the tables.
     /// This is used for efficiently locating data by block number.
     table BlockChangeSet {
         type Key = u64; // Block number

@@ -374,15 +374,13 @@ impl OpProofsStore for MdbxProofsStorage {
         new_earliest_block_number: u64,
         _diff: BlockStateDiff,
     ) -> OpProofsStorageResult<()> {
-        let earliest_block = self.get_earliest_block_number().await?;
-        let start_block = if let Some((block, _)) = earliest_block {
-            if block >= new_earliest_block_number {
-                return Ok(()) // Nothing to prune
-            }
-            block
-        } else {
-            return Ok(()) // Nothing to prune
+        let Some((start_block, _)) = self.get_earliest_block_number().await? else {
+            return Ok(()); // Nothing to prune
         };
+
+        if start_block >= new_earliest_block_number {
+            return Ok(()); // Nothing to prune
+        }
 
         self.env.update(|tx| {
             // Collect keys to prune first to avoid borrow checker issues with cursors.
@@ -404,9 +402,9 @@ impl OpProofsStore for MdbxProofsStorage {
                 for (block_number, change_set) in &keys_to_prune {
                     // Process account trie entries
                     for key in &change_set.account_trie_keys {
-                        if account_trie_cursor
-                            .seek_by_key_subkey(key.clone(), *block_number)?
-                            .is_some()
+                        if let Some(vv) =
+                            account_trie_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
                         {
                             account_trie_cursor.delete_current()?;
                         }
@@ -414,9 +412,9 @@ impl OpProofsStore for MdbxProofsStorage {
 
                     // Process storage trie entries
                     for key in &change_set.storage_trie_keys {
-                        if storage_trie_cursor
-                            .seek_by_key_subkey(key.clone(), *block_number)?
-                            .is_some()
+                        if let Some(vv) =
+                            storage_trie_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
                         {
                             storage_trie_cursor.delete_current()?;
                         }
@@ -424,7 +422,9 @@ impl OpProofsStore for MdbxProofsStorage {
 
                     // Process hashed account entries
                     for key in &change_set.hashed_account_keys {
-                        if hashed_account_cursor.seek_by_key_subkey(*key, *block_number)?.is_some()
+                        if let Some(vv) =
+                            hashed_account_cursor.seek_by_key_subkey(*key, *block_number)? &&
+                            vv.block_number == *block_number
                         {
                             hashed_account_cursor.delete_current()?;
                         }
@@ -432,9 +432,9 @@ impl OpProofsStore for MdbxProofsStorage {
 
                     // Process hashed storage entries
                     for key in &change_set.hashed_storage_keys {
-                        if hashed_storage_cursor
-                            .seek_by_key_subkey(key.clone(), *block_number)?
-                            .is_some()
+                        if let Some(vv) =
+                            hashed_storage_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
                         {
                             hashed_storage_cursor.delete_current()?;
                         }
