@@ -9804,6 +9804,7 @@ dependencies = [
 name = "reth-optimism-exex"
 version = "1.9.3"
 dependencies = [
+ "alloy-consensus",
  "derive_more",
  "eyre",
  "futures",
@@ -9816,6 +9817,7 @@ dependencies = [
  "reth-optimism-trie",
  "reth-provider",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
