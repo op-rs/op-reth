@@ -266,11 +266,11 @@ impl OpProofsStore for MdbxProofsStorage {
         let latest_hash =
             self.get_latest_block_number().await?.map(|(_, hash)| hash).unwrap_or(B256::ZERO);
         if latest_hash != block_ref.parent {
-            return Err(OpProofsStorageError::OutOfOrder(
+            return Err(OpProofsStorageError::OutOfOrder {
                 block_number,
-                block_ref.parent,
-                latest_hash,
-            ));
+                parent_block_hash: block_ref.parent,
+                latest_block_hash: latest_hash,
+            });
         }
 
         self.env.update(|tx| {
@@ -967,7 +967,7 @@ mod tests {
         let diff = BlockStateDiff::default();
 
         let res = store.store_trie_updates(bad_block, diff).await;
-        assert!(matches!(res, Err(OpProofsStorageError::OutOfOrder(..))));
+        assert!(matches!(res, Err(OpProofsStorageError::OutOfOrder { .. })));
         // verify nothing written: proof window still unchanged
         let latest = store.get_latest_block_number().await.expect("get latest");
         assert_eq!(latest.unwrap().1, existing_block.block.hash);

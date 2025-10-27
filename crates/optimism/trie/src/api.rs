@@ -19,8 +19,15 @@ pub enum OpProofsStorageError {
     #[error("Parent block number is less than earliest stored block number")]
     UnknownParent,
     /// Block is out of order
-    #[error("Block {0} is out of order (parent: {1}, latest stored block number: {2})")]
-    OutOfOrder(u64, B256, B256),
+    #[error("Block {block_number} is out of order (parent: {parent_block_hash}, latest stored block hash: {latest_block_hash})")]
+    OutOfOrder {
+        /// The block number being inserted
+        block_number: u64,
+        /// The parent hash of the block being inserted
+        parent_block_hash: B256,
+        /// block hash of the latest stored block
+        latest_block_hash: B256,
+    },
     /// Block update failed since parent state
     #[error("Cannot execute block updates for block {0} without parent state {1} (latest stored block number: {2})")]
     BlockUpdateFailed(u64, u64, u64),

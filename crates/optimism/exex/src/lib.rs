@@ -121,7 +121,7 @@ where
                         new_block_hash = ?new.tip().hash(),
                         "ChainReorged notification received",
                     );
-                    // handle reorg logic here
+                    unimplemented!();
                 }
                 ExExNotification::ChainReverted { old } => {
                     debug!(
@@ -129,7 +129,7 @@ where
                         old_block_hash = ?old.tip().hash(),
                         "ChainReverted notification received",
                     );
-                    // handle revert logic here
+                    unimplemented!();
                 }
             };
 
