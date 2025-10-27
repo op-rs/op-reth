@@ -132,7 +132,7 @@
           "refId": "A"
         }
       ],
-      "title": "Max DA Transaction Size",
+      "title": "Miner Max DA Transaction Size",
       "type": "stat"
     },
     {
@@ -194,7 +194,7 @@
           "refId": "A"
         }
       ],
-      "title": "Max DA Block Size",
+      "title": "Miner Max DA Block Size",
       "type": "stat"
     },
     {
@@ -359,7 +359,7 @@
           "useBackend": false
         }
       ],
-      "title": "Transaction Forward Latency",
+      "title": "Sequencer Transaction Forward Latency",
       "type": "timeseries"
     }
   ],
