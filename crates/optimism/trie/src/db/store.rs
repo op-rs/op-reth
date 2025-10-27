@@ -1,16 +1,12 @@
 use super::{BlockNumberHash, ProofWindow, ProofWindowKey};
-use crate::{
-    db::{
-        cursor::Dup,
-        models::{
-            AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
-            MaybeDeleted, StorageTrieHistory, StorageTrieKey, StorageValue, VersionedValue,
-        },
-        MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
+use crate::{db::{
+    cursor::Dup,
+    models::{
+        AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
+        MaybeDeleted, StorageTrieHistory, StorageTrieKey, StorageValue, VersionedValue,
     },
-    BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult,
-    OpProofsStore,
-};
+    MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
+}, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult, OpProofsStore, OpProofsTrieCursorRO};
 use alloy_primitives::{map::HashMap, B256, U256};
 use itertools::Itertools;
 use reth_db::{
@@ -271,6 +267,21 @@ impl OpProofsStore for MdbxProofsStorage {
 
             let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
             for (hashed_address, nodes) in sorted_storage_nodes {
+                // Handle wiped - mark all storage trie as deleted at the current block number
+                if nodes.is_deleted {
+                    // Yet to have any update for the current block number - So just using up to
+                    // previous block number
+                    let mut storage_trie_cursor_ro =
+                        self.storage_trie_cursor(hashed_address, block_number - 1)?;
+                    while let Some((path, _vv)) = storage_trie_cursor_ro.next()? {
+                        // Mark deleted at current block
+                        let del = VersionedValue { block_number, value: MaybeDeleted(None) };
+                        storage_trie_cursor
+                            .append_dup( StorageTrieKey::new(hashed_address, path.into()), del)?;
+                    }
+                    // Skip any further processing for this hashed_address
+                    continue;
+                }
                 for (path, node) in nodes.storage_nodes {
                     let key = StorageTrieKey::new(hashed_address, path.into());
                     let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
@@ -1001,6 +1012,76 @@ mod tests {
         assert_eq!(vv.block_number, BLOCK);
         assert!(vv.value.0.is_none(), "expected storage trie deletion");
     }
+
+    #[tokio::test]
+    async fn store_trie_updates_wiped_storage_trie_nodes() {
+        use reth_trie::updates::StorageTrieUpdates;
+
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        let addr_wiped = B256::from([0x10; 32]);
+        let addr_live  = B256::from([0xF0; 32]);
+
+        // Seed some storage-trie nodes at block 0 for the address that will be wiped.
+        let p1 = Nibbles::from_nibbles_unchecked([0x01, 0x02]);
+        let p2 = Nibbles::from_nibbles_unchecked([0x0A, 0x0B, 0x0C]);
+        let n1 = BranchNodeCompact::default();
+        let n2 = BranchNodeCompact::default();
+
+        store
+            .store_storage_branches(addr_wiped, vec![(p1, Some(n1.clone())), (p2, Some(n2.clone()))])
+            .await
+            .expect("seed wiped addr trie nodes");
+
+        // Build a BlockStateDiff that wipes addr_wiped's storage trie, and
+        // also adds a normal storage-trie node for addr_live.
+        const BLOCK: u64 = 123;
+        let mut diff = BlockStateDiff::default();
+
+        // Wipe for addr_wiped
+        let mut wiped_updates = StorageTrieUpdates::default();
+        wiped_updates.set_deleted(true);
+        diff.trie_updates.storage_tries.insert(addr_wiped, wiped_updates);
+
+        // Normal update for addr_live
+        let live_path = Nibbles::from_nibbles_unchecked([0xEE, 0xFF]);
+        let live_node = BranchNodeCompact::default();
+        let mut live_updates = StorageTrieUpdates::default();
+        live_updates.storage_nodes.insert(live_path, live_node.clone());
+        diff.trie_updates.storage_tries.insert(addr_live, live_updates);
+
+        // Execute the store
+        store.store_trie_updates(BLOCK, diff).await.expect("store");
+
+        // Verify: for addr_wiped, each previously existing path now has a deletion tombstone at BLOCK.
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<StorageTrieHistory>().expect("cursor");
+
+            for path in [p1, p2] {
+                let key = StorageTrieKey::new(addr_wiped, StoredNibbles::from(path));
+                let vv = cur.seek_by_key_subkey(key, BLOCK).expect("seek").expect("exists");
+                assert_eq!(vv.block_number, BLOCK);
+                assert!(vv.value.0.is_none(), "expected tombstone at wipe block for path {:?}", path);
+            }
+        }
+
+        // Verify: addr_live got its normal node written at BLOCK (not a deletion).
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<StorageTrieHistory>().expect("cursor");
+
+            let key = StorageTrieKey::new(addr_live, StoredNibbles::from(live_path));
+            let vv = cur.seek_by_key_subkey(key, BLOCK).expect("seek").expect("exists");
+            assert_eq!(vv.block_number, BLOCK);
+            assert!(
+                vv.value.0.is_some(),
+                "expected normal node for non-wiped address at BLOCK"
+            );
+        }
+    }
+
 
     #[tokio::test]
     async fn store_trie_updates_wiped_storage() {
