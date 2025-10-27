@@ -265,7 +265,7 @@ impl OpProofsStore for MdbxProofsStorage {
             // check latest stored block is the parent of incoming block
             let latest_block_hash = tx
                 .get::<ProofWindow>(ProofWindowKey::LatestBlock)?
-                .map(|bn_hash| bn_hash.hash().clone())
+                .map(|bn_hash| *bn_hash.hash())
                 .unwrap_or(B256::ZERO);
 
             if latest_block_hash != block_ref.parent {
