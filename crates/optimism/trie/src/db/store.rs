@@ -266,7 +266,7 @@ impl OpProofsStore for MdbxProofsStorage {
             let latest_block_hash = tx
                 .get::<ProofWindow>(ProofWindowKey::LatestBlock)?
                 .map(|bn_hash| *bn_hash.hash())
-                .unwrap_or(B256::ZERO);
+                .unwrap_or_default();
 
             if latest_block_hash != block_ref.parent {
                 return Err(OpProofsStorageError::OutOfOrder {
