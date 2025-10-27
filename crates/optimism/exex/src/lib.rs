@@ -129,7 +129,7 @@ where
                         old_block_hash = ?old.tip().hash(),
                         "ChainReverted notification received",
                     );
-                    unimplemented!();
+                    unimplemented!("Chain revert handling not yet implemented");
                 }
             };
 
