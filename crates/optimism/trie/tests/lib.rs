@@ -549,8 +549,7 @@ async fn test_deleted_branch_nodes<S: OpProofsStore>(
 ) -> Result<(), OpProofsStorageError> {
     let path = nibbles_from(vec![1, 2]);
     let branch = create_test_branch();
-    let block_ref: BlockWithParent =
-        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
+    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // Store branch node, then delete it (store None)
     storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
