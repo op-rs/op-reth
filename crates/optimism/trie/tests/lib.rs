@@ -549,6 +549,8 @@ async fn test_deleted_branch_nodes<S: OpProofsStore>(
 ) -> Result<(), OpProofsStorageError> {
     let path = nibbles_from(vec![1, 2]);
     let branch = create_test_branch();
+    let block_ref: BlockWithParent =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // Store branch node, then delete it (store None)
     storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
@@ -559,7 +561,7 @@ async fn test_deleted_branch_nodes<S: OpProofsStore>(
 
     let mut block_state_diff = BlockStateDiff::default();
     block_state_diff.trie_updates.removed_nodes.insert(path);
-    storage.store_trie_updates(100, block_state_diff).await?;
+    storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // Cursor after deletion should not see the node
     let mut cursor150 = storage.account_trie_cursor(150)?;
@@ -1049,7 +1051,10 @@ async fn test_storage_zero_value_deletion<S: OpProofsStore>(
     let mut hashed_storage = HashedStorage::default();
     hashed_storage.storage.insert(storage_key, U256::ZERO);
     block_state_diff.post_state.storages.insert(hashed_address, hashed_storage);
-    storage.store_trie_updates(100, block_state_diff).await?;
+
+    let block_ref: BlockWithParent =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
+    storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // Cursor after deletion should NOT see the entry (zero values are skipped)
     let mut cursor150 = storage.storage_hashed_cursor(hashed_address, 150)?;
@@ -1208,7 +1213,8 @@ async fn test_store_trie_updates_with_wiped_storage<S: OpProofsStore>(
     use reth_trie::HashedStorage;
 
     let hashed_address = B256::repeat_byte(0x01);
-    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
+    let block_ref: BlockWithParent =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // First, store some storage values at block 50
     let storage_slots = vec![
