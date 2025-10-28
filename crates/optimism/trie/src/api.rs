@@ -30,7 +30,7 @@ pub enum OpProofsStorageError {
     },
     /// Block update failed since parent state
     #[error("Cannot execute block updates for block {0} without parent state {1} (latest stored block number: {2})")]
-    BlockUpdateFailed(u64, u64, u64),
+    MissingParentBlock(u64, u64, u64),
     /// State root mismatch
     #[error("State root mismatch for block {0} (have: {1}, expected: {2})")]
     StateRootMismatch(u64, B256, B256),
