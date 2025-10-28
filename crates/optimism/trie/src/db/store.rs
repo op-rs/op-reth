@@ -282,75 +282,69 @@ impl OpProofsStore for MdbxProofsStorage {
             let hashed_account_len = sorted_accounts.size_hint().0;
             let hashed_storage_len = sorted_storage.len();
 
-            if account_trie_len > 0 ||
-                storage_trie_len > 0 ||
-                hashed_account_len > 0 ||
-                hashed_storage_len > 0
-            {
-                // Preparing the entries for the `BlockChangeSet` table
-                let mut account_trie_keys = Vec::<StoredNibbles>::with_capacity(account_trie_len);
-                let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
-                let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
-                let mut hashed_storage_keys =
-                    Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
+            // Preparing the entries for the `BlockChangeSet` table
+            let mut account_trie_keys = Vec::<StoredNibbles>::with_capacity(account_trie_len);
+            let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
+            let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
+            let mut hashed_storage_keys =
+                Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
 
-                let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
-                for (path, node) in sorted_account_nodes {
-                    let key: StoredNibbles = path.into();
-                    let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                    account_trie_cursor.append_dup(key.clone(), vv)?;
+            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            for (path, node) in sorted_account_nodes {
+                let key: StoredNibbles = path.into();
+                let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+                account_trie_cursor.append_dup(key.clone(), vv)?;
 
-                    account_trie_keys.push(key);
-                }
-
-                let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
-                for (hashed_address, nodes) in sorted_storage_nodes {
-                    // todo: handle is_deleted scenario
-                    for (path, node) in nodes.storage_nodes {
-                        let key = StorageTrieKey::new(hashed_address, path.into());
-                        let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                        storage_trie_cursor.append_dup(key.clone(), vv)?;
-
-                        storage_trie_keys.push(key);
-                    }
-                }
-
-                let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
-                for (hashed_address, account) in sorted_accounts {
-                    let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
-                    account_cursor.append_dup(hashed_address, vv)?;
-
-                    hashed_account_keys.push(hashed_address);
-                }
-
-                let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
-                for (hashed_address, storage) in sorted_storage {
-                    // todo: handle wiped storage scenario
-                    let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
-                    for (storage_key, storage_value) in storage_items {
-                        let vv = VersionedValue {
-                            block_number,
-                            value: MaybeDeleted(Some(StorageValue(storage_value))),
-                        };
-                        let key = HashedStorageKey::new(*hashed_address, storage_key);
-                        storage_cursor.append_dup(key.clone(), vv)?;
-
-                        hashed_storage_keys.push(key);
-                    }
-                }
-
-                // Cursor for recording all changes made in this block for all history tables
-                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
-                change_set_cursor.append(
-                    block_number,
-                    &ChangeSet {
-                        account_trie_keys,
-                        storage_trie_keys,
-                        hashed_account_keys,
-                        hashed_storage_keys,
-                    },
-                )?;
+                account_trie_keys.push(key);
             }
+
+            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+            for (hashed_address, nodes) in sorted_storage_nodes {
+                // todo: handle is_deleted scenario
+                for (path, node) in nodes.storage_nodes {
+                    let key = StorageTrieKey::new(hashed_address, path.into());
+                    let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+                    storage_trie_cursor.append_dup(key.clone(), vv)?;
+
+                    storage_trie_keys.push(key);
+                }
+            }
+
+            let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            for (hashed_address, account) in sorted_accounts {
+                let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
+                account_cursor.append_dup(hashed_address, vv)?;
+
+                hashed_account_keys.push(hashed_address);
+            }
+
+            let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+            for (hashed_address, storage) in sorted_storage {
+                // todo: handle wiped storage scenario
+                let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
+                for (storage_key, storage_value) in storage_items {
+                    let vv = VersionedValue {
+                        block_number,
+                        value: MaybeDeleted(Some(StorageValue(storage_value))),
+                    };
+                    let key = HashedStorageKey::new(*hashed_address, storage_key);
+                    storage_cursor.append_dup(key.clone(), vv)?;
+
+                    hashed_storage_keys.push(key);
+                }
+            }
+
+            // Cursor for recording all changes made in this block for all history tables
+            let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+            change_set_cursor.append(
+                block_number,
+                &ChangeSet {
+                    account_trie_keys,
+                    storage_trie_keys,
+                    hashed_account_keys,
+                    hashed_storage_keys,
+                },
+            )?;
 
             // update proof window latest block
             let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
@@ -442,7 +436,7 @@ impl OpProofsStore for MdbxProofsStorage {
                 }
             }
 
-            Ok(BlockStateDiff::default())
+            Ok(block_state_diff)
         })?
     }
 
@@ -1239,6 +1233,98 @@ mod tests {
 
         let mut cur5 = tx.new_cursor::<BlockChangeSet>().expect("cursor");
         assert!(cur5.next().expect("first").is_none(), "Pruning index should be empty");
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_missing_changeset_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        let res = store.fetch_trie_updates(99).await;
+        assert!(matches!(res, Err(OpProofsStorageError::NoChangeSetForBlock(99))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_empty_changeset() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        let block = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let diff = BlockStateDiff::default();
+
+        store.store_trie_updates(block, diff).await.expect("store");
+        let got = store.fetch_trie_updates(1).await.expect("fetch");
+        assert!(got.trie_updates.account_nodes.is_empty());
+        assert!(got.trie_updates.removed_nodes.is_empty());
+        assert!(got.trie_updates.storage_tries.is_empty());
+        assert!(got.post_state.accounts.is_empty());
+        assert!(got.post_state.storages.is_empty());
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_basic() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // Build a block with mixed changes (accounts, trie nodes, hashed storages)
+        let block = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+
+        // prepare data
+        let addr1 = B256::from([0x11; 32]);
+        let addr2 = B256::from([0x22; 32]);
+        let slot1 = B256::from([0xA1; 32]);
+        let slot2 = B256::from([0xA2; 32]);
+
+        let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
+
+        let val1 = U256::from(1234u64);
+        let val2 = U256::from(5678u64);
+
+        let account_path1 = Nibbles::from_nibbles_unchecked(vec![0, 1, 2, 3]);
+        let account_path2 = Nibbles::from_nibbles_unchecked(vec![4, 5, 6, 7]);
+        let account_node1 =
+            BranchNodeCompact { root_hash: Some(B256::random()), ..Default::default() };
+        let account_node2 =
+            BranchNodeCompact { root_hash: Some(B256::random()), ..Default::default() };
+
+        let storage_path1 = Nibbles::from_nibbles_unchecked(vec![1, 2, 3, 4]);
+        let storage_node1 =
+            BranchNodeCompact { root_hash: Some(B256::random()), ..Default::default() };
+
+        // Construct BlockStateDiff
+        let mut block_state_diff = BlockStateDiff::default();
+        block_state_diff.trie_updates.account_nodes.insert(account_path1, account_node1.clone());
+        block_state_diff.trie_updates.account_nodes.insert(account_path2, account_node2.clone());
+        // storage trie for addr1
+        let mut storage_nodes1 = StorageTrieUpdates::default();
+        storage_nodes1.storage_nodes.insert(storage_path1, storage_node1.clone());
+        block_state_diff.trie_updates.storage_tries.insert(addr1, storage_nodes1);
+
+        // hashed accounts: addr1 -> Some, addr2 -> None
+        block_state_diff.post_state.accounts.insert(addr1, Some(acc1));
+        block_state_diff.post_state.accounts.insert(addr2, None);
+
+        // hashed storages
+        let mut storage1 = HashedStorage::default();
+        storage1.storage.insert(slot1, val1);
+        block_state_diff.post_state.storages.insert(addr1, storage1);
+
+        let mut storage2 = HashedStorage::default();
+        storage2.storage.insert(slot2, val2);
+        block_state_diff.post_state.storages.insert(addr2, storage2);
+
+        // store then fetch
+        store.store_trie_updates(block, block_state_diff.clone()).await.expect("store");
+        let got = store.fetch_trie_updates(1).await.expect("fetch");
+
+        // verify trie updates
+        assert_eq!(got.trie_updates.account_nodes, block_state_diff.trie_updates.account_nodes,);
+        assert_eq!(got.trie_updates.removed_nodes, block_state_diff.trie_updates.removed_nodes,);
+        assert_eq!(got.trie_updates.storage_tries, block_state_diff.trie_updates.storage_tries,);
+
+        // verify post state
+        assert_eq!(got.post_state.accounts, block_state_diff.post_state.accounts);
+        assert_eq!(got.post_state.storages, block_state_diff.post_state.storages);
     }
 
     #[tokio::test]
