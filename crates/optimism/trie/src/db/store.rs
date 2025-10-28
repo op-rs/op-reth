@@ -453,7 +453,6 @@ impl OpProofsStore for MdbxProofsStorage {
             // First collect keys to prune to avoid borrow checker issues with cursors.
             let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
             let keys_to_prune: Vec<(u64, ChangeSet)> = {
-                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
                 change_set_cursor
                     .walk_range(start_block..new_earliest_block_number)?
                     .collect::<Result<Vec<_>, _>>()?
