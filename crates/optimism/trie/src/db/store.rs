@@ -263,10 +263,15 @@ impl OpProofsStore for MdbxProofsStorage {
 
         self.env.update(|tx| {
             // check latest stored block is the parent of incoming block
-            let latest_block_hash = tx
-                .get::<ProofWindow>(ProofWindowKey::LatestBlock)?
-                .map(|bn_hash| *bn_hash.hash())
-                .unwrap_or_default();
+            let latest_block_hash = if let Some(bn_hash) =
+                tx.get::<ProofWindow>(ProofWindowKey::LatestBlock)?
+            {
+                *bn_hash.hash()
+            } else if let Some(bn_hash) = tx.get::<ProofWindow>(ProofWindowKey::EarliestBlock)? {
+                *bn_hash.hash()
+            } else {
+                B256::ZERO
+            };
 
             if latest_block_hash != block_ref.parent {
                 return Err(OpProofsStorageError::OutOfOrder {
