@@ -17,7 +17,7 @@ use itertools::Itertools;
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
     mdbx::{init_db_for, DatabaseArguments},
-    transaction::DbTx,
+    transaction::{DbTx, DbTxMut},
     Database, DatabaseEnv,
 };
 use reth_primitives_traits::Account;
@@ -55,12 +55,22 @@ impl MdbxProofsStorage {
         block_number: u64,
         hash: B256,
     ) -> OpProofsStorageResult<()> {
-        self.env.update(|tx| {
-            let mut cursor = tx.new_cursor::<ProofWindow>()?;
-            cursor
-                .upsert(ProofWindowKey::EarliestBlock, &BlockNumberHash::new(block_number, hash))?;
-            Ok(())
-        })?
+        let _ = self.env.update(|tx| {
+            Self::inner_set_earliest_block_number(tx, block_number, hash)?;
+            Ok::<(), reth_db::DatabaseError>(())
+        })?;
+        Ok(())
+    }
+
+    /// Internal helper to set earliest block number hash within an existing transaction
+    fn inner_set_earliest_block_number(
+        tx: &(impl DbTxMut + DbTx),
+        block_number: u64,
+        hash: B256,
+    ) -> OpProofsStorageResult<()> {
+        let mut cursor = tx.cursor_write::<ProofWindow>()?;
+        cursor.upsert(ProofWindowKey::EarliestBlock, &BlockNumberHash::new(block_number, hash))?;
+        Ok(())
     }
 }
 
@@ -506,15 +516,16 @@ impl OpProofsStore for MdbxProofsStorage {
                     change_set_cursor.delete_current()?;
                 }
             }
+
+            // Set the earliest block number to the new value
+            Self::inner_set_earliest_block_number(
+                tx,
+                new_earliest_block_number,
+                new_earliest_block_ref.block.hash,
+            )?;
+
             Ok::<(), reth_db::DatabaseError>(())
         })?;
-
-        // Set the earliest block number to the new value
-        self.set_earliest_block_number_hash(
-            new_earliest_block_number,
-            new_earliest_block_ref.block.hash,
-        )
-        .await?;
 
         Ok(())
     }
