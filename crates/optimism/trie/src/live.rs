@@ -1,9 +1,8 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-    api::{BlockStateDiff, OpProofsStorageError, OpProofsStore},
-    provider::OpProofsStateProviderRef,
-    OpProofsStorage,
+    provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage, OpProofsStorageError,
+    OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use derive_more::Constructor;
@@ -57,11 +56,11 @@ where
         }
 
         if parent_block_number > latest {
-            return Err(OpProofsStorageError::MissingParentBlock(
-                block.number(),
+            return Err(OpProofsStorageError::MissingParentBlock {
+                block_number: block.number(),
                 parent_block_number,
-                latest,
-            )
+                latest_block_number: latest,
+            }
             .into());
         }
 
@@ -93,11 +92,11 @@ where
         let calculate_state_root_duration = start.elapsed() - execute_block_duration;
 
         if state_root != block.state_root() {
-            return Err(OpProofsStorageError::StateRootMismatch(
-                block.number(),
-                state_root,
-                block.state_root(),
-            )
+            return Err(OpProofsStorageError::StateRootMismatch {
+                block_number: block.number(),
+                current_state_hash: state_root,
+                expected_state_hash: block.state_root(),
+            }
             .into());
         }
 
