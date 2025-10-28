@@ -435,11 +435,11 @@ impl OpProofsStore for MdbxProofsStorage {
                     match hashed_storage_cursor.seek_by_key_subkey(key.clone(), block_number)? {
                         Some(v) if v.block_number == block_number => v.value.0,
                         _ => {
-                            return Err(OpProofsStorageError::MissingHashedStorageHistory(
-                                key.hashed_address,
-                                key.hashed_storage_key,
+                            return Err(OpProofsStorageError::MissingHashedStorageHistory {
+                                hashed_address: key.hashed_address,
+                                hashed_storage_key: key.hashed_storage_key,
                                 block_number,
-                            ))
+                            })
                         }
                     };
 
@@ -1499,7 +1499,7 @@ mod tests {
         }
 
         let res = store.fetch_trie_updates(1).await;
-        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedStorageHistory(..))));
+        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedStorageHistory { .. })));
     }
 
     #[tokio::test]
@@ -1536,7 +1536,7 @@ mod tests {
         // fetch block 1 -> seek will find block 2 but block_number != 1 so expect
         // MissingHashedStorageHistory
         let res = store.fetch_trie_updates(1).await;
-        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedStorageHistory(..))));
+        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedStorageHistory { .. })));
     }
 
     #[tokio::test]
