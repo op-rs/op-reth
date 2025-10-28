@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 /// The keys of the entries in the history tables.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ChangeSet {
-    /// Keys changed in [`AccountTrieHistory`] table.
+    /// Keys changed in [`AccountTrieHistory`](super::AccountTrieHistory) table.
     pub account_trie_keys: Vec<StoredNibbles>,
-    /// Keys changed in [`StorageTrieHistory`] table.
+    /// Keys changed in [`StorageTrieHistory`](super::StorageTrieHistory) table.
     pub storage_trie_keys: Vec<StorageTrieKey>,
-    /// Keys changed in [`HashedAccountHistory`] table.
+    /// Keys changed in [`HashedAccountHistory`](super::HashedAccountHistory) table.
     pub hashed_account_keys: Vec<B256>,
-    /// Keys changed in [`HashedStorageHistory`] table.
+    /// Keys changed in [`HashedStorageHistory`](super::HashedStorageHistory) table.
     pub hashed_storage_keys: Vec<HashedStorageKey>,
 }
 
