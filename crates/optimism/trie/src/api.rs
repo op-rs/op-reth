@@ -35,7 +35,7 @@ pub enum OpProofsStorageError {
         block_number: u64,
         /// The parent state of the block being executed
         parent_block_number: u64,
-        /// latest stored block number
+        /// Latest stored block number
         latest_block_number: u64,
     },
     /// State root mismatch
