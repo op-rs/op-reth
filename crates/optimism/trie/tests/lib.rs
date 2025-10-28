@@ -1,13 +1,18 @@
 //! Common test suite for [`OpProofsStore`] implementations.
 
+use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_optimism_trie::{
-    BlockStateDiff, InMemoryProofsStorage, OpProofsHashedCursorRO, OpProofsStorageError,
-    OpProofsStore, OpProofsTrieCursorRO,
+    db::MdbxProofsStorage, BlockStateDiff, InMemoryProofsStorage, OpProofsHashedCursorRO,
+    OpProofsStorageError, OpProofsStore, OpProofsTrieCursorRO,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles, TrieMask};
+use reth_trie::{
+    updates::TrieUpdates, BranchNodeCompact, HashedPostState, HashedStorage, Nibbles, TrieMask,
+};
+use serial_test::serial;
 use std::sync::Arc;
+use tempfile::TempDir;
 use test_case::test_case;
 
 /// Helper to create a simple test branch node
@@ -63,9 +68,16 @@ fn create_test_account_with_values(nonce: u64, balance: u64, code_hash_byte: u8)
     }
 }
 
+fn create_mdbx_proofs_storage() -> MdbxProofsStorage {
+    let path = TempDir::new().unwrap();
+    MdbxProofsStorage::new(path.path()).unwrap()
+}
+
 /// Test basic storage and retrieval of earliest block number
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_earliest_block_operations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -86,21 +98,23 @@ async fn test_earliest_block_operations<S: OpProofsStore>(
 
 /// Test storing and retrieving trie updates
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+// #[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_trie_updates_operations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
-    let block_number = 50;
+    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
     let trie_updates = TrieUpdates::default();
     let post_state = HashedPostState::default();
     let block_state_diff =
         BlockStateDiff { trie_updates: trie_updates.clone(), post_state: post_state.clone() };
 
     // Store trie updates
-    storage.store_trie_updates(block_number, block_state_diff).await?;
+    storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // Retrieve and verify
-    let retrieved_diff = storage.fetch_trie_updates(block_number).await?;
+    let retrieved_diff = storage.fetch_trie_updates(block_ref.block.number).await?;
     assert_eq!(retrieved_diff.trie_updates, trie_updates);
     assert_eq!(retrieved_diff.post_state, post_state);
 
@@ -113,7 +127,9 @@ async fn test_trie_updates_operations<S: OpProofsStore>(
 
 /// Test cursor operations on empty trie
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_cursor_empty_trie<S: OpProofsStore>(storage: S) -> Result<(), OpProofsStorageError> {
     let mut cursor = storage.account_trie_cursor(100)?;
 
@@ -128,7 +144,9 @@ async fn test_cursor_empty_trie<S: OpProofsStore>(storage: S) -> Result<(), OpPr
 
 /// Test cursor operations with single entry
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_cursor_single_entry<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -155,7 +173,9 @@ async fn test_cursor_single_entry<S: OpProofsStore>(
 
 /// Test cursor operations with multiple entries
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_cursor_multiple_entries<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -195,7 +215,9 @@ async fn test_cursor_multiple_entries<S: OpProofsStore>(
 
 /// Test `seek_exact` with existing path
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_seek_exact_existing_path<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -213,7 +235,9 @@ async fn test_seek_exact_existing_path<S: OpProofsStore>(
 
 /// Test `seek_exact` with non-existing path
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_seek_exact_non_existing_path<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -231,7 +255,9 @@ async fn test_seek_exact_non_existing_path<S: OpProofsStore>(
 
 /// Test `seek_exact` with empty path
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_seek_exact_empty_path<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -249,7 +275,9 @@ async fn test_seek_exact_empty_path<S: OpProofsStore>(
 
 /// Test seek to existing path
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_seek_to_existing_path<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -267,7 +295,9 @@ async fn test_seek_to_existing_path<S: OpProofsStore>(
 
 /// Test seek between existing nodes
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_seek_between_existing_nodes<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -289,7 +319,9 @@ async fn test_seek_between_existing_nodes<S: OpProofsStore>(
 
 /// Test seek after all nodes
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_seek_after_all_nodes<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -308,7 +340,9 @@ async fn test_seek_after_all_nodes<S: OpProofsStore>(
 
 /// Test seek before all nodes
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_seek_before_all_nodes<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -332,7 +366,9 @@ async fn test_seek_before_all_nodes<S: OpProofsStore>(
 
 /// Test next without prior seek
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_next_without_prior_seek<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -351,7 +387,9 @@ async fn test_next_without_prior_seek<S: OpProofsStore>(
 
 /// Test next after seek
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_next_after_seek<S: OpProofsStore>(storage: S) -> Result<(), OpProofsStorageError> {
     let path1 = nibbles_from(vec![1]);
     let path2 = nibbles_from(vec![2]);
@@ -372,7 +410,9 @@ async fn test_next_after_seek<S: OpProofsStore>(storage: S) -> Result<(), OpProo
 
 /// Test next at end of trie
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_next_at_end_of_trie<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -392,7 +432,9 @@ async fn test_next_at_end_of_trie<S: OpProofsStore>(
 
 /// Test multiple consecutive next calls
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_multiple_consecutive_next<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -419,7 +461,9 @@ async fn test_multiple_consecutive_next<S: OpProofsStore>(
 
 /// Test current after operations
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_current_after_operations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -448,7 +492,9 @@ async fn test_current_after_operations<S: OpProofsStore>(
 
 /// Test current with no prior operations
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_current_no_prior_operations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -466,7 +512,9 @@ async fn test_current_no_prior_operations<S: OpProofsStore>(
 
 /// Test same path with different blocks
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_same_path_different_blocks<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -493,12 +541,15 @@ async fn test_same_path_different_blocks<S: OpProofsStore>(
 
 /// Test deleted branch nodes
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_deleted_branch_nodes<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
     let path = nibbles_from(vec![1, 2]);
     let branch = create_test_branch();
+    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // Store branch node, then delete it (store None)
     storage.store_account_branches(vec![(path, Some(branch.clone()))]).await?;
@@ -507,8 +558,10 @@ async fn test_deleted_branch_nodes<S: OpProofsStore>(
     let mut cursor75 = storage.account_trie_cursor(75)?;
     assert!(cursor75.seek_exact(path)?.is_some());
 
-    // set the node to None
-    storage.store_account_branches(vec![(path, None)]).await?;
+    let mut block_state_diff = BlockStateDiff::default();
+    block_state_diff.trie_updates.removed_nodes.insert(path);
+    storage.store_trie_updates(block_ref, block_state_diff).await?;
+
     // Cursor after deletion should not see the node
     let mut cursor150 = storage.account_trie_cursor(150)?;
     assert!(cursor150.seek_exact(path)?.is_none());
@@ -522,7 +575,9 @@ async fn test_deleted_branch_nodes<S: OpProofsStore>(
 
 /// Test account-specific cursor
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_account_specific_cursor<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -558,7 +613,9 @@ async fn test_account_specific_cursor<S: OpProofsStore>(
 
 /// Test state trie cursor
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_state_trie_cursor<S: OpProofsStore>(storage: S) -> Result<(), OpProofsStorageError> {
     let path = nibbles_from(vec![1, 2]);
     let addr = B256::repeat_byte(0x01);
@@ -587,7 +644,9 @@ async fn test_state_trie_cursor<S: OpProofsStore>(storage: S) -> Result<(), OpPr
 
 /// Test mixed account and state data
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_mixed_account_state_data<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -627,7 +686,9 @@ async fn test_mixed_account_state_data<S: OpProofsStore>(
 
 /// Test lexicographic ordering
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_lexicographic_ordering<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -665,7 +726,9 @@ async fn test_lexicographic_ordering<S: OpProofsStore>(
 
 /// Test path prefix scenarios
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_path_prefix_scenarios<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -698,7 +761,9 @@ async fn test_path_prefix_scenarios<S: OpProofsStore>(
 
 /// Test complex nibble combinations
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_complex_nibble_combinations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -739,7 +804,9 @@ async fn test_complex_nibble_combinations<S: OpProofsStore>(
 
 /// Test store and retrieve single account
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_store_and_retrieve_single_account<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -763,7 +830,9 @@ async fn test_store_and_retrieve_single_account<S: OpProofsStore>(
 
 /// Test account cursor navigation
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_account_cursor_navigation<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -800,7 +869,9 @@ async fn test_account_cursor_navigation<S: OpProofsStore>(
 
 /// Test account block versioning
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_account_block_versioning<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -830,6 +901,7 @@ async fn test_account_block_versioning<S: OpProofsStore>(
 
 /// Test store and retrieve storage
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
 async fn test_store_and_retrieve_storage<S: OpProofsStore>(
     storage: S,
@@ -859,7 +931,9 @@ async fn test_store_and_retrieve_storage<S: OpProofsStore>(
 
 /// Test storage cursor navigation
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_storage_cursor_navigation<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -890,7 +964,9 @@ async fn test_storage_cursor_navigation<S: OpProofsStore>(
 
 /// Test storage account isolation
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_storage_account_isolation<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -924,7 +1000,9 @@ async fn test_storage_account_isolation<S: OpProofsStore>(
 
 /// Test storage block versioning
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_storage_block_versioning<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -950,7 +1028,9 @@ async fn test_storage_block_versioning<S: OpProofsStore>(
 
 /// Test storage zero value deletion
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_storage_zero_value_deletion<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -965,8 +1045,15 @@ async fn test_storage_zero_value_deletion<S: OpProofsStore>(
     let result75 = cursor75.seek(storage_key)?.unwrap();
     assert_eq!(result75.1, U256::from(100));
 
-    // "Delete" by storing zero value
-    storage.store_hashed_storages(hashed_address, vec![(storage_key, U256::ZERO)]).await?;
+    // "Delete" by storing zero value at block 100
+    let mut block_state_diff = BlockStateDiff::default();
+    let mut hashed_storage = HashedStorage::default();
+    hashed_storage.storage.insert(storage_key, U256::ZERO);
+    block_state_diff.post_state.storages.insert(hashed_address, hashed_storage);
+
+    let block_ref: BlockWithParent =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
+    storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // Cursor after deletion should NOT see the entry (zero values are skipped)
     let mut cursor150 = storage.storage_hashed_cursor(hashed_address, 150)?;
@@ -978,7 +1065,9 @@ async fn test_storage_zero_value_deletion<S: OpProofsStore>(
 
 /// Test that zero values are skipped during iteration
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_storage_cursor_skips_zero_values<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -1026,7 +1115,9 @@ async fn test_storage_cursor_skips_zero_values<S: OpProofsStore>(
 
 /// Test empty cursors
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_empty_cursors<S: OpProofsStore>(storage: S) -> Result<(), OpProofsStorageError> {
     // Test empty account cursor
     let mut account_cursor = storage.account_hashed_cursor(100)?;
@@ -1043,7 +1134,9 @@ async fn test_empty_cursors<S: OpProofsStore>(storage: S) -> Result<(), OpProofs
 
 /// Test cursor boundary conditions
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_cursor_boundary_conditions<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -1071,7 +1164,9 @@ async fn test_cursor_boundary_conditions<S: OpProofsStore>(
 
 /// Test large batch operations
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_large_batch_operations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -1108,13 +1203,17 @@ async fn test_large_batch_operations<S: OpProofsStore>(
 /// When `store_trie_updates` receives a [`HashedPostState`] with wiped=true for a storage entry,
 /// it should iterate all existing values for that address and create deletion entries for them.
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+// #[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_store_trie_updates_with_wiped_storage<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
     use reth_trie::HashedStorage;
 
     let hashed_address = B256::repeat_byte(0x01);
+    let block_ref: BlockWithParent =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // First, store some storage values at block 50
     let storage_slots = vec![
@@ -1146,7 +1245,7 @@ async fn test_store_trie_updates_with_wiped_storage<S: OpProofsStore>(
     let block_state_diff = BlockStateDiff { trie_updates: TrieUpdates::default(), post_state };
 
     // Store the wiped state
-    storage.store_trie_updates(100, block_state_diff).await?;
+    storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // After wiping, cursor at block 150 should see NO storage values
     let mut cursor150 = storage.storage_hashed_cursor(hashed_address, 150)?;
@@ -1193,13 +1292,15 @@ async fn test_store_trie_updates_with_wiped_storage<S: OpProofsStore>(
 /// This test verifies that all data stored via `store_trie_updates` can be read back
 /// through the cursor APIs.
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+// #[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
     use reth_trie::{updates::StorageTrieUpdates, HashedStorage};
 
-    let block_number = 100;
+    let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
 
     // Create comprehensive trie updates with branches, leaves, and removals
     let mut trie_updates = TrieUpdates::default();
@@ -1260,10 +1361,10 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     let block_state_diff = BlockStateDiff { trie_updates, post_state };
 
     // Store the updates
-    storage.store_trie_updates(block_number, block_state_diff).await?;
+    storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // ========== Verify Account Branch Nodes ==========
-    let mut account_trie_cursor = storage.account_trie_cursor(block_number + 10)?;
+    let mut account_trie_cursor = storage.account_trie_cursor(block_ref.block.number + 10)?;
 
     // Should find the added branches
     let result1 = account_trie_cursor.seek_exact(account_path1)?;
@@ -1279,7 +1380,8 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     assert!(removed_result.is_none(), "Removed account node should not be found");
 
     // ========== Verify Storage Branch Nodes ==========
-    let mut storage_trie_cursor = storage.storage_trie_cursor(hashed_address, block_number + 10)?;
+    let mut storage_trie_cursor =
+        storage.storage_trie_cursor(hashed_address, block_ref.block.number + 10)?;
 
     let storage_result1 = storage_trie_cursor.seek_exact(storage_path1)?;
     assert!(storage_result1.is_some(), "Storage branch node 1 should be found");
@@ -1292,7 +1394,7 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     assert!(removed_storage_result.is_none(), "Removed storage node should not be found");
 
     // ========== Verify Account Leaves ==========
-    let mut account_cursor = storage.account_hashed_cursor(block_number + 10)?;
+    let mut account_cursor = storage.account_hashed_cursor(block_ref.block.number + 10)?;
 
     let acc1_result = account_cursor.seek(account1_addr)?;
     assert!(acc1_result.is_some(), "Account 1 should be found");
@@ -1312,7 +1414,8 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     );
 
     // ========== Verify Storage Leaves ==========
-    let mut storage_cursor = storage.storage_hashed_cursor(storage_addr, block_number + 10)?;
+    let mut storage_cursor =
+        storage.storage_hashed_cursor(storage_addr, block_ref.block.number + 10)?;
 
     let slot1_result = storage_cursor.seek(B256::repeat_byte(0x01))?;
     assert!(slot1_result.is_some(), "Storage slot 1 should be found");
@@ -1330,7 +1433,7 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     );
 
     // ========== Verify fetch_trie_updates can retrieve the data ==========
-    let fetched_diff = storage.fetch_trie_updates(block_number).await?;
+    let fetched_diff = storage.fetch_trie_updates(block_ref.block.number).await?;
 
     // Check that trie updates are stored
     assert_eq!(
@@ -1361,11 +1464,15 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
 /// and `post_states` directly without populating the internal data structures
 /// (`hashed_accounts`, `hashed_storages`, `account_branches`, `storage_branches`).
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+// #[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
     use reth_trie::{updates::StorageTrieUpdates, HashedStorage};
+
+    let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
 
     // ========== Setup: Store initial state at blocks 50, 100, 101 ==========
     let initial_account_addr = B256::repeat_byte(0x10);
@@ -1387,7 +1494,7 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
 
     let initial_diff_50 =
         BlockStateDiff { trie_updates: initial_trie_updates_50, post_state: initial_post_state_50 };
-    storage.store_trie_updates(50, initial_diff_50).await?;
+    storage.store_trie_updates(block_ref_50, initial_diff_50).await?;
 
     // Store data at block 100 (common block)
     let mut initial_trie_updates_100 = TrieUpdates::default();
@@ -1403,7 +1510,11 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
         trie_updates: initial_trie_updates_100,
         post_state: initial_post_state_100,
     };
-    storage.store_trie_updates(100, initial_diff_100).await?;
+
+    let block_ref_100 =
+        BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x97)));
+
+    storage.store_trie_updates(block_ref_100, initial_diff_100).await?;
 
     // Store data at block 101 (will be replaced)
     let mut initial_trie_updates_101 = TrieUpdates::default();
@@ -1419,7 +1530,9 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
         trie_updates: initial_trie_updates_101,
         post_state: initial_post_state_101,
     };
-    storage.store_trie_updates(101, initial_diff_101).await?;
+    let block_ref_101 =
+        BlockWithParent::new(B256::ZERO, NumHash::new(101, B256::repeat_byte(0x98)));
+    storage.store_trie_updates(block_ref_101, initial_diff_101).await?;
 
     // ========== Verify initial state exists ==========
     // Verify block 50 data exists
@@ -1597,7 +1710,9 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
 /// This test verifies that when a node appears only in `removed_nodes` (not in updates),
 /// it is properly stored as a deletion and subsequent queries return None for that path.
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -1626,7 +1741,9 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    storage.store_trie_updates(50, initial_diff).await?;
+    let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
+
+    storage.store_trie_updates(block_ref_50, initial_diff).await?;
 
     // Verify initial state exists at block 75
     let mut cursor_75 = storage.account_trie_cursor(75)?;
@@ -1665,7 +1782,10 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    storage.store_trie_updates(100, deletion_diff).await?;
+    let block_ref_100 =
+        BlockWithParent::new(B256::repeat_byte(0x96), NumHash::new(100, B256::repeat_byte(0x97)));
+
+    storage.store_trie_updates(block_ref_100, deletion_diff).await?;
 
     // ========== Verify that deleted nodes return None at block 150 ==========
 
@@ -1725,7 +1845,9 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
 /// the update from `account_nodes` takes precedence. This is critical for correctness
 /// when processing trie updates that both remove and update the same node.
 #[test_case(InMemoryProofsStorage::new(); "InMemory")]
+#[test_case(create_mdbx_proofs_storage(); "Mdbx")]
 #[tokio::test]
+#[serial]
 async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
@@ -1750,7 +1872,9 @@ async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    storage.store_trie_updates(50, initial_diff).await?;
+    let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
+
+    storage.store_trie_updates(block_ref_50, initial_diff).await?;
 
     // Verify initial state exists at block 75
     let mut cursor_75 = storage.account_trie_cursor(75)?;
@@ -1789,7 +1913,10 @@ async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
         post_state: HashedPostState::default(),
     };
 
-    storage.store_trie_updates(100, conflicting_diff).await?;
+    let block_ref_100 =
+        BlockWithParent::new(B256::repeat_byte(0x96), NumHash::new(100, B256::repeat_byte(0x97)));
+
+    storage.store_trie_updates(block_ref_100, conflicting_diff).await?;
 
     // ========== Verify that updates took precedence at block 150 ==========
 
