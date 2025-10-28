@@ -1,29 +1,26 @@
-use crate::db::HashedStorageKey;
+use crate::db::{HashedStorageKey, StorageTrieKey};
 use alloy_primitives::B256;
 use reth_db::{
-    table::{Compress, Decode, Decompress, Encode},
+    table::{self, Decode, Encode},
     DatabaseError,
 };
-
 use reth_trie::StoredNibbles;
 use serde::{Deserialize, Serialize};
-
-use crate::db::StorageTrieKey;
 
 /// The keys of the entries in the history tables.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ChangeSet {
-    /// Keys changed in `AccountTrieHistory` table.
+    /// Keys changed in [`AccountTrieHistory`] table.
     pub account_trie_keys: Vec<StoredNibbles>,
-    /// Keys changed in `StorageTrieHistory` table.
+    /// Keys changed in [`StorageTrieHistory`] table.
     pub storage_trie_keys: Vec<StorageTrieKey>,
-    /// Keys changed in `HashedAccountHistory` table.
+    /// Keys changed in [`HashedAccountHistory`] table.
     pub hashed_account_keys: Vec<B256>,
-    /// Keys changed in `HashedStorageHistory` table.
+    /// Keys changed in [`HashedStorageHistory`] table.
     pub hashed_storage_keys: Vec<HashedStorageKey>,
 }
 
-impl Encode for ChangeSet {
+impl table::Encode for ChangeSet {
     type Encoded = Vec<u8>;
 
     fn encode(self) -> Self::Encoded {
@@ -31,13 +28,13 @@ impl Encode for ChangeSet {
     }
 }
 
-impl Decode for ChangeSet {
+impl table::Decode for ChangeSet {
     fn decode(value: &[u8]) -> Result<Self, DatabaseError> {
         bincode::deserialize(value).map_err(|_| DatabaseError::Decode)
     }
 }
 
-impl Compress for ChangeSet {
+impl table::Compress for ChangeSet {
     type Compressed = Vec<u8>;
 
     fn compress_to_buf<B: bytes::BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
@@ -46,7 +43,7 @@ impl Compress for ChangeSet {
     }
 }
 
-impl Decompress for ChangeSet {
+impl table::Decompress for ChangeSet {
     fn decompress(value: &[u8]) -> Result<Self, DatabaseError> {
         Self::decode(value)
     }
@@ -56,6 +53,7 @@ impl Decompress for ChangeSet {
 mod tests {
     use super::*;
     use alloy_primitives::B256;
+    use reth_db::table::{Compress, Decompress};
 
     #[test]
     fn test_encode_decode_empty_change_set() {
