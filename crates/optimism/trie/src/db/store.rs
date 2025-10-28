@@ -370,12 +370,17 @@ impl OpProofsStore for MdbxProofsStorage {
 
             let mut block_state_diff = BlockStateDiff::default();
             for key in change_set.account_trie_keys {
-                // todo: error handling
-                let entry = account_trie_cursor
+                let entry = match account_trie_cursor
                     .seek_by_key_subkey(key.clone(), block_number)?
-                    .unwrap()
-                    .value
-                    .0;
+                {
+                    Some(v) if v.block_number == block_number => v.value.0,
+                    _ => {
+                        return Err(OpProofsStorageError::MissingAccountTrieHistory(
+                            key.0,
+                            block_number,
+                        ))
+                    }
+                };
 
                 if let Some(value) = entry {
                     block_state_diff.trie_updates.account_nodes.insert(key.0, value);
@@ -385,12 +390,18 @@ impl OpProofsStore for MdbxProofsStorage {
             }
 
             for key in change_set.storage_trie_keys {
-                // todo: error handling
-                let entry = storage_trie_cursor
+                let entry = match storage_trie_cursor
                     .seek_by_key_subkey(key.clone(), block_number)?
-                    .unwrap()
-                    .value
-                    .0;
+                {
+                    Some(v) if v.block_number == block_number => v.value.0,
+                    _ => {
+                        return Err(OpProofsStorageError::MissingStorageTrieHistory(
+                            key.hashed_address,
+                            key.path.0,
+                            block_number,
+                        ))
+                    }
+                };
 
                 let stu = block_state_diff
                     .trie_updates
@@ -399,6 +410,7 @@ impl OpProofsStore for MdbxProofsStorage {
                     .or_insert_with(StorageTrieUpdates::default);
 
                 // handle is_deleted scenario
+                // Issue: https://github.com/op-rs/op-reth/issues/323
                 if let Some(value) = entry {
                     stu.storage_nodes.insert(key.path.0, value);
                 } else {
@@ -407,20 +419,34 @@ impl OpProofsStore for MdbxProofsStorage {
             }
 
             for key in change_set.hashed_account_keys {
-                // todo: error handling
-                let entries =
-                    hashed_account_cursor.seek_by_key_subkey(key, block_number)?.unwrap().value.0;
+                let entry = match hashed_account_cursor
+                    .seek_by_key_subkey(key, block_number)?
+                {
+                    Some(v) if v.block_number == block_number => v.value.0,
+                    _ => {
+                        return Err(OpProofsStorageError::MissingHashedAccountHistory(
+                            key,
+                            block_number,
+                        ))
+                    }
+                };
 
-                block_state_diff.post_state.accounts.insert(key, entries);
+                block_state_diff.post_state.accounts.insert(key, entry);
             }
 
             for key in change_set.hashed_storage_keys {
-                // todo: error handling
-                let entry = hashed_storage_cursor
+                let entry = match hashed_storage_cursor
                     .seek_by_key_subkey(key.clone(), block_number)?
-                    .unwrap()
-                    .value
-                    .0;
+                {
+                    Some(v) if v.block_number == block_number => v.value.0,
+                    _ => {
+                        return Err(OpProofsStorageError::MissingHashedStorageHistory(
+                            key.hashed_address,
+                            key.hashed_storage_key,
+                            block_number,
+                        ))
+                    }
+                };
 
                 let hs = block_state_diff
                     .post_state
@@ -429,6 +455,7 @@ impl OpProofsStore for MdbxProofsStorage {
                     .or_insert_with(HashedStorage::default);
 
                 // handle wiped storage scenario
+                // Issue: https://github.com/op-rs/op-reth/issues/323
                 if let Some(value) = entry {
                     hs.storage.insert(key.hashed_storage_key, value.0);
                 } else {
@@ -1232,7 +1259,10 @@ mod tests {
         assert!(cur4.next_dup_val().expect("first").is_none(), "Hashed storage should be empty");
 
         let mut cur5 = tx.new_cursor::<BlockChangeSet>().expect("cursor");
-        assert!(cur5.next().expect("first").is_none(), "Pruning index should be empty");
+        assert!(
+            cur5.next().expect("first").is_some(),
+            "Pruning index SHOULD populate the change set even for empty diffs"
+        );
     }
 
     #[tokio::test]
