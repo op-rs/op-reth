@@ -20,9 +20,10 @@ use reth_db::{
     transaction::DbTx,
     Database, DatabaseEnv,
 };
-use reth_primitives_traits::{block, Account};
-use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
-use core::hash;
+use reth_primitives_traits::Account;
+use reth_trie::{
+    updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles, StoredNibbles,
+};
 use std::path::Path;
 
 /// MDBX implementation of [`OpProofsStore`].
@@ -361,47 +362,87 @@ impl OpProofsStore for MdbxProofsStorage {
         })?
     }
 
-    async fn fetch_trie_updates(
-        &self,
-        block_number: u64,
-    ) -> OpProofsStorageResult<BlockStateDiff> {
+    async fn fetch_trie_updates(&self, block_number: u64) -> OpProofsStorageResult<BlockStateDiff> {
         self.env.view(|tx| {
             let mut change_set_cursor = tx.cursor_read::<BlockChangeSet>()?;
             let (_, change_set) = change_set_cursor
                 .seek_exact(block_number)?
                 .ok_or(OpProofsStorageError::NoChangeSetForBlock(block_number))?;
-        
-        let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
-        let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
-        let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
-        let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
 
-        for key in change_set.account_trie_keys {
-            // todo: error handling
-            let entries = account_trie_cursor
-                .seek_by_key_subkey(key.clone(), block_number)?.unwrap().value.0;
+            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+            let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
 
-        }
+            let mut block_state_diff = BlockStateDiff::default();
+            for key in change_set.account_trie_keys {
+                // todo: error handling
+                let entry = account_trie_cursor
+                    .seek_by_key_subkey(key.clone(), block_number)?
+                    .unwrap()
+                    .value
+                    .0;
 
-        for key in change_set.storage_trie_keys {
-            // todo: error handling
-            let entries = storage_trie_cursor.
-                seek_by_key_subkey(key, block_number)?.unwrap().value.0;
-        }
+                if let Some(value) = entry {
+                    block_state_diff.trie_updates.account_nodes.insert(key.0, value);
+                } else {
+                    block_state_diff.trie_updates.removed_nodes.insert(key.0);
+                }
+            }
 
-        for key in change_set.hashed_account_keys {
-            // todo: error handling
-            let entries = hashed_account_cursor
-                .seek_by_key_subkey(key, block_number)?.unwrap().value.0;
-        }
+            for key in change_set.storage_trie_keys {
+                // todo: error handling
+                let entry = storage_trie_cursor
+                    .seek_by_key_subkey(key.clone(), block_number)?
+                    .unwrap()
+                    .value
+                    .0;
 
-        for key in change_set.hashed_storage_keys {
-            // todo: error handling
-            let entries = hashed_storage_cursor
-                .seek_by_key_subkey(key, block_number)?.unwrap().value.0;
-        }
+                let stu = block_state_diff
+                    .trie_updates
+                    .storage_tries
+                    .entry(key.hashed_address)
+                    .or_insert_with(StorageTrieUpdates::default);
 
-        Ok(BlockStateDiff::default())
+                // handle is_deleted scenario
+                if let Some(value) = entry {
+                    stu.storage_nodes.insert(key.path.0, value);
+                } else {
+                    stu.removed_nodes.insert(key.path.0);
+                }
+            }
+
+            for key in change_set.hashed_account_keys {
+                // todo: error handling
+                let entries =
+                    hashed_account_cursor.seek_by_key_subkey(key, block_number)?.unwrap().value.0;
+
+                block_state_diff.post_state.accounts.insert(key, entries);
+            }
+
+            for key in change_set.hashed_storage_keys {
+                // todo: error handling
+                let entry = hashed_storage_cursor
+                    .seek_by_key_subkey(key.clone(), block_number)?
+                    .unwrap()
+                    .value
+                    .0;
+
+                let hs = block_state_diff
+                    .post_state
+                    .storages
+                    .entry(key.hashed_address)
+                    .or_insert_with(HashedStorage::default);
+
+                // handle wiped storage scenario
+                if let Some(value) = entry {
+                    hs.storage.insert(key.hashed_storage_key, value.0);
+                } else {
+                    hs.storage.insert(key.hashed_storage_key, U256::ZERO);
+                }
+            }
+
+            Ok(BlockStateDiff::default())
         })?
     }
 
