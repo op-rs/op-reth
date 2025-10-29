@@ -597,15 +597,14 @@ impl OpProofsStore for MdbxProofsStorage {
         blocks_to_add: HashMap<BlockWithParent, BlockStateDiff>,
     ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
-            // Collect keys to prune first to avoid borrow checker issues with cursors.
-            let keys_to_prune: Vec<(u64, ChangeSet)> = {
+            let keys_to_rollback: Vec<(u64, ChangeSet)> = {
                 let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
                 change_set_cursor
                     .walk(Some(latest_common_block_number + 1))?
                     .collect::<Result<Vec<_>, _>>()?
             };
 
-            if !keys_to_prune.is_empty() {
+            if !keys_to_rollback.is_empty() {
                 let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
                 let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
                 let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
@@ -613,7 +612,7 @@ impl OpProofsStore for MdbxProofsStorage {
                 let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
 
                 // Process already sorted entries directly
-                for (block_number, change_set) in &keys_to_prune {
+                for (block_number, change_set) in &keys_to_rollback {
                     // Process account trie entries
                     for key in &change_set.account_trie_keys {
                         if let Some(vv) =
