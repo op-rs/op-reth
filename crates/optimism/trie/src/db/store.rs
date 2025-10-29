@@ -19,7 +19,7 @@ use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
     mdbx::{init_db_for, DatabaseArguments},
     transaction::{DbTx, DbTxMut},
-    Database, DatabaseEnv,
+    Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
@@ -58,7 +58,7 @@ impl MdbxProofsStorage {
     ) -> OpProofsStorageResult<()> {
         let _ = self.env.update(|tx| {
             Self::inner_set_earliest_block_number(tx, block_number, hash)?;
-            Ok::<(), reth_db::DatabaseError>(())
+            Ok::<(), DatabaseError>(())
         })?;
         Ok(())
     }
@@ -555,7 +555,7 @@ impl OpProofsStore for MdbxProofsStorage {
                 new_earliest_block_ref.block.hash,
             )?;
 
-            Ok::<(), reth_db::DatabaseError>(())
+            Ok::<(), DatabaseError>(())
         })?;
 
         Ok(())
@@ -590,6 +590,7 @@ mod tests {
     use reth_db::{
         cursor::DbDupCursorRO,
         transaction::{DbTx, DbTxMut},
+        DatabaseError,
     };
     use reth_trie::{
         updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles, StoredNibbles,
@@ -1513,7 +1514,7 @@ mod tests {
                     ProofWindowKey::LatestBlock,
                     &BlockNumberHash::new(3, block_3.block.hash),
                 )?;
-                Ok::<(), reth_db::DatabaseError>(())
+                Ok::<(), DatabaseError>(())
             })
             .unwrap()
             .unwrap();
