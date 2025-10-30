@@ -34,12 +34,12 @@ func TestL2MultipleTransactionsInDifferentBlocks(gt *testing.T) {
 	recipientAddr := recipient.Address()
 
 	// Block 1: Send transaction from first account
-	gt.Logf("Sent transaction from account 0: %s", accounts[0].Address().Hex())
 	currentBlock := preset.L2EL.WaitForBlock()
 	gt.Logf("Current L2 block number: %d", currentBlock.Number)
 
 	transferAmount := eth.Ether(1)
 	tx1 := accounts[0].Transfer(recipientAddr, transferAmount)
+	gt.Logf("Sent transaction from account 0: %s", accounts[0].Address().Hex())
 	receipt1, err := tx1.Included.Eval(dt.Ctx())
 	require.NoError(gt, err)
 	require.Equal(gt, types.ReceiptStatusSuccessful, receipt1.Status)
@@ -68,11 +68,11 @@ func TestL2MultipleTransactionsInDifferentBlocks(gt *testing.T) {
 	preset.L2EL.WaitForBlockNumber(currentBlock.Number + 1)
 
 	// Block 2: Send transaction from second account
-	gt.Logf("Sent transaction from account 1: %s", accounts[1].Address().Hex())
 	currentBlock = preset.L2EL.WaitForBlock()
 	gt.Logf("Current L2 block number: %d", currentBlock.Number)
 
 	tx2 := accounts[1].Transfer(recipientAddr, transferAmount)
+	gt.Logf("Sent transaction from account 1: %s", accounts[1].Address().Hex())
 	receipt2, err := tx2.Included.Eval(dt.Ctx())
 	require.NoError(gt, err)
 	require.Equal(gt, types.ReceiptStatusSuccessful, receipt2.Status)
