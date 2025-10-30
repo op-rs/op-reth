@@ -1,4 +1,4 @@
-package l2reorg
+package proofs
 
 import (
 	"testing"
