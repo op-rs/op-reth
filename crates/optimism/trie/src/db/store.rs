@@ -22,7 +22,9 @@ use reth_db::{
     Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
+use reth_trie::{
+    updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles, StoredNibbles,
+};
 use std::path::Path;
 
 /// MDBX implementation of [`OpProofsStore`].
@@ -71,6 +73,157 @@ impl MdbxProofsStorage {
     ) -> OpProofsStorageResult<()> {
         let mut cursor = tx.cursor_write::<ProofWindow>()?;
         cursor.upsert(ProofWindowKey::EarliestBlock, &BlockNumberHash::new(block_number, hash))?;
+        Ok(())
+    }
+
+    fn store_trie_updates_inner(
+        &self,
+        tx: &<DatabaseEnv as Database>::TXMut,
+        block_ref: BlockWithParent,
+        block_state_diff: BlockStateDiff,
+    ) -> OpProofsStorageResult<()> {
+        let block_number = block_ref.block.number;
+        // TODO: refactor the code - remove sorting out of tx
+
+        let sorted_trie_updates = block_state_diff.trie_updates.into_sorted();
+        //  Sorted list of updated and removed account nodes
+        let sorted_account_nodes = sorted_trie_updates.account_nodes;
+
+        //  Sorted list of updated and removed storage nodes
+        let sorted_storage_nodes = sorted_trie_updates
+            .storage_tries
+            .into_iter()
+            .sorted_by_key(|(hashed_address, _)| *hashed_address)
+            .collect::<Vec<_>>();
+
+        let sorted_post_state = block_state_diff.post_state.into_sorted();
+        let sorted_accounts = sorted_post_state.accounts().accounts_sorted();
+
+        let sorted_storage = sorted_post_state
+            .account_storages()
+            .iter()
+            .sorted_by_key(|(hashed_address, _)| *hashed_address)
+            .collect::<Vec<_>>();
+
+        // check latest stored block is the parent of incoming block
+        let latest_block_hash =
+            if let Some(bn_hash) = tx.get::<ProofWindow>(ProofWindowKey::LatestBlock)? {
+                *bn_hash.hash()
+            } else if let Some(bn_hash) = tx.get::<ProofWindow>(ProofWindowKey::EarliestBlock)? {
+                *bn_hash.hash()
+            } else {
+                B256::ZERO
+            };
+
+        if latest_block_hash != block_ref.parent {
+            return Err(OpProofsStorageError::OutOfOrder {
+                block_number,
+                parent_block_hash: block_ref.parent,
+                latest_block_hash,
+            });
+        }
+
+        let account_trie_len = sorted_account_nodes.len();
+        let storage_trie_len = sorted_storage_nodes.len();
+        let hashed_account_len = sorted_accounts.size_hint().0;
+        let hashed_storage_len = sorted_storage.len();
+
+        // Preparing the entries for the `BlockChangeSet` table
+        let mut account_trie_keys = Vec::<StoredNibbles>::with_capacity(account_trie_len);
+        let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
+        let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
+        let mut hashed_storage_keys = Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
+
+        let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+        for (path, node) in sorted_account_nodes {
+            let key: StoredNibbles = path.into();
+            let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+            account_trie_cursor.append_dup(key.clone(), vv)?;
+
+            account_trie_keys.push(key);
+        }
+
+        let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+        for (hashed_address, nodes) in sorted_storage_nodes {
+            // Handle wiped - mark all storage trie as deleted at the current block number
+            if nodes.is_deleted {
+                // Yet to have any update for the current block number - So just using up to
+                // previous block number
+                let mut storage_trie_cursor_ro =
+                    self.storage_trie_cursor(hashed_address, block_number - 1)?;
+                while let Some((path, _vv)) = storage_trie_cursor_ro.next()? {
+                    // Mark deleted at current block
+                    let del = VersionedValue { block_number, value: MaybeDeleted(None) };
+                    storage_trie_cursor
+                        .append_dup(StorageTrieKey::new(hashed_address, path.into()), del)?;
+                }
+                // Skip any further processing for this hashed_address
+                continue;
+            }
+            for (path, node) in nodes.storage_nodes {
+                let key = StorageTrieKey::new(hashed_address, path.into());
+                let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+                storage_trie_cursor.append_dup(key.clone(), vv)?;
+
+                storage_trie_keys.push(key);
+            }
+        }
+
+        let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+        for (hashed_address, account) in sorted_accounts {
+            let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
+            account_cursor.append_dup(hashed_address, vv)?;
+
+            hashed_account_keys.push(hashed_address);
+        }
+
+        let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+        for (hashed_address, storage) in sorted_storage {
+            // Handle wiped - mark all storage slots as deleted at the current block number
+            if storage.is_wiped() {
+                // Yet to have any update for the current block number - So just using up to
+                // previous block number
+                let mut storage_hashed_cursor =
+                    self.storage_hashed_cursor(*hashed_address, block_number - 1)?;
+                while let Some((key, _vv)) = storage_hashed_cursor.next()? {
+                    // Mark deleted at current block
+                    let del = VersionedValue { block_number, value: MaybeDeleted(None) };
+                    storage_cursor.append_dup(HashedStorageKey::new(*hashed_address, key), del)?;
+                }
+                // Skip any further processing for this hashed_address
+                continue;
+            }
+            let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
+            for (storage_key, storage_value) in storage_items {
+                let vv = VersionedValue {
+                    block_number,
+                    value: MaybeDeleted(Some(StorageValue(storage_value))),
+                };
+                let key = HashedStorageKey::new(*hashed_address, storage_key);
+                storage_cursor.append_dup(key.clone(), vv)?;
+
+                hashed_storage_keys.push(key);
+            }
+        }
+
+        // Cursor for recording all changes made in this block for all history tables
+        let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+        change_set_cursor.append(
+            block_number,
+            &ChangeSet {
+                account_trie_keys,
+                storage_trie_keys,
+                hashed_account_keys,
+                hashed_storage_keys,
+            },
+        )?;
+
+        // update proof window latest block
+        let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
+        proof_window_cursor.append(
+            ProofWindowKey::LatestBlock,
+            &BlockNumberHash::new(block_number, block_ref.block.hash),
+        )?;
         Ok(())
     }
 }
@@ -254,152 +407,116 @@ impl OpProofsStore for MdbxProofsStorage {
         block_ref: BlockWithParent,
         block_state_diff: BlockStateDiff,
     ) -> OpProofsStorageResult<()> {
-        let block_number = block_ref.block.number;
-        let sorted_trie_updates = block_state_diff.trie_updates.into_sorted();
-        //  Sorted list of updated and removed account nodes
-        let sorted_account_nodes = sorted_trie_updates.account_nodes;
-
-        //  Sorted list of updated and removed storage nodes
-        let sorted_storage_nodes = sorted_trie_updates
-            .storage_tries
-            .into_iter()
-            .sorted_by_key(|(hashed_address, _)| *hashed_address)
-            .collect::<Vec<_>>();
-
-        let sorted_post_state = block_state_diff.post_state.into_sorted();
-        let sorted_accounts = sorted_post_state.accounts().accounts_sorted();
-
-        let sorted_storage = sorted_post_state
-            .account_storages()
-            .iter()
-            .sorted_by_key(|(hashed_address, _)| *hashed_address)
-            .collect::<Vec<_>>();
-
-        // check latest stored block is the parent of incoming block
-        // todo: move this check inside the update transaction
-        let latest_hash =
-            self.get_latest_block_number().await?.map(|(_, hash)| hash).unwrap_or(B256::ZERO);
-        if latest_hash != block_ref.parent {
-            return Err(OpProofsStorageError::OutOfOrder {
-                block_number,
-                parent_block_hash: block_ref.parent,
-                latest_block_hash: latest_hash,
-            });
-        }
-
         self.env.update(|tx| {
-            let account_trie_len = sorted_account_nodes.len();
-            let storage_trie_len = sorted_storage_nodes.len();
-            let hashed_account_len = sorted_accounts.size_hint().0;
-            let hashed_storage_len = sorted_storage.len();
-
-            // Preparing the entries for the `BlockChangeSet` table
-            let mut account_trie_keys = Vec::<StoredNibbles>::with_capacity(account_trie_len);
-            let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
-            let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
-            let mut hashed_storage_keys =
-                Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
-
-            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
-            for (path, node) in sorted_account_nodes {
-                let key: StoredNibbles = path.into();
-                let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                account_trie_cursor.append_dup(key.clone(), vv)?;
-
-                account_trie_keys.push(key);
-            }
-
-            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
-            for (hashed_address, nodes) in sorted_storage_nodes {
-                // Handle wiped - mark all storage trie as deleted at the current block number
-                if nodes.is_deleted {
-                    // Yet to have any update for the current block number - So just using up to
-                    // previous block number
-                    let mut storage_trie_cursor_ro =
-                        self.storage_trie_cursor(hashed_address, block_number - 1)?;
-                    while let Some((path, _vv)) = storage_trie_cursor_ro.next()? {
-                        // Mark deleted at current block
-                        let del = VersionedValue { block_number, value: MaybeDeleted(None) };
-                        storage_trie_cursor
-                            .append_dup(StorageTrieKey::new(hashed_address, path.into()), del)?;
-                    }
-                    // Skip any further processing for this hashed_address
-                    continue;
-                }
-                for (path, node) in nodes.storage_nodes {
-                    let key = StorageTrieKey::new(hashed_address, path.into());
-                    let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                    storage_trie_cursor.append_dup(key.clone(), vv)?;
-
-                    storage_trie_keys.push(key);
-                }
-            }
-
-            let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
-            for (hashed_address, account) in sorted_accounts {
-                let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
-                account_cursor.append_dup(hashed_address, vv)?;
-
-                hashed_account_keys.push(hashed_address);
-            }
-
-            let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
-            for (hashed_address, storage) in sorted_storage {
-                // Handle wiped - mark all storage slots as deleted at the current block number
-                if storage.is_wiped() {
-                    // Yet to have any update for the current block number - So just using up to
-                    // previous block number
-                    let mut storage_hashed_cursor =
-                        self.storage_hashed_cursor(*hashed_address, block_number - 1)?;
-                    while let Some((key, _vv)) = storage_hashed_cursor.next()? {
-                        // Mark deleted at current block
-                        let del = VersionedValue { block_number, value: MaybeDeleted(None) };
-                        storage_cursor
-                            .append_dup(HashedStorageKey::new(*hashed_address, key), del)?;
-                    }
-                    // Skip any further processing for this hashed_address
-                    continue;
-                }
-                let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
-                for (storage_key, storage_value) in storage_items {
-                    let vv = VersionedValue {
-                        block_number,
-                        value: MaybeDeleted(Some(StorageValue(storage_value))),
-                    };
-                    let key = HashedStorageKey::new(*hashed_address, storage_key);
-                    storage_cursor.append_dup(key.clone(), vv)?;
-
-                    hashed_storage_keys.push(key);
-                }
-            }
-
-            // Cursor for recording all changes made in this block for all history tables
-            let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
-            change_set_cursor.append(
-                block_number,
-                &ChangeSet {
-                    account_trie_keys,
-                    storage_trie_keys,
-                    hashed_account_keys,
-                    hashed_storage_keys,
-                },
-            )?;
-
-            // update proof window latest block
-            let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
-            proof_window_cursor.append(
-                ProofWindowKey::LatestBlock,
-                &BlockNumberHash::new(block_number, block_ref.block.hash),
-            )?;
+            self.store_trie_updates_inner(tx, block_ref, block_state_diff)?;
             Ok(())
         })?
     }
 
-    async fn fetch_trie_updates(
-        &self,
-        _block_number: u64,
-    ) -> OpProofsStorageResult<BlockStateDiff> {
-        unimplemented!()
+    async fn fetch_trie_updates(&self, block_number: u64) -> OpProofsStorageResult<BlockStateDiff> {
+        self.env.view(|tx| {
+            let mut change_set_cursor = tx.cursor_read::<BlockChangeSet>()?;
+            let (_, change_set) = change_set_cursor
+                .seek_exact(block_number)?
+                .ok_or(OpProofsStorageError::NoChangeSetForBlock(block_number))?;
+
+            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+            let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+
+            let mut block_state_diff = BlockStateDiff::default();
+            for key in change_set.account_trie_keys {
+                let entry =
+                    match account_trie_cursor.seek_by_key_subkey(key.clone(), block_number)? {
+                        Some(v) if v.block_number == block_number => v.value.0,
+                        _ => {
+                            return Err(OpProofsStorageError::MissingAccountTrieHistory(
+                                key.0,
+                                block_number,
+                            ))
+                        }
+                    };
+
+                if let Some(value) = entry {
+                    block_state_diff.trie_updates.account_nodes.insert(key.0, value);
+                } else {
+                    block_state_diff.trie_updates.removed_nodes.insert(key.0);
+                }
+            }
+
+            for key in change_set.storage_trie_keys {
+                let entry =
+                    match storage_trie_cursor.seek_by_key_subkey(key.clone(), block_number)? {
+                        Some(v) if v.block_number == block_number => v.value.0,
+                        _ => {
+                            return Err(OpProofsStorageError::MissingStorageTrieHistory(
+                                key.hashed_address,
+                                key.path.0,
+                                block_number,
+                            ))
+                        }
+                    };
+
+                let stu = block_state_diff
+                    .trie_updates
+                    .storage_tries
+                    .entry(key.hashed_address)
+                    .or_insert_with(StorageTrieUpdates::default);
+
+                // handle is_deleted scenario
+                // Issue: https://github.com/op-rs/op-reth/issues/323
+                if let Some(value) = entry {
+                    stu.storage_nodes.insert(key.path.0, value);
+                } else {
+                    stu.removed_nodes.insert(key.path.0);
+                }
+            }
+
+            for key in change_set.hashed_account_keys {
+                let entry = match hashed_account_cursor.seek_by_key_subkey(key, block_number)? {
+                    Some(v) if v.block_number == block_number => v.value.0,
+                    _ => {
+                        return Err(OpProofsStorageError::MissingHashedAccountHistory(
+                            key,
+                            block_number,
+                        ))
+                    }
+                };
+
+                block_state_diff.post_state.accounts.insert(key, entry);
+            }
+
+            for key in change_set.hashed_storage_keys {
+                let entry =
+                    match hashed_storage_cursor.seek_by_key_subkey(key.clone(), block_number)? {
+                        Some(v) if v.block_number == block_number => v.value.0,
+                        _ => {
+                            return Err(OpProofsStorageError::MissingHashedStorageHistory {
+                                hashed_address: key.hashed_address,
+                                hashed_storage_key: key.hashed_storage_key,
+                                block_number,
+                            })
+                        }
+                    };
+
+                let hs = block_state_diff
+                    .post_state
+                    .storages
+                    .entry(key.hashed_address)
+                    .or_insert_with(HashedStorage::default);
+
+                // handle wiped storage scenario
+                // Issue: https://github.com/op-rs/op-reth/issues/323
+                if let Some(value) = entry {
+                    hs.storage.insert(key.hashed_storage_key, value.0);
+                } else {
+                    hs.storage.insert(key.hashed_storage_key, U256::ZERO);
+                }
+            }
+
+            Ok(block_state_diff)
+        })?
     }
 
     /// Update the initial state with the provided diff.
@@ -568,10 +685,96 @@ impl OpProofsStore for MdbxProofsStorage {
 
     async fn replace_updates(
         &self,
-        _latest_common_block_number: u64,
-        _blocks_to_add: HashMap<u64, BlockStateDiff>,
+        latest_common_block_number: u64,
+        blocks_to_add: HashMap<BlockWithParent, BlockStateDiff>,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!()
+        self.env.update(|tx| {
+            let keys_to_rollback: Vec<(u64, ChangeSet)> = {
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+                change_set_cursor
+                    .walk(Some(latest_common_block_number + 1))?
+                    .collect::<Result<Vec<_>, _>>()?
+            };
+
+            if !keys_to_rollback.is_empty() {
+                let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+                let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+                let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+                let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+
+                // Process already sorted entries directly
+                for (block_number, change_set) in &keys_to_rollback {
+                    // Process account trie entries
+                    for key in &change_set.account_trie_keys {
+                        if let Some(vv) =
+                            account_trie_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            account_trie_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process storage trie entries
+                    for key in &change_set.storage_trie_keys {
+                        if let Some(vv) =
+                            storage_trie_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            storage_trie_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process hashed account entries
+                    for key in &change_set.hashed_account_keys {
+                        if let Some(vv) =
+                            hashed_account_cursor.seek_by_key_subkey(*key, *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            hashed_account_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process hashed storage entries
+                    for key in &change_set.hashed_storage_keys {
+                        if let Some(vv) =
+                            hashed_storage_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            hashed_storage_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Delete the change set immediately
+                    change_set_cursor.seek_exact(*block_number)?;
+                    change_set_cursor.delete_current()?;
+                }
+            }
+
+            // Sort by block number: Hashmap does not guarantee order
+            // todo: use a sorted vec instead
+            let mut blocks_to_add_vec: Vec<(BlockWithParent, BlockStateDiff)> =
+                blocks_to_add.into_iter().collect();
+
+            blocks_to_add_vec.sort_unstable_by_key(|(bwp, _)| bwp.block.number);
+
+            // update the proof window
+            // todo: refactor to use block hash from the block to add. We need to pass the
+            // BlockNumHash type for the latest_common_block_number
+            let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
+            proof_window_cursor.append(
+                ProofWindowKey::LatestBlock,
+                &BlockNumberHash::new(
+                    latest_common_block_number,
+                    blocks_to_add_vec.first().unwrap().0.parent,
+                ),
+            )?;
+
+            for (block_with_parent, diff) in blocks_to_add_vec {
+                self.store_trie_updates_inner(tx, block_with_parent, diff)?;
+            }
+            Ok(())
+        })?
     }
 
     async fn set_earliest_block_number(
@@ -1281,6 +1484,351 @@ mod tests {
             cur5.next().expect("first").is_some(),
             "Pruning index SHOULD populate the change set even for empty diffs"
         );
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_missing_changeset_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        let res = store.fetch_trie_updates(99).await;
+        assert!(matches!(res, Err(OpProofsStorageError::NoChangeSetForBlock(99))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_empty_changeset() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        let block = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let diff = BlockStateDiff::default();
+
+        store.store_trie_updates(block, diff).await.expect("store");
+        let got = store.fetch_trie_updates(1).await.expect("fetch");
+        assert!(got.trie_updates.account_nodes.is_empty());
+        assert!(got.trie_updates.removed_nodes.is_empty());
+        assert!(got.trie_updates.storage_tries.is_empty());
+        assert!(got.post_state.accounts.is_empty());
+        assert!(got.post_state.storages.is_empty());
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_missing_account_history_entry_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // prepare ChangeSet that references StoredNibbles for account key
+        // (insert ChangeSet into BlockChangeSet directly using tx)
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    account_trie_keys: vec![StoredNibbles::default()],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingAccountTrieHistory(..))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_account_history_seek_returns_later_block_treated_as_missing() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // manually insert account history and ChangeSet for block 1 referencing same key
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut acc_cur = tx.cursor_write::<AccountTrieHistory>().unwrap();
+            acc_cur
+                .insert(
+                    StoredNibbles::from(Nibbles::from_nibbles_unchecked([0x1])),
+                    &VersionedValue::new(2, MaybeDeleted(Some(BranchNodeCompact::default()))),
+                )
+                .unwrap();
+
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    account_trie_keys: vec![StoredNibbles::from(Nibbles::from_nibbles_unchecked(
+                        [0x1],
+                    ))],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        // fetch block 1 -> seek will find block 2 but block_number != 1 so expect
+        // MissingAccountTrieHistory
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingAccountTrieHistory(..))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_missing_storage_history_entry_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // prepare ChangeSet that references StorageTrieKey for storage trie
+        // (insert ChangeSet into BlockChangeSet directly using tx)
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    storage_trie_keys: vec![StorageTrieKey::new(
+                        B256::from([0u8; 32]),
+                        StoredNibbles::default(),
+                    )],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingStorageTrieHistory(..))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_storage_history_seek_returns_later_block_treated_as_missing() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // manually insert storage history and ChangeSet for block 1 referencing same key
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut stor_cur = tx.cursor_write::<StorageTrieHistory>().unwrap();
+            stor_cur
+                .insert(
+                    StorageTrieKey::new(
+                        B256::from([0u8; 32]),
+                        StoredNibbles::from(Nibbles::from_nibbles_unchecked([0x1])),
+                    ),
+                    &VersionedValue::new(2, MaybeDeleted(Some(BranchNodeCompact::default()))),
+                )
+                .unwrap();
+
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    storage_trie_keys: vec![StorageTrieKey::new(
+                        B256::from([0u8; 32]),
+                        StoredNibbles::from(Nibbles::from_nibbles_unchecked([0x1])),
+                    )],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        // fetch block 1 -> seek will find block 2 but block_number != 1 so expect
+        // MissingStorageTrieHistory
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingStorageTrieHistory(..))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_missing_hashed_account_entry_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // prepare ChangeSet that references hashed account address
+        // (insert ChangeSet into BlockChangeSet directly using tx)
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    hashed_account_keys: vec![B256::from([0u8; 32])],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedAccountHistory(..))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_hashed_account_seek_returns_later_block_treated_as_missing() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // manually insert hashed account history and ChangeSet for block 1 referencing same key
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut acc_cur = tx.cursor_write::<HashedAccountHistory>().unwrap();
+            acc_cur
+                .insert(
+                    B256::from([0u8; 32]),
+                    &VersionedValue::new(2, MaybeDeleted(Some(Account::default()))),
+                )
+                .unwrap();
+
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    hashed_account_keys: vec![B256::from([0u8; 32])],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        // fetch block 1 -> seek will find block 2 but block_number != 1 so expect
+        // MissingHashedAccountHistory
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedAccountHistory(..))));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_missing_hashed_storage_entry_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // prepare ChangeSet that references hashed storage key
+        // (insert ChangeSet into BlockChangeSet directly using tx)
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    hashed_storage_keys: vec![HashedStorageKey::new(
+                        B256::from([0u8; 32]),
+                        B256::from([0u8; 32]),
+                    )],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedStorageHistory { .. })));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_hashed_storage_seek_returns_later_block_treated_as_missing() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // manually insert hashed storage history and ChangeSet for block 1 referencing same key
+        {
+            let tx = store.env.tx_mut().unwrap();
+            let mut stor_cur = tx.cursor_write::<HashedStorageHistory>().unwrap();
+            stor_cur
+                .insert(
+                    HashedStorageKey::new(B256::from([0u8; 32]), B256::from([0u8; 32])),
+                    &VersionedValue::new(2, MaybeDeleted(Some(StorageValue::new(U256::ZERO)))),
+                )
+                .unwrap();
+
+            let mut cur = tx.cursor_write::<BlockChangeSet>().unwrap();
+            cur.insert(
+                1,
+                &ChangeSet {
+                    hashed_storage_keys: vec![HashedStorageKey::new(
+                        B256::from([0u8; 32]),
+                        B256::from([0u8; 32]),
+                    )],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+
+        // fetch block 1 -> seek will find block 2 but block_number != 1 so expect
+        // MissingHashedStorageHistory
+        let res = store.fetch_trie_updates(1).await;
+        assert!(matches!(res, Err(OpProofsStorageError::MissingHashedStorageHistory { .. })));
+    }
+
+    #[tokio::test]
+    async fn fetch_trie_updates_basic() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // Build a block with mixed changes (accounts, trie nodes, hashed storages)
+        let block = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+
+        // prepare data
+        let addr1 = B256::from([0x11; 32]);
+        let addr2 = B256::from([0x22; 32]);
+        let slot1 = B256::from([0xA1; 32]);
+        let slot2 = B256::from([0xA2; 32]);
+
+        let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
+
+        let val1 = U256::from(1234u64);
+        let val2 = U256::from(5678u64);
+
+        let account_path1 = Nibbles::from_nibbles_unchecked(vec![0, 1, 2, 3]);
+        let account_path2 = Nibbles::from_nibbles_unchecked(vec![4, 5, 6, 7]);
+        let account_node1 =
+            BranchNodeCompact { root_hash: Some(B256::random()), ..Default::default() };
+        let account_node2 =
+            BranchNodeCompact { root_hash: Some(B256::random()), ..Default::default() };
+
+        let storage_path1 = Nibbles::from_nibbles_unchecked(vec![1, 2, 3, 4]);
+        let storage_node1 =
+            BranchNodeCompact { root_hash: Some(B256::random()), ..Default::default() };
+
+        // Construct BlockStateDiff
+        let mut block_state_diff = BlockStateDiff::default();
+        block_state_diff.trie_updates.account_nodes.insert(account_path1, account_node1.clone());
+        block_state_diff.trie_updates.account_nodes.insert(account_path2, account_node2.clone());
+        // storage trie for addr1
+        let mut storage_nodes1 = StorageTrieUpdates::default();
+        storage_nodes1.storage_nodes.insert(storage_path1, storage_node1.clone());
+        block_state_diff.trie_updates.storage_tries.insert(addr1, storage_nodes1);
+
+        // hashed accounts: addr1 -> Some, addr2 -> None
+        block_state_diff.post_state.accounts.insert(addr1, Some(acc1));
+        block_state_diff.post_state.accounts.insert(addr2, None);
+
+        // hashed storages
+        let mut storage1 = HashedStorage::default();
+        storage1.storage.insert(slot1, val1);
+        block_state_diff.post_state.storages.insert(addr1, storage1);
+
+        let mut storage2 = HashedStorage::default();
+        storage2.storage.insert(slot2, val2);
+        block_state_diff.post_state.storages.insert(addr2, storage2);
+
+        // store then fetch
+        store.store_trie_updates(block, block_state_diff.clone()).await.expect("store");
+        let got = store.fetch_trie_updates(1).await.expect("fetch");
+
+        // verify trie updates
+        assert_eq!(got.trie_updates.account_nodes, block_state_diff.trie_updates.account_nodes,);
+        assert_eq!(got.trie_updates.removed_nodes, block_state_diff.trie_updates.removed_nodes,);
+        assert_eq!(got.trie_updates.storage_tries, block_state_diff.trie_updates.storage_tries,);
+
+        // verify post state
+        assert_eq!(got.post_state.accounts, block_state_diff.post_state.accounts);
+        assert_eq!(got.post_state.storages, block_state_diff.post_state.storages);
     }
 
     #[tokio::test]
@@ -2096,5 +2644,92 @@ mod tests {
             Some((new_block_number, new_hash)),
             "Latest block should fall back to earliest when not explicitly set"
         );
+    }
+
+    #[tokio::test]
+    async fn replace_updates_prunes_and_adds_new_chain() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // Test address and helper to make diffs with distinct nonces.
+        let addr = B256::from([0xAB; 32]);
+        let make_diff = |nonce: u64| {
+            let mut d = BlockStateDiff::default();
+            d.post_state.accounts.insert(addr, Some(Account { nonce, ..Default::default() }));
+            d
+        };
+
+        // --- Build initial canonical chain: 1 -> 2 -> 3 ---
+        let b1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let b2 = BlockWithParent::new(b1.block.hash, NumHash::new(2, B256::random()));
+        let b3 = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random()));
+
+        store.store_trie_updates(b1, make_diff(10)).await.expect("store b1");
+        store.store_trie_updates(b2, make_diff(20)).await.expect("store b2");
+        store.store_trie_updates(b3, make_diff(30)).await.expect("store b3");
+
+        // Sanity: entries for 1,2,3 exist with expected nonces.
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
+            let v1 = cur.seek_by_key_subkey(addr, 1).expect("seek").expect("exists");
+            let v2 = cur.seek_by_key_subkey(addr, 2).expect("seek").expect("exists");
+            let v3 = cur.seek_by_key_subkey(addr, 3).expect("seek").expect("exists");
+            assert_eq!(v1.value.0.unwrap().nonce, 10);
+            assert_eq!(v2.value.0.unwrap().nonce, 20);
+            assert_eq!(v3.value.0.unwrap().nonce, 30);
+        }
+
+        // --- Reorg at LCA = 2: prune >2, then add 3' and 4' ---
+        let b3p = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random())); // 3'
+        let b4p = BlockWithParent::new(b3p.block.hash, NumHash::new(4, B256::random())); // 4'
+
+        // Build blocks_to_add (HashMap). Order is not guaranteed.
+        let mut blocks_to_add = HashMap::default();
+        blocks_to_add.insert(b3p, make_diff(300)); // new value at height 3
+        blocks_to_add.insert(b4p, make_diff(400)); // new value at height 4
+
+        store.replace_updates(2, blocks_to_add).await.expect("replace_updates succeeds");
+
+        // --- Verify post-conditions ---
+
+        // 1) HashedAccountHistory: blocks 1,2 remain; block 3 was replaced (nonce=300); block 4
+        //    exists (nonce=400).
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
+
+            let v1 = cur.seek_by_key_subkey(addr, 1).expect("seek").expect("exists");
+            assert_eq!(v1.value.0.unwrap().nonce, 10);
+
+            let v2 = cur.seek_by_key_subkey(addr, 2).expect("seek").expect("exists");
+            assert_eq!(v2.value.0.unwrap().nonce, 20);
+
+            // Old block 3 (nonce=30) should have been pruned; we should now have a fresh entry at 3
+            // with nonce=300.
+            let v3_new = cur.seek_by_key_subkey(addr, 3).expect("seek").expect("replaced exists");
+            assert_eq!(
+                v3_new.value.0.unwrap().nonce,
+                300,
+                "block 3 should be replaced by new chain"
+            );
+
+            // New block 4 should exist.
+            let v4 = cur.seek_by_key_subkey(addr, 4).expect("seek").expect("exists");
+            assert_eq!(v4.value.0.unwrap().nonce, 400);
+        }
+
+        // 2) BlockChangeSet contains exactly entries for block numbers {1,2,3,4}.
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<BlockChangeSet>().expect("cursor");
+            let mut seen = std::collections::BTreeSet::new();
+            let mut it = cur.walk(Some(1)).expect("walk");
+            while let Some(Ok((bn, _))) = it.next() {
+                seen.insert(bn);
+            }
+            let expected: std::collections::BTreeSet<u64> = [1u64, 2, 3, 4].into_iter().collect();
+            assert_eq!(seen, expected, "BlockChangeSet should reflect pruned+new chain");
+        }
     }
 }
