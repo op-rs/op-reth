@@ -9628,7 +9628,7 @@ dependencies = [
  "strum 0.27.2",
  "tempfile",
  "test-case",
- "thiserror 2.0.17",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -11802,7 +11802,7 @@ checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.107",
+ "syn 2.0.106",
 ]
 
 [[package]]
