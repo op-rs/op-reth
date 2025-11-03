@@ -1,5 +1,6 @@
 use super::{BlockNumberHash, ProofWindow, ProofWindowKey};
 use crate::{
+    api::WriteCounts,
     db::{
         cursor::Dup,
         models::{
@@ -41,16 +42,26 @@ impl MdbxProofsStorage {
         Ok(Self { env })
     }
 
-    async fn get_block_number_hash(
+    fn inner_get_latest_block_number_hash(
         &self,
+        tx: &impl DbTx,
+    ) -> OpProofsStorageResult<Option<(u64, B256)>> {
+        let block = self.inner_get_block_number_hash(tx, ProofWindowKey::LatestBlock)?;
+        if block.is_some() {
+            return Ok(block);
+        }
+
+        self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock)
+    }
+
+    fn inner_get_block_number_hash(
+        &self,
+        tx: &impl DbTx,
         key: ProofWindowKey,
     ) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        let result = self.env.view(|tx| {
-            let mut cursor = tx.cursor_read::<ProofWindow>().ok()?;
-            let value = cursor.seek_exact(key).ok()?;
-            value.map(|(_, val)| (val.number(), *val.hash()))
-        });
-        Ok(result?)
+        let mut cursor = tx.cursor_read::<ProofWindow>()?;
+        let value = cursor.seek_exact(key)?;
+        Ok(value.map(|(_, val)| (val.number(), *val.hash())))
     }
 
     async fn set_earliest_block_number_hash(
@@ -81,7 +92,7 @@ impl MdbxProofsStorage {
         tx: &<DatabaseEnv as Database>::TXMut,
         block_ref: BlockWithParent,
         block_state_diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()> {
+    ) -> OpProofsStorageResult<WriteCounts> {
         let block_number = block_ref.block.number;
         // TODO: refactor the code - remove sorting out of tx
 
@@ -106,14 +117,10 @@ impl MdbxProofsStorage {
             .collect::<Vec<_>>();
 
         // check latest stored block is the parent of incoming block
-        let latest_block_hash =
-            if let Some(bn_hash) = tx.get::<ProofWindow>(ProofWindowKey::LatestBlock)? {
-                *bn_hash.hash()
-            } else if let Some(bn_hash) = tx.get::<ProofWindow>(ProofWindowKey::EarliestBlock)? {
-                *bn_hash.hash()
-            } else {
-                B256::ZERO
-            };
+        let latest_block_hash = match self.inner_get_latest_block_number_hash(tx)? {
+            Some((_num, hash)) => hash,
+            None => B256::ZERO,
+        };
 
         if latest_block_hash != block_ref.parent {
             return Err(OpProofsStorageError::OutOfOrder {
@@ -134,6 +141,8 @@ impl MdbxProofsStorage {
         let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
         let mut hashed_storage_keys = Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
 
+        let mut write_counts = WriteCounts::default();
+
         let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
         for (path, node) in sorted_account_nodes {
             let key: StoredNibbles = path.into();
@@ -141,6 +150,7 @@ impl MdbxProofsStorage {
             account_trie_cursor.append_dup(key.clone(), vv)?;
 
             account_trie_keys.push(key);
+            write_counts.account_trie_updates_written_total += 1;
         }
 
         let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
@@ -156,6 +166,7 @@ impl MdbxProofsStorage {
                     let del = VersionedValue { block_number, value: MaybeDeleted(None) };
                     storage_trie_cursor
                         .append_dup(StorageTrieKey::new(hashed_address, path.into()), del)?;
+                    write_counts.storage_trie_updates_written_total += 1;
                 }
                 // Skip any further processing for this hashed_address
                 continue;
@@ -166,6 +177,7 @@ impl MdbxProofsStorage {
                 storage_trie_cursor.append_dup(key.clone(), vv)?;
 
                 storage_trie_keys.push(key);
+                write_counts.storage_trie_updates_written_total += 1;
             }
         }
 
@@ -175,6 +187,7 @@ impl MdbxProofsStorage {
             account_cursor.append_dup(hashed_address, vv)?;
 
             hashed_account_keys.push(hashed_address);
+            write_counts.hashed_accounts_written_total += 1;
         }
 
         let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
@@ -189,6 +202,7 @@ impl MdbxProofsStorage {
                     // Mark deleted at current block
                     let del = VersionedValue { block_number, value: MaybeDeleted(None) };
                     storage_cursor.append_dup(HashedStorageKey::new(*hashed_address, key), del)?;
+                    write_counts.hashed_storages_written_total += 1;
                 }
                 // Skip any further processing for this hashed_address
                 continue;
@@ -203,6 +217,7 @@ impl MdbxProofsStorage {
                 storage_cursor.append_dup(key.clone(), vv)?;
 
                 hashed_storage_keys.push(key);
+                write_counts.hashed_storages_written_total += 1;
             }
         }
 
@@ -224,7 +239,7 @@ impl MdbxProofsStorage {
             ProofWindowKey::LatestBlock,
             &BlockNumberHash::new(block_number, block_ref.block.hash),
         )?;
-        Ok(())
+        Ok(write_counts)
     }
 }
 
@@ -340,16 +355,11 @@ impl OpProofsStore for MdbxProofsStorage {
     }
 
     async fn get_earliest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        self.get_block_number_hash(ProofWindowKey::EarliestBlock).await
+        self.env.view(|tx| self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock))?
     }
 
     async fn get_latest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        let latest_block = self.get_block_number_hash(ProofWindowKey::LatestBlock).await?;
-        if latest_block.is_some() {
-            return Ok(latest_block);
-        }
-
-        self.get_block_number_hash(ProofWindowKey::EarliestBlock).await
+        self.env.view(|tx| self.inner_get_latest_block_number_hash(tx))?
     }
 
     fn storage_trie_cursor<'tx>(
@@ -406,11 +416,8 @@ impl OpProofsStore for MdbxProofsStorage {
         &self,
         block_ref: BlockWithParent,
         block_state_diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()> {
-        self.env.update(|tx| {
-            self.store_trie_updates_inner(tx, block_ref, block_state_diff)?;
-            Ok(())
-        })?
+    ) -> OpProofsStorageResult<WriteCounts> {
+        self.env.update(|tx| self.store_trie_updates_inner(tx, block_ref, block_state_diff))?
     }
 
     async fn fetch_trie_updates(&self, block_number: u64) -> OpProofsStorageResult<BlockStateDiff> {
