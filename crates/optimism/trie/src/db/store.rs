@@ -1,5 +1,6 @@
 use super::{BlockNumberHash, ProofWindow, ProofWindowKey};
 use crate::{
+    api::WriteCounts,
     db::{
         cursor::Dup,
         models::{
@@ -18,8 +19,8 @@ use itertools::Itertools;
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
     mdbx::{init_db_for, DatabaseArguments},
-    transaction::DbTx,
-    Database, DatabaseEnv,
+    transaction::{DbTx, DbTxMut},
+    Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{
@@ -41,16 +42,26 @@ impl MdbxProofsStorage {
         Ok(Self { env })
     }
 
-    async fn get_block_number_hash(
+    fn inner_get_latest_block_number_hash(
         &self,
+        tx: &impl DbTx,
+    ) -> OpProofsStorageResult<Option<(u64, B256)>> {
+        let block = self.inner_get_block_number_hash(tx, ProofWindowKey::LatestBlock)?;
+        if block.is_some() {
+            return Ok(block);
+        }
+
+        self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock)
+    }
+
+    fn inner_get_block_number_hash(
+        &self,
+        tx: &impl DbTx,
         key: ProofWindowKey,
     ) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        let result = self.env.view(|tx| {
-            let mut cursor = tx.cursor_read::<ProofWindow>().ok()?;
-            let value = cursor.seek_exact(key).ok()?;
-            value.map(|(_, val)| (val.number(), *val.hash()))
-        });
-        Ok(result?)
+        let mut cursor = tx.cursor_read::<ProofWindow>()?;
+        let value = cursor.seek_exact(key)?;
+        Ok(value.map(|(_, val)| (val.number(), *val.hash())))
     }
 
     async fn set_earliest_block_number_hash(
@@ -58,12 +69,177 @@ impl MdbxProofsStorage {
         block_number: u64,
         hash: B256,
     ) -> OpProofsStorageResult<()> {
-        self.env.update(|tx| {
-            let mut cursor = tx.new_cursor::<ProofWindow>()?;
-            cursor
-                .append(ProofWindowKey::EarliestBlock, &BlockNumberHash::new(block_number, hash))?;
-            Ok(())
-        })?
+        let _ = self.env.update(|tx| {
+            Self::inner_set_earliest_block_number(tx, block_number, hash)?;
+            Ok::<(), DatabaseError>(())
+        })?;
+        Ok(())
+    }
+
+    /// Internal helper to set earliest block number hash within an existing transaction
+    fn inner_set_earliest_block_number(
+        tx: &(impl DbTxMut + DbTx),
+        block_number: u64,
+        hash: B256,
+    ) -> OpProofsStorageResult<()> {
+        let mut cursor = tx.cursor_write::<ProofWindow>()?;
+        cursor.upsert(ProofWindowKey::EarliestBlock, &BlockNumberHash::new(block_number, hash))?;
+        Ok(())
+    }
+
+    fn store_trie_updates_inner(
+        &self,
+        tx: &<DatabaseEnv as Database>::TXMut,
+        block_ref: BlockWithParent,
+        block_state_diff: BlockStateDiff,
+    ) -> OpProofsStorageResult<WriteCounts> {
+        let block_number = block_ref.block.number;
+        // TODO: refactor the code - remove sorting out of tx
+
+        let sorted_trie_updates = block_state_diff.trie_updates.into_sorted();
+        //  Sorted list of updated and removed account nodes
+        let sorted_account_nodes = sorted_trie_updates.account_nodes;
+
+        //  Sorted list of updated and removed storage nodes
+        let sorted_storage_nodes = sorted_trie_updates
+            .storage_tries
+            .into_iter()
+            .sorted_by_key(|(hashed_address, _)| *hashed_address)
+            .collect::<Vec<_>>();
+
+        let sorted_post_state = block_state_diff.post_state.into_sorted();
+        let sorted_accounts = sorted_post_state.accounts().accounts_sorted();
+
+        let sorted_storage = sorted_post_state
+            .account_storages()
+            .iter()
+            .sorted_by_key(|(hashed_address, _)| *hashed_address)
+            .collect::<Vec<_>>();
+
+        // check latest stored block is the parent of incoming block
+        let latest_block_hash = match self.inner_get_latest_block_number_hash(tx)? {
+            Some((_num, hash)) => hash,
+            None => B256::ZERO,
+        };
+
+        if latest_block_hash != block_ref.parent {
+            return Err(OpProofsStorageError::OutOfOrder {
+                block_number,
+                parent_block_hash: block_ref.parent,
+                latest_block_hash,
+            });
+        }
+
+        let account_trie_len = sorted_account_nodes.len();
+        let storage_trie_len = sorted_storage_nodes.len();
+        let hashed_account_len = sorted_accounts.size_hint().0;
+        let hashed_storage_len = sorted_storage.len();
+
+        // Preparing the entries for the `BlockChangeSet` table
+        let mut account_trie_keys = Vec::<StoredNibbles>::with_capacity(account_trie_len);
+        let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
+        let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
+        let mut hashed_storage_keys = Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
+
+        let mut write_counts = WriteCounts::default();
+
+        let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+        for (path, node) in sorted_account_nodes {
+            let key: StoredNibbles = path.into();
+            let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+            account_trie_cursor.append_dup(key.clone(), vv)?;
+
+            account_trie_keys.push(key);
+            write_counts.account_trie_updates_written_total += 1;
+        }
+
+        let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+        for (hashed_address, nodes) in sorted_storage_nodes {
+            // Handle wiped - mark all storage trie as deleted at the current block number
+            if nodes.is_deleted {
+                // Yet to have any update for the current block number - So just using up to
+                // previous block number
+                let mut storage_trie_cursor_ro =
+                    self.storage_trie_cursor(hashed_address, block_number - 1)?;
+                while let Some((path, _vv)) = storage_trie_cursor_ro.next()? {
+                    // Mark deleted at current block
+                    let del = VersionedValue { block_number, value: MaybeDeleted(None) };
+                    storage_trie_cursor
+                        .append_dup(StorageTrieKey::new(hashed_address, path.into()), del)?;
+                    write_counts.storage_trie_updates_written_total += 1;
+                }
+                // Skip any further processing for this hashed_address
+                continue;
+            }
+            for (path, node) in nodes.storage_nodes {
+                let key = StorageTrieKey::new(hashed_address, path.into());
+                let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
+                storage_trie_cursor.append_dup(key.clone(), vv)?;
+
+                storage_trie_keys.push(key);
+                write_counts.storage_trie_updates_written_total += 1;
+            }
+        }
+
+        let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+        for (hashed_address, account) in sorted_accounts {
+            let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
+            account_cursor.append_dup(hashed_address, vv)?;
+
+            hashed_account_keys.push(hashed_address);
+            write_counts.hashed_accounts_written_total += 1;
+        }
+
+        let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+        for (hashed_address, storage) in sorted_storage {
+            // Handle wiped - mark all storage slots as deleted at the current block number
+            if storage.is_wiped() {
+                // Yet to have any update for the current block number - So just using up to
+                // previous block number
+                let mut storage_hashed_cursor =
+                    self.storage_hashed_cursor(*hashed_address, block_number - 1)?;
+                while let Some((key, _vv)) = storage_hashed_cursor.next()? {
+                    // Mark deleted at current block
+                    let del = VersionedValue { block_number, value: MaybeDeleted(None) };
+                    storage_cursor.append_dup(HashedStorageKey::new(*hashed_address, key), del)?;
+                    write_counts.hashed_storages_written_total += 1;
+                }
+                // Skip any further processing for this hashed_address
+                continue;
+            }
+            let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
+            for (storage_key, storage_value) in storage_items {
+                let vv = VersionedValue {
+                    block_number,
+                    value: MaybeDeleted(Some(StorageValue(storage_value))),
+                };
+                let key = HashedStorageKey::new(*hashed_address, storage_key);
+                storage_cursor.append_dup(key.clone(), vv)?;
+
+                hashed_storage_keys.push(key);
+                write_counts.hashed_storages_written_total += 1;
+            }
+        }
+
+        // Cursor for recording all changes made in this block for all history tables
+        let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+        change_set_cursor.append(
+            block_number,
+            &ChangeSet {
+                account_trie_keys,
+                storage_trie_keys,
+                hashed_account_keys,
+                hashed_storage_keys,
+            },
+        )?;
+
+        // update proof window latest block
+        let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
+        proof_window_cursor.append(
+            ProofWindowKey::LatestBlock,
+            &BlockNumberHash::new(block_number, block_ref.block.hash),
+        )?;
+        Ok(write_counts)
     }
 }
 
@@ -179,16 +355,11 @@ impl OpProofsStore for MdbxProofsStorage {
     }
 
     async fn get_earliest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        self.get_block_number_hash(ProofWindowKey::EarliestBlock).await
+        self.env.view(|tx| self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock))?
     }
 
     async fn get_latest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
-        let latest_block = self.get_block_number_hash(ProofWindowKey::LatestBlock).await?;
-        if latest_block.is_some() {
-            return Ok(latest_block);
-        }
-
-        self.get_block_number_hash(ProofWindowKey::EarliestBlock).await
+        self.env.view(|tx| self.inner_get_latest_block_number_hash(tx))?
     }
 
     fn storage_trie_cursor<'tx>(
@@ -245,153 +416,8 @@ impl OpProofsStore for MdbxProofsStorage {
         &self,
         block_ref: BlockWithParent,
         block_state_diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()> {
-        let block_number = block_ref.block.number;
-        let sorted_trie_updates = block_state_diff.trie_updates.into_sorted();
-        //  Sorted list of updated and removed account nodes
-        let sorted_account_nodes = sorted_trie_updates.account_nodes;
-
-        //  Sorted list of updated and removed storage nodes
-        let sorted_storage_nodes = sorted_trie_updates
-            .storage_tries
-            .into_iter()
-            .sorted_by_key(|(hashed_address, _)| *hashed_address)
-            .collect::<Vec<_>>();
-
-        let sorted_post_state = block_state_diff.post_state.into_sorted();
-        let sorted_accounts = sorted_post_state.accounts().accounts_sorted();
-
-        let sorted_storage = sorted_post_state
-            .account_storages()
-            .iter()
-            .sorted_by_key(|(hashed_address, _)| *hashed_address)
-            .collect::<Vec<_>>();
-
-        self.env.update(|tx| {
-            // check latest stored block is the parent of incoming block
-            let latest_block_hash = if let Some(bn_hash) =
-                tx.get::<ProofWindow>(ProofWindowKey::LatestBlock)?
-            {
-                *bn_hash.hash()
-            } else if let Some(bn_hash) = tx.get::<ProofWindow>(ProofWindowKey::EarliestBlock)? {
-                *bn_hash.hash()
-            } else {
-                B256::ZERO
-            };
-
-            if latest_block_hash != block_ref.parent {
-                return Err(OpProofsStorageError::OutOfOrder {
-                    block_number,
-                    parent_block_hash: block_ref.parent,
-                    latest_block_hash,
-                });
-            }
-
-            let account_trie_len = sorted_account_nodes.len();
-            let storage_trie_len = sorted_storage_nodes.len();
-            let hashed_account_len = sorted_accounts.size_hint().0;
-            let hashed_storage_len = sorted_storage.len();
-
-            // Preparing the entries for the `BlockChangeSet` table
-            let mut account_trie_keys = Vec::<StoredNibbles>::with_capacity(account_trie_len);
-            let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
-            let mut hashed_account_keys = Vec::<B256>::with_capacity(hashed_account_len);
-            let mut hashed_storage_keys =
-                Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
-
-            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
-            for (path, node) in sorted_account_nodes {
-                let key: StoredNibbles = path.into();
-                let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                account_trie_cursor.append_dup(key.clone(), vv)?;
-
-                account_trie_keys.push(key);
-            }
-
-            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
-            for (hashed_address, nodes) in sorted_storage_nodes {
-                // Handle wiped - mark all storage trie as deleted at the current block number
-                if nodes.is_deleted {
-                    // Yet to have any update for the current block number - So just using up to
-                    // previous block number
-                    let mut storage_trie_cursor_ro =
-                        self.storage_trie_cursor(hashed_address, block_number - 1)?;
-                    while let Some((path, _vv)) = storage_trie_cursor_ro.next()? {
-                        // Mark deleted at current block
-                        let del = VersionedValue { block_number, value: MaybeDeleted(None) };
-                        storage_trie_cursor
-                            .append_dup(StorageTrieKey::new(hashed_address, path.into()), del)?;
-                    }
-                    // Skip any further processing for this hashed_address
-                    continue;
-                }
-                for (path, node) in nodes.storage_nodes {
-                    let key = StorageTrieKey::new(hashed_address, path.into());
-                    let vv = VersionedValue { block_number, value: MaybeDeleted(node) };
-                    storage_trie_cursor.append_dup(key.clone(), vv)?;
-
-                    storage_trie_keys.push(key);
-                }
-            }
-
-            let mut account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
-            for (hashed_address, account) in sorted_accounts {
-                let vv = VersionedValue { block_number, value: MaybeDeleted(account) };
-                account_cursor.append_dup(hashed_address, vv)?;
-
-                hashed_account_keys.push(hashed_address);
-            }
-
-            let mut storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
-            for (hashed_address, storage) in sorted_storage {
-                // Handle wiped - mark all storage slots as deleted at the current block number
-                if storage.is_wiped() {
-                    // Yet to have any update for the current block number - So just using up to
-                    // previous block number
-                    let mut storage_hashed_cursor =
-                        self.storage_hashed_cursor(*hashed_address, block_number - 1)?;
-                    while let Some((key, _vv)) = storage_hashed_cursor.next()? {
-                        // Mark deleted at current block
-                        let del = VersionedValue { block_number, value: MaybeDeleted(None) };
-                        storage_cursor
-                            .append_dup(HashedStorageKey::new(*hashed_address, key), del)?;
-                    }
-                    // Skip any further processing for this hashed_address
-                    continue;
-                }
-                let storage_items = storage.storage_slots_sorted().collect::<Vec<_>>();
-                for (storage_key, storage_value) in storage_items {
-                    let vv = VersionedValue {
-                        block_number,
-                        value: MaybeDeleted(Some(StorageValue(storage_value))),
-                    };
-                    let key = HashedStorageKey::new(*hashed_address, storage_key);
-                    storage_cursor.append_dup(key.clone(), vv)?;
-
-                    hashed_storage_keys.push(key);
-                }
-            }
-
-            // Cursor for recording all changes made in this block for all history tables
-            let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
-            change_set_cursor.append(
-                block_number,
-                &ChangeSet {
-                    account_trie_keys,
-                    storage_trie_keys,
-                    hashed_account_keys,
-                    hashed_storage_keys,
-                },
-            )?;
-
-            // update proof window latest block
-            let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
-            proof_window_cursor.append(
-                ProofWindowKey::LatestBlock,
-                &BlockNumberHash::new(block_number, block_ref.block.hash),
-            )?;
-            Ok(())
-        })?
+    ) -> OpProofsStorageResult<WriteCounts> {
+        self.env.update(|tx| self.store_trie_updates_inner(tx, block_ref, block_state_diff))?
     }
 
     async fn fetch_trie_updates(&self, block_number: u64) -> OpProofsStorageResult<BlockStateDiff> {
@@ -500,13 +526,15 @@ impl OpProofsStore for MdbxProofsStorage {
         })?
     }
 
+    /// Update the initial state with the provided diff.
     /// Prune all historical trie data prior to `new_earliest_block_number` using
     /// the [`BlockChangeSet`] index.
     async fn prune_earliest_state(
         &self,
-        new_earliest_block_number: u64,
-        _diff: BlockStateDiff,
+        new_earliest_block_ref: BlockWithParent,
+        diff: BlockStateDiff,
     ) -> OpProofsStorageResult<()> {
+        let new_earliest_block_number = new_earliest_block_ref.block.number;
         let Some((start_block, _)) = self.get_earliest_block_number().await? else {
             return Ok(()); // Nothing to prune
         };
@@ -515,22 +543,28 @@ impl OpProofsStore for MdbxProofsStorage {
             return Ok(()); // Nothing to prune
         }
 
-        self.env.update(|tx| {
-            // Collect keys to prune first to avoid borrow checker issues with cursors.
+        let branches_diff = diff.trie_updates;
+        let leaves_diff = diff.post_state;
+
+        let _ = self.env.update(|tx| {
+            let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+            let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+
+            // START PRUNING TABLES FIRST
+            // We must delete old entries before inserting new ones at block 0
+            // to maintain sorted order for append_dup operations.
+
+            // First collect keys to prune to avoid borrow checker issues with cursors.
+            let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
             let keys_to_prune: Vec<(u64, ChangeSet)> = {
-                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
                 change_set_cursor
                     .walk_range(start_block..new_earliest_block_number)?
                     .collect::<Result<Vec<_>, _>>()?
             };
 
             if !keys_to_prune.is_empty() {
-                let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
-                let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
-                let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
-                let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
-                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
-
                 // Process already sorted entries directly
                 for (block_number, change_set) in &keys_to_prune {
                     // Process account trie entries
@@ -578,16 +612,176 @@ impl OpProofsStore for MdbxProofsStorage {
                     change_set_cursor.delete_current()?;
                 }
             }
-            Ok(())
-        })?
+
+            // NOW INSERT THE NEW INITIAL STATE AT BLOCK 0
+            // After deleting old entries, we can safely insert at block 0 with append_dup
+
+            // Insert account trie nodes at block 0
+            for (path, branch) in branches_diff.into_sorted_ref().account_nodes {
+                let key: StoredNibbles = StoredNibbles::from(*path);
+                let vv =
+                    VersionedValue { block_number: 0, value: MaybeDeleted(Some(branch.clone())) };
+                account_trie_cursor.append_dup(key, vv)?;
+            }
+
+            // Remove old entries for removed nodes prior to new_earliest_block_number
+            // This ensures that any node that was removed but got added later which is still within
+            // the new proof window is not deleted.
+            for path in branches_diff.removed_nodes {
+                let key: StoredNibbles = path.into();
+                let mut walker = account_trie_cursor.walk_dup(Some(key.clone()), Some(0))?;
+                while let Some(Ok((_, vv))) = walker.next() {
+                    if vv.block_number < new_earliest_block_number {
+                        walker.delete_current()?;
+                    }
+                }
+            }
+
+            // Same for storage trie nodes
+            for (hashed_address, storage_updates) in branches_diff.storage_tries {
+                for (path, branch) in storage_updates.into_sorted_ref().storage_nodes {
+                    let key = StorageTrieKey::new(hashed_address, StoredNibbles::from(*path));
+                    let vv = VersionedValue {
+                        block_number: 0,
+                        value: MaybeDeleted(Some(branch.clone())),
+                    };
+                    storage_trie_cursor.append_dup(key, vv)?;
+                }
+
+                for path in &storage_updates.removed_nodes {
+                    let key = StorageTrieKey::new(hashed_address, StoredNibbles::from(*path));
+                    let mut walker = storage_trie_cursor.walk_dup(Some(key.clone()), Some(0))?;
+                    while let Some(Ok((_, vv))) = walker.next() {
+                        if vv.block_number < new_earliest_block_number {
+                            walker.delete_current()?;
+                        }
+                    }
+                }
+            }
+
+            // Insert hashed account diff entries at block 0
+            for (hashed_address, account) in leaves_diff.accounts {
+                let vv = VersionedValue { block_number: 0, value: MaybeDeleted(account) };
+                hashed_account_cursor.append_dup(hashed_address, vv)?;
+            }
+
+            // Hashed storage leaves
+            for (hashed_address, storage) in leaves_diff.storages {
+                for (slot, value) in storage.storage {
+                    let key = HashedStorageKey::new(hashed_address, slot);
+                    let vv = VersionedValue {
+                        block_number: 0,
+                        value: MaybeDeleted(Some(StorageValue(value))),
+                    };
+                    hashed_storage_cursor.append_dup(key, vv)?;
+                }
+            }
+
+            // Set the earliest block number to the new value
+            Self::inner_set_earliest_block_number(
+                tx,
+                new_earliest_block_number,
+                new_earliest_block_ref.block.hash,
+            )?;
+
+            Ok::<(), DatabaseError>(())
+        })?;
+
+        Ok(())
     }
 
     async fn replace_updates(
         &self,
-        _latest_common_block_number: u64,
-        _blocks_to_add: HashMap<u64, BlockStateDiff>,
+        latest_common_block_number: u64,
+        blocks_to_add: HashMap<BlockWithParent, BlockStateDiff>,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!()
+        self.env.update(|tx| {
+            let keys_to_rollback: Vec<(u64, ChangeSet)> = {
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+                change_set_cursor
+                    .walk(Some(latest_common_block_number + 1))?
+                    .collect::<Result<Vec<_>, _>>()?
+            };
+
+            if !keys_to_rollback.is_empty() {
+                let mut account_trie_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+                let mut storage_trie_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+                let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+                let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+
+                // Process already sorted entries directly
+                for (block_number, change_set) in &keys_to_rollback {
+                    // Process account trie entries
+                    for key in &change_set.account_trie_keys {
+                        if let Some(vv) =
+                            account_trie_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            account_trie_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process storage trie entries
+                    for key in &change_set.storage_trie_keys {
+                        if let Some(vv) =
+                            storage_trie_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            storage_trie_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process hashed account entries
+                    for key in &change_set.hashed_account_keys {
+                        if let Some(vv) =
+                            hashed_account_cursor.seek_by_key_subkey(*key, *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            hashed_account_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Process hashed storage entries
+                    for key in &change_set.hashed_storage_keys {
+                        if let Some(vv) =
+                            hashed_storage_cursor.seek_by_key_subkey(key.clone(), *block_number)? &&
+                            vv.block_number == *block_number
+                        {
+                            hashed_storage_cursor.delete_current()?;
+                        }
+                    }
+
+                    // Delete the change set immediately
+                    change_set_cursor.seek_exact(*block_number)?;
+                    change_set_cursor.delete_current()?;
+                }
+            }
+
+            // Sort by block number: Hashmap does not guarantee order
+            // todo: use a sorted vec instead
+            let mut blocks_to_add_vec: Vec<(BlockWithParent, BlockStateDiff)> =
+                blocks_to_add.into_iter().collect();
+
+            blocks_to_add_vec.sort_unstable_by_key(|(bwp, _)| bwp.block.number);
+
+            // update the proof window
+            // todo: refactor to use block hash from the block to add. We need to pass the
+            // BlockNumHash type for the latest_common_block_number
+            let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
+            proof_window_cursor.append(
+                ProofWindowKey::LatestBlock,
+                &BlockNumberHash::new(
+                    latest_common_block_number,
+                    blocks_to_add_vec.first().unwrap().0.parent,
+                ),
+            )?;
+
+            for (block_with_parent, diff) in blocks_to_add_vec {
+                self.store_trie_updates_inner(tx, block_with_parent, diff)?;
+            }
+            Ok(())
+        })?
     }
 
     async fn set_earliest_block_number(
@@ -611,6 +805,7 @@ mod tests {
     use reth_db::{
         cursor::DbDupCursorRO,
         transaction::{DbTx, DbTxMut},
+        DatabaseError,
     };
     use reth_trie::{
         updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles, StoredNibbles,
@@ -1648,7 +1843,6 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
         let block = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
-        let diff = BlockStateDiff::default();
         store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
 
         // Insert a single entry to be pruned
@@ -1657,8 +1851,10 @@ mod tests {
         state_diff.post_state.accounts.insert(addr, Some(Account::default()));
         store.store_trie_updates(block, state_diff).await.unwrap();
 
-        // Prune the entry
-        store.prune_earliest_state(block.block.number + 1, diff).await.unwrap();
+        // Prune the entry - pass empty diff since we're just removing data
+        let next_block = BlockWithParent::new(block.block.hash, NumHash::new(2, B256::random()));
+        let diff = BlockStateDiff::default();
+        store.prune_earliest_state(next_block, diff).await.unwrap();
 
         // Verify the entry was pruned
         let tx = store.env.tx().unwrap();
@@ -1666,6 +1862,10 @@ mod tests {
         assert!(cur.seek_by_key_subkey(addr, block.block.number).unwrap().is_none());
         let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
         assert!(pruning_cur.seek_exact(block.block.number).unwrap().is_none());
+
+        // Verify earliest block was updated
+        let earliest = store.get_earliest_block_number().await.unwrap();
+        assert_eq!(earliest, Some((2, next_block.block.hash)));
     }
 
     #[tokio::test]
@@ -1673,7 +1873,6 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
         let block = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
-        let diff = BlockStateDiff::default();
         store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
 
         // Insert multiple entries for the same block
@@ -1685,7 +1884,9 @@ mod tests {
         store.store_trie_updates(block, state_diff).await.unwrap();
 
         // Prune the entries
-        store.prune_earliest_state(block.block.number + 1, diff).await.unwrap();
+        let next_block = BlockWithParent::new(block.block.hash, NumHash::new(2, B256::random()));
+        let diff = BlockStateDiff::default();
+        store.prune_earliest_state(next_block, diff).await.unwrap();
 
         // Verify the entries were pruned
         let tx = store.env.tx().unwrap();
@@ -1700,9 +1901,9 @@ mod tests {
     async fn test_prune_earliest_state_multiple_blocks() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
-        let diff = BlockStateDiff::default();
         let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
         let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
+        let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
         store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
 
         // Insert entries for multiple blocks
@@ -1717,7 +1918,8 @@ mod tests {
         store.store_trie_updates(block_2, state_diff2).await.unwrap();
 
         // Prune up to block 3 (should remove blocks 1 and 2)
-        store.prune_earliest_state(3, diff).await.unwrap();
+        let diff = BlockStateDiff::default();
+        store.prune_earliest_state(block_3, diff).await.unwrap();
 
         // Verify the entries were pruned
         let tx = store.env.tx().unwrap();
@@ -1737,8 +1939,10 @@ mod tests {
         store.set_earliest_block_number(1, B256::random()).await.unwrap();
 
         // Attempt to prune with a new earliest block that is not newer
-        store.prune_earliest_state(1, diff.clone()).await.unwrap();
-        store.prune_earliest_state(0, diff).await.unwrap();
+        let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let block_0 = BlockWithParent::new(B256::ZERO, NumHash::new(0, B256::random()));
+        store.prune_earliest_state(block_1, diff.clone()).await.unwrap();
+        store.prune_earliest_state(block_0, diff).await.unwrap();
 
         // Nothing should have been pruned, this call should not panic or error
     }
@@ -1751,9 +1955,360 @@ mod tests {
         store.set_earliest_block_number(1, B256::random()).await.unwrap();
 
         // Prune a range where no entries exist
-        store.prune_earliest_state(10, diff).await.unwrap();
+        let block_10 = BlockWithParent::new(B256::ZERO, NumHash::new(10, B256::random()));
+        store.prune_earliest_state(block_10, diff).await.unwrap();
 
         // Nothing should have been pruned, this call should not panic or error
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_with_diff_insertion() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        // Insert entries for blocks 1 and 2
+        let addr1 = B256::random();
+        let addr2 = B256::random();
+        let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
+        let acc2 = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
+
+        let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let mut state_diff1 = BlockStateDiff::default();
+        state_diff1.post_state.accounts.insert(addr1, Some(acc1));
+        store.store_trie_updates(block_1, state_diff1).await.unwrap();
+
+        let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
+        let mut state_diff2 = BlockStateDiff::default();
+        state_diff2.post_state.accounts.insert(addr2, Some(acc2));
+        store.store_trie_updates(block_2, state_diff2).await.unwrap();
+
+        // Now prune to block 3, passing a diff that represents the new initial state
+        let new_initial_account =
+            Account { nonce: 10, balance: U256::from(1000), ..Default::default() };
+        let new_addr = B256::random();
+        let mut prune_diff = BlockStateDiff::default();
+        prune_diff.post_state.accounts.insert(addr1, Some(acc1));
+        prune_diff.post_state.accounts.insert(addr2, Some(acc2));
+        prune_diff.post_state.accounts.insert(new_addr, Some(new_initial_account));
+
+        let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
+        store.prune_earliest_state(block_3, prune_diff).await.unwrap();
+
+        // Verify that blocks 1 and 2 entries were pruned
+        let tx = store.env.tx().unwrap();
+        let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
+        assert!(
+            cur.seek_by_key_subkey(addr1, 1).unwrap().is_none(),
+            "Block 1 entry should be pruned"
+        );
+        assert!(
+            cur.seek_by_key_subkey(addr2, 2).unwrap().is_none(),
+            "Block 2 entry should be pruned"
+        );
+
+        // Verify that the new diff was inserted at block 0
+        let vv = cur
+            .seek_by_key_subkey(new_addr, 0)
+            .unwrap()
+            .expect("New initial state should exist at block 0");
+        assert_eq!(vv.block_number, 0);
+        assert_eq!(vv.value.0, Some(new_initial_account));
+
+        // Verify change sets for blocks 1 and 2 were removed
+        let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
+        assert!(pruning_cur.seek_exact(1).unwrap().is_none());
+        assert!(pruning_cur.seek_exact(2).unwrap().is_none());
+
+        // Verify earliest block was updated
+        let earliest = store.get_earliest_block_number().await.unwrap();
+        assert_eq!(earliest, Some((3, block_3.block.hash)));
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_with_removed_nodes() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        // Create some trie nodes in blocks 1, 2, 3
+        let path1 = Nibbles::from_nibbles_unchecked([0x01, 0x02]);
+        let path2 = Nibbles::from_nibbles_unchecked([0x03, 0x04]);
+        let node1 = BranchNodeCompact::new(0b1, 0, 0, vec![], Some(B256::random()));
+        let node2 = BranchNodeCompact::new(0b10, 0, 0, vec![], Some(B256::random()));
+
+        let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let mut diff1 = BlockStateDiff::default();
+        diff1.trie_updates.account_nodes.insert(path1, node1.clone());
+        store.store_trie_updates(block_1, diff1).await.unwrap();
+
+        let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
+        let mut diff2 = BlockStateDiff::default();
+        diff2.trie_updates.account_nodes.insert(path2, node2.clone());
+        store.store_trie_updates(block_2, diff2).await.unwrap();
+
+        // In block 3, path1 is deleted (stored as None in the database)
+        // This happens when we store trie updates with path1 mapped to None
+        let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
+        // Simulate storing a deletion by directly writing to DB
+        store
+            .env
+            .update(|tx| {
+                let mut cursor = tx.new_cursor::<AccountTrieHistory>()?;
+                let vv = VersionedValue { block_number: 3, value: MaybeDeleted(None) };
+                cursor.upsert(StoredNibbles::from(path1), &vv)?;
+
+                // Record in change set
+                let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
+                change_set_cursor.upsert(
+                    3,
+                    &ChangeSet {
+                        account_trie_keys: vec![StoredNibbles::from(path1)],
+                        storage_trie_keys: vec![],
+                        hashed_account_keys: vec![],
+                        hashed_storage_keys: vec![],
+                    },
+                )?;
+
+                // Update proof window
+                let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
+                proof_window_cursor.upsert(
+                    ProofWindowKey::LatestBlock,
+                    &BlockNumberHash::new(3, block_3.block.hash),
+                )?;
+                Ok::<(), DatabaseError>(())
+            })
+            .unwrap()
+            .unwrap();
+
+        // Now prune to block 5, with the new initial state:
+        // - path1 should be in removed_nodes (it was deleted in block 3)
+        // - path2 should be included with its value (it still exists from block 2)
+        let block_5 = BlockWithParent::new(B256::random(), NumHash::new(5, B256::random()));
+        let mut prune_diff = BlockStateDiff::default();
+        prune_diff.trie_updates.removed_nodes.insert(path1);
+        prune_diff.trie_updates.account_nodes.insert(path2, node2.clone());
+        store.prune_earliest_state(block_5, prune_diff).await.unwrap();
+
+        // Verify that all entries for path1 before block 5 were removed
+        let tx = store.env.tx().unwrap();
+        let mut cur = tx.cursor_dup_read::<AccountTrieHistory>().unwrap();
+
+        // path1 at block 1 should be gone
+        assert!(
+            cur.seek_by_key_subkey(StoredNibbles::from(path1), 1).unwrap().is_none(),
+            "path1 at block 1 should be pruned"
+        );
+        // path1 at block 3 (deletion) should also be gone
+        assert!(
+            cur.seek_by_key_subkey(StoredNibbles::from(path1), 3).unwrap().is_none(),
+            "path1 at block 3 should be pruned"
+        );
+
+        // path2 entries should be pruned (blocks < 5)
+        assert!(
+            cur.seek_by_key_subkey(StoredNibbles::from(path2), 2).unwrap().is_none(),
+            "path2 at block 2 should be pruned"
+        );
+
+        // path2 should exist at block 0 as part of the new initial state
+        let vv = cur
+            .seek_by_key_subkey(StoredNibbles::from(path2), 0)
+            .unwrap()
+            .expect("path2 should exist at block 0");
+        assert_eq!(vv.block_number, 0);
+        assert_eq!(vv.value.0, Some(node2));
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_overlapping_keys() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        // Use different addresses - addr1 in old history, addr2 in new initial state
+        // This reflects the real-world use case where pruning replaces old account history
+        // with a new set of accounts as the initial state
+        let addr1 = B256::random();
+        let addr2 = B256::random();
+        let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
+        let acc2 = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
+        let new_acc = Account { nonce: 10, balance: U256::from(500), ..Default::default() };
+
+        let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let mut diff1 = BlockStateDiff::default();
+        diff1.post_state.accounts.insert(addr1, Some(acc1));
+        store.store_trie_updates(block_1, diff1).await.unwrap();
+
+        let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
+        let mut diff2 = BlockStateDiff::default();
+        diff2.post_state.accounts.insert(addr1, Some(acc2));
+        store.store_trie_updates(block_2, diff2).await.unwrap();
+
+        // Prune to block 3, with new initial state including:
+        // - addr1 with its final value (acc2) from block 2
+        // - addr2 as a new account
+        let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
+        let mut prune_diff = BlockStateDiff::default();
+        prune_diff.post_state.accounts.insert(addr1, Some(acc2));
+        prune_diff.post_state.accounts.insert(addr2, Some(new_acc));
+        store.prune_earliest_state(block_3, prune_diff).await.unwrap();
+
+        // Verify old versions of addr1 were pruned
+        let tx = store.env.tx().unwrap();
+        let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
+        assert!(
+            cur.seek_by_key_subkey(addr1, 1).unwrap().is_none(),
+            "Block 1 entry should be pruned"
+        );
+        assert!(
+            cur.seek_by_key_subkey(addr1, 2).unwrap().is_none(),
+            "Block 2 entry should be pruned"
+        );
+
+        // Verify new initial state at block 0 for addr1 (with final value acc2)
+        let vv1 = cur
+            .seek_by_key_subkey(addr1, 0)
+            .unwrap()
+            .expect("addr1 initial state should exist at block 0");
+        assert_eq!(vv1.block_number, 0);
+        assert_eq!(vv1.value.0, Some(acc2));
+
+        // Verify new initial state at block 0 for addr2
+        let vv2 = cur
+            .seek_by_key_subkey(addr2, 0)
+            .unwrap()
+            .expect("New initial state should exist at block 0");
+        assert_eq!(vv2.block_number, 0);
+        assert_eq!(vv2.value.0, Some(new_acc));
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_comprehensive() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        // Setup complex scenario with accounts, storage, and trie nodes
+        // Use addr1 for old history, addr2 for new initial state
+        let addr1 = B256::random();
+        let addr2 = B256::random();
+        let slot1 = B256::random();
+        let slot2 = B256::random();
+        let path1 = Nibbles::from_nibbles_unchecked([0x01]);
+        let path2 = Nibbles::from_nibbles_unchecked([0x02]);
+        let storage_path1 = Nibbles::from_nibbles_unchecked([0x03]);
+        let storage_path2 = Nibbles::from_nibbles_unchecked([0x04]);
+
+        let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
+        let node1 = BranchNodeCompact::new(0b1, 0, 0, vec![], Some(B256::random()));
+        let storage_node1 = BranchNodeCompact::new(0b10, 0, 0, vec![], Some(B256::random()));
+
+        // Block 1: Insert account, trie node, and storage for addr1
+        let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let mut diff1 = BlockStateDiff::default();
+        diff1.post_state.accounts.insert(addr1, Some(acc1));
+        diff1.trie_updates.account_nodes.insert(path1, node1.clone());
+        let mut storage1 = HashedStorage::default();
+        storage1.storage.insert(slot1, U256::from(1234));
+        diff1.post_state.storages.insert(addr1, storage1.clone());
+        let mut storage_updates1 = StorageTrieUpdates::default();
+        storage_updates1.storage_nodes.insert(storage_path1, storage_node1.clone());
+        diff1.trie_updates.storage_tries.insert(addr1, storage_updates1.clone());
+        store.store_trie_updates(block_1, diff1).await.unwrap();
+
+        // Block 2: Update account
+        let acc2 = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
+        let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
+        let mut diff2 = BlockStateDiff::default();
+        diff2.post_state.accounts.insert(addr1, Some(acc2));
+        store.store_trie_updates(block_2, diff2).await.unwrap();
+
+        // Prune to block 3 with new initial state for DIFFERENT keys (addr2, path2, etc.)
+        let new_acc = Account { nonce: 10, balance: U256::from(1000), ..Default::default() };
+        let new_node = BranchNodeCompact::new(0b11, 0, 0, vec![], Some(B256::random()));
+        let new_storage_node = BranchNodeCompact::new(0b100, 0, 0, vec![], Some(B256::random()));
+
+        let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
+        let mut prune_diff = BlockStateDiff::default();
+        prune_diff.post_state.accounts.insert(addr1, Some(acc2));
+        prune_diff.post_state.accounts.insert(addr2, Some(new_acc));
+        prune_diff.trie_updates.account_nodes.insert(path1, node1.clone());
+        prune_diff.trie_updates.account_nodes.insert(path2, new_node.clone());
+        prune_diff.post_state.storages.insert(addr1, storage1);
+        prune_diff.trie_updates.storage_tries.insert(addr1, storage_updates1);
+
+        let mut new_storage = HashedStorage::default();
+        new_storage.storage.insert(slot2, U256::from(9999));
+        prune_diff.post_state.storages.insert(addr2, new_storage);
+        let mut new_storage_updates = StorageTrieUpdates::default();
+        new_storage_updates.storage_nodes.insert(storage_path2, new_storage_node.clone());
+        prune_diff.trie_updates.storage_tries.insert(addr2, new_storage_updates);
+
+        store.prune_earliest_state(block_3, prune_diff).await.unwrap();
+
+        let tx = store.env.tx().unwrap();
+
+        // Verify account history - old addr1 entries pruned
+        let mut acc_cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
+        assert!(
+            acc_cur.seek_by_key_subkey(addr1, 1).unwrap().is_none(),
+            "Old account entries should be pruned"
+        );
+        assert!(
+            acc_cur.seek_by_key_subkey(addr1, 2).unwrap().is_none(),
+            "Old account entries should be pruned"
+        );
+        // New addr2 entry at block 0
+        let new_acc_vv =
+            acc_cur.seek_by_key_subkey(addr2, 0).unwrap().expect("New account at block 0");
+        assert_eq!(new_acc_vv.value.0, Some(new_acc));
+
+        // Verify account trie history - old path1 pruned, new path2 at block 0
+        let mut trie_cur = tx.cursor_dup_read::<AccountTrieHistory>().unwrap();
+        assert!(
+            trie_cur.seek_by_key_subkey(StoredNibbles::from(path1), 1).unwrap().is_none(),
+            "Old trie entry should be pruned"
+        );
+        let new_trie_vv = trie_cur
+            .seek_by_key_subkey(StoredNibbles::from(path2), 0)
+            .unwrap()
+            .expect("New trie at block 0");
+        assert_eq!(new_trie_vv.value.0, Some(new_node));
+
+        // Verify storage history - old addr1/slot1 pruned, new addr2/slot2 at block 0
+        let mut storage_cur = tx.new_cursor::<HashedStorageHistory>().unwrap();
+        let old_storage_key = HashedStorageKey::new(addr1, slot1);
+        assert!(
+            storage_cur.seek_by_key_subkey(old_storage_key, 1).unwrap().is_none(),
+            "Old storage should be pruned"
+        );
+        let new_storage_key = HashedStorageKey::new(addr2, slot2);
+        let new_storage_vv = storage_cur
+            .seek_by_key_subkey(new_storage_key, 0)
+            .unwrap()
+            .expect("New storage at block 0");
+        assert_eq!(new_storage_vv.value.0.as_ref().unwrap().0, U256::from(9999));
+
+        // Verify storage trie history - old addr1/storage_path1 pruned, new addr2/storage_path2 at
+        // block 0
+        let mut storage_trie_cur = tx.cursor_dup_read::<StorageTrieHistory>().unwrap();
+        let old_storage_trie_key = StorageTrieKey::new(addr1, StoredNibbles::from(storage_path1));
+        assert!(
+            storage_trie_cur.seek_by_key_subkey(old_storage_trie_key, 1).unwrap().is_none(),
+            "Old storage trie should be pruned"
+        );
+        let new_storage_trie_key = StorageTrieKey::new(addr2, StoredNibbles::from(storage_path2));
+        let new_storage_trie_vv = storage_trie_cur
+            .seek_by_key_subkey(new_storage_trie_key, 0)
+            .unwrap()
+            .expect("New storage trie at block 0");
+        assert_eq!(new_storage_trie_vv.value.0, Some(new_storage_node));
+
+        // Verify change sets pruned
+        let mut change_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
+        assert!(change_cur.seek_exact(1).unwrap().is_none());
+        assert!(change_cur.seek_exact(2).unwrap().is_none());
     }
 
     #[test]
@@ -2096,5 +2651,92 @@ mod tests {
             Some((new_block_number, new_hash)),
             "Latest block should fall back to earliest when not explicitly set"
         );
+    }
+
+    #[tokio::test]
+    async fn replace_updates_prunes_and_adds_new_chain() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // Test address and helper to make diffs with distinct nonces.
+        let addr = B256::from([0xAB; 32]);
+        let make_diff = |nonce: u64| {
+            let mut d = BlockStateDiff::default();
+            d.post_state.accounts.insert(addr, Some(Account { nonce, ..Default::default() }));
+            d
+        };
+
+        // --- Build initial canonical chain: 1 -> 2 -> 3 ---
+        let b1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let b2 = BlockWithParent::new(b1.block.hash, NumHash::new(2, B256::random()));
+        let b3 = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random()));
+
+        store.store_trie_updates(b1, make_diff(10)).await.expect("store b1");
+        store.store_trie_updates(b2, make_diff(20)).await.expect("store b2");
+        store.store_trie_updates(b3, make_diff(30)).await.expect("store b3");
+
+        // Sanity: entries for 1,2,3 exist with expected nonces.
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
+            let v1 = cur.seek_by_key_subkey(addr, 1).expect("seek").expect("exists");
+            let v2 = cur.seek_by_key_subkey(addr, 2).expect("seek").expect("exists");
+            let v3 = cur.seek_by_key_subkey(addr, 3).expect("seek").expect("exists");
+            assert_eq!(v1.value.0.unwrap().nonce, 10);
+            assert_eq!(v2.value.0.unwrap().nonce, 20);
+            assert_eq!(v3.value.0.unwrap().nonce, 30);
+        }
+
+        // --- Reorg at LCA = 2: prune >2, then add 3' and 4' ---
+        let b3p = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random())); // 3'
+        let b4p = BlockWithParent::new(b3p.block.hash, NumHash::new(4, B256::random())); // 4'
+
+        // Build blocks_to_add (HashMap). Order is not guaranteed.
+        let mut blocks_to_add = HashMap::default();
+        blocks_to_add.insert(b3p, make_diff(300)); // new value at height 3
+        blocks_to_add.insert(b4p, make_diff(400)); // new value at height 4
+
+        store.replace_updates(2, blocks_to_add).await.expect("replace_updates succeeds");
+
+        // --- Verify post-conditions ---
+
+        // 1) HashedAccountHistory: blocks 1,2 remain; block 3 was replaced (nonce=300); block 4
+        //    exists (nonce=400).
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
+
+            let v1 = cur.seek_by_key_subkey(addr, 1).expect("seek").expect("exists");
+            assert_eq!(v1.value.0.unwrap().nonce, 10);
+
+            let v2 = cur.seek_by_key_subkey(addr, 2).expect("seek").expect("exists");
+            assert_eq!(v2.value.0.unwrap().nonce, 20);
+
+            // Old block 3 (nonce=30) should have been pruned; we should now have a fresh entry at 3
+            // with nonce=300.
+            let v3_new = cur.seek_by_key_subkey(addr, 3).expect("seek").expect("replaced exists");
+            assert_eq!(
+                v3_new.value.0.unwrap().nonce,
+                300,
+                "block 3 should be replaced by new chain"
+            );
+
+            // New block 4 should exist.
+            let v4 = cur.seek_by_key_subkey(addr, 4).expect("seek").expect("exists");
+            assert_eq!(v4.value.0.unwrap().nonce, 400);
+        }
+
+        // 2) BlockChangeSet contains exactly entries for block numbers {1,2,3,4}.
+        {
+            let tx = store.env.tx().expect("tx");
+            let mut cur = tx.new_cursor::<BlockChangeSet>().expect("cursor");
+            let mut seen = std::collections::BTreeSet::new();
+            let mut it = cur.walk(Some(1)).expect("walk");
+            while let Some(Ok((bn, _))) = it.next() {
+                seen.insert(bn);
+            }
+            let expected: std::collections::BTreeSet<u64> = [1u64, 2, 3, 4].into_iter().collect();
+            assert_eq!(seen, expected, "BlockChangeSet should reflect pruned+new chain");
+        }
     }
 }
