@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func simpleStorageSetValue(t devtest.T, parsedABI *abi.ABI, user *dsl.EOA, contractAddress common.Address, value *big.Int) *types.Receipt {
@@ -89,6 +90,10 @@ func TestStorageProofUsingSimpleStorageContract(gt *testing.T) {
 	for _, c := range cases {
 		fetchAndVerifyProofs(ctx, t, sys, contractAddress, []common.Hash{common.HexToHash("0x0")}, c.Block)
 	}
+
+	// test with non-existent storage slot
+	nonExistentSlot := common.HexToHash("0xdeadbeef")
+	fetchAndVerifyProofs(ctx, t, sys, contractAddress, []common.Hash{nonExistentSlot}, cases[len(cases)-1].Block)
 }
 
 func multiStorageSetValues(t devtest.T, parsedABI *abi.ABI, user *dsl.EOA, contractAddress common.Address, aVal, bVal *big.Int) *types.Receipt {
@@ -181,4 +186,147 @@ func TestStorageProofUsingMultiStorageContract(gt *testing.T) {
 
 		fetchAndVerifyProofs(ctx, t, sys, contractAddress, slots, c.Block)
 	}
+}
+
+// helper: compute mapping slot = keccak256(pad(key) ++ pad(slotIndex))
+func mappingSlot(key common.Address, slotIndex uint64) common.Hash {
+	keyBytes := common.LeftPadBytes(key.Bytes(), 32)
+	slotBytes := common.LeftPadBytes(new(big.Int).SetUint64(slotIndex).Bytes(), 32)
+	return crypto.Keccak256Hash(append(keyBytes, slotBytes...))
+}
+
+// nested mapping: allowances[owner][spender] where `slotIndex` is the storage slot of allowances mapping
+// innerSlot = keccak256(pad(owner) ++ pad(slotIndex))
+// entrySlot = keccak256(pad(spender) ++ innerSlot)
+func nestedMappingSlot(owner, spender common.Address, slotIndex uint64) common.Hash {
+	ownerBytes := common.LeftPadBytes(owner.Bytes(), 32)
+	slotBytes := common.LeftPadBytes(new(big.Int).SetUint64(slotIndex).Bytes(), 32)
+	inner := crypto.Keccak256(ownerBytes, slotBytes)
+	spenderBytes := common.LeftPadBytes(spender.Bytes(), 32)
+	return crypto.Keccak256Hash(append(spenderBytes, inner...))
+}
+
+// dynamic array element slot: element k stored at Big(keccak256(p)) + k
+func arrayIndexSlot(slotIndex uint64, idx uint64) common.Hash {
+	slotBytes := common.LeftPadBytes(new(big.Int).SetUint64(slotIndex).Bytes(), 32)
+	base := crypto.Keccak256(slotBytes)
+	baseInt := new(big.Int).SetBytes(base)
+	elem := new(big.Int).Add(baseInt, new(big.Int).SetUint64(idx))
+	return common.BigToHash(elem)
+}
+
+func TestTokenVaultStorageProofs(gt *testing.T) {
+	t := devtest.SerialT(gt)
+	ctx := t.Ctx()
+
+	sys := presets.NewSingleChainMultiNode(t)
+	artifactPath := "contracts/artifacts/TokenVault.sol/TokenVault.json"
+	parsedABI, bin, err := loadArtifact(artifactPath)
+	if err != nil {
+		t.Errorf("failed to load artifact: %v", err)
+		t.FailNow()
+	}
+
+	// funder EOA that will deploy / interact
+	alice := sys.FunderL2.NewFundedEOA(eth.OneEther)
+	bob := sys.FunderL2.NewFundedEOA(eth.OneEther)
+
+	// deploy contract
+	contractAddr, deployBlock, err := deployContract(ctx, alice, bin)
+	if err != nil {
+		t.Errorf("deploy failed: %v", err)
+		t.FailNow()
+	}
+	t.Logf("TokenVault deployed at %s block=%d", contractAddr.Hex(), deployBlock)
+
+	userAddr := alice.Address()
+
+	// call deposit (payable)
+	depositAmount := eth.OneHundredthEther
+	depositCalldata, err := parsedABI.Pack("deposit")
+	if err != nil {
+		t.Errorf("failed to pack deposit: %v", err)
+		t.FailNow()
+	}
+	depTx := txplan.NewPlannedTx(alice.Plan(), txplan.WithTo(&contractAddr), txplan.WithData(depositCalldata), txplan.WithValue(depositAmount))
+	depRes, err := depTx.Included.Eval(ctx)
+	if err != nil {
+		t.Errorf("deposit tx failed: %v", err)
+		t.FailNow()
+	}
+
+	if depRes.Status != types.ReceiptStatusSuccessful {
+		t.Error("set transaction failed")
+		t.FailNow()
+	}
+
+	depositBlock := depRes.BlockNumber.Uint64()
+	t.Logf("deposit included in block %d", depositBlock)
+
+	// call approve(spender, amount) - use same user as spender for simplicity, or create another funded EOA
+	approveAmount := big.NewInt(100)
+	spenderAddr := bob.Address()
+	approveCalldata, err := parsedABI.Pack("approve", spenderAddr, approveAmount)
+	if err != nil {
+		t.Errorf("failed to pack approve: %v", err)
+		t.FailNow()
+	}
+	approveTx := txplan.NewPlannedTx(alice.Plan(), txplan.WithTo(&contractAddr), txplan.WithData(approveCalldata))
+	approveRes, err := approveTx.Included.Eval(ctx)
+	if err != nil {
+		t.Errorf("approve tx failed: %v", err)
+		t.FailNow()
+	}
+
+	if approveRes.Status != types.ReceiptStatusSuccessful {
+		t.Error("approve transaction failed")
+		t.FailNow()
+	}
+
+	approveBlock := approveRes.BlockNumber.Uint64()
+	t.Logf("approve included in block %d", approveBlock)
+
+	// call deactivateAllowance(spender)
+	deactCalldata, err := parsedABI.Pack("deactivateAllowance", spenderAddr)
+	if err != nil {
+		t.Errorf("failed to pack deactivateAllowance: %v", err)
+		t.FailNow()
+	}
+	deactTx := txplan.NewPlannedTx(alice.Plan(), txplan.WithTo(&contractAddr), txplan.WithData(deactCalldata))
+	deactRes, err := deactTx.Included.Eval(ctx)
+	if err != nil {
+		t.Errorf("deactivateAllowance tx failed: %v", err)
+		t.FailNow()
+	}
+
+	if deactRes.Status != types.ReceiptStatusSuccessful {
+		t.Error("deactivateAllowance transaction failed")
+		t.FailNow()
+	}
+
+	deactBlock := deactRes.BlockNumber.Uint64()
+	t.Logf("deactivateAllowance included in block %d", deactBlock)
+
+	// --- compute storage slots and verify proofs ---
+	const pBalances = 0   // mapping(address => uint256) slot index
+	const pAllowances = 1 // mapping(address => mapping(address => uint256)) slot index
+	const pDepositors = 2 // dynamic array slot index
+
+	// balance slot for user
+	balanceSlot := mappingSlot(userAddr, pBalances)
+	// nested allowance slot owner=user, spender=spenderAddr
+	allowanceSlot := nestedMappingSlot(userAddr, spenderAddr, pAllowances)
+	// depositors[0] element slot
+	depositor0Slot := arrayIndexSlot(pDepositors, 0)
+
+	// fetch & verify proofs at appropriate blocks
+	// balance after deposit (depositBlock)
+	t.Logf("Verifying balance slot %s at deposit block %d", balanceSlot.Hex(), depositBlock)
+	fetchAndVerifyProofs(ctx, t, sys, contractAddr, []common.Hash{balanceSlot, depositor0Slot}, depositBlock)
+	// allowance after approve (approveBlock)
+	t.Logf("Verifying allowance slot %s at approve block %d", allowanceSlot.Hex(), approveBlock)
+	fetchAndVerifyProofs(ctx, t, sys, contractAddr, []common.Hash{allowanceSlot}, approveBlock)
+	// after deactivation, allowance should be zero at deactBlock
+	t.Logf("Verifying allowance slot %s at deactivate block %d", allowanceSlot.Hex(), deactBlock)
+	fetchAndVerifyProofs(ctx, t, sys, contractAddr, []common.Hash{allowanceSlot}, deactBlock)
 }
