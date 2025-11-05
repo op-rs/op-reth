@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,38 +64,51 @@ func TestDebugExecutionWitness(gt *testing.T) {
 
 	// Verify the witness contains expected data
 	require.NotEmpty(t, witness.Keys, "Witness should contain keys data")
-	t.Logf("Witness contains %d key entries", len(witness.Keys))
-
 	require.NotEmpty(t, witness.Codes, "Witness should contain codes data")
-	t.Logf("Witness contains %d code entries", len(witness.Codes))
-
 	require.NotEmpty(t, witness.State, "State should not be empty")
-	t.Logf("Witness contains %d state entries", len(witness.State))
-
 	require.NotNil(t, witness.Headers, "Witness should contain headers data")
-	t.Logf("Witness contains %d header entries", len(witness.Headers))
 
-	// Verify that the witness contains state for the accounts involved in the transaction
+	// Verify the parent header is present and decode it
+	require.NotEmpty(t, witness.Headers, "Headers should contain at least the parent block")
+	parentHeaderBytes := witness.Headers[len(witness.Headers)-1]
+	require.NotEmpty(t, parentHeaderBytes, "Parent header should not be empty")
+	t.Logf("Parent header size: %d bytes", len(parentHeaderBytes))
+
+	// Decode the parent header to verify it's valid RLP and extract state root
+	var parentHeader types.Header
+	err = rlp.DecodeBytes(parentHeaderBytes, &parentHeader)
+	require.NoError(t, err, "Parent header should be valid RLP-encoded")
+
+	// Verify the parent header matches the expected parent block
+	expectedParentNumber := block.NumberU64() - 1
+	require.Equal(t, expectedParentNumber, parentHeader.Number.Uint64(),
+		"Parent header should be for block %d", expectedParentNumber)
+
+	// Get the actual parent block from the chain to verify state root
+	actualParentBlock, err := l2RethClient.InfoByNumber(t.Ctx(), expectedParentNumber)
+	require.NoError(t, err, "Should be able to fetch parent block from chain")
+
+	// Verify the parent header's state root matches the actual parent block's state root
+	require.Equal(t, actualParentBlock.Root(), parentHeader.Root,
+		"Parent header state root in witness should match actual parent block state root")
+	t.Logf("Verified parent header state root matches chain: %s", parentHeader.Root.Hex())
+
+	// Verify that the witness contains keys for the accounts involved in the transaction
 	senderAddrHex := strings.ToLower(account.Address().Hex())
 	recipientAddrHex := strings.ToLower(recipientAddr.Hex())
 
-	t.Logf("Looking for sender in witness state (addr: %s)", senderAddrHex)
-	t.Logf("Looking for recipient in witness state (addr: %s)", recipientAddrHex)
-
-	// Check if the witness state contains the accounts
+	// Check if the witness keys contains the accounts
 	// The witness format may vary, so we check for the presence of either the address or its hash
 	foundSender := false
 	foundRecipient := false
 
-	for key, value := range witness.Keys {
+	for _, value := range witness.Keys {
 		keyLower := strings.ToLower(value.String())
 		if strings.Contains(keyLower, senderAddrHex) {
 			foundSender = true
-			t.Logf("Found sender in witness state under key: %d", key)
 		}
 		if strings.Contains(keyLower, recipientAddrHex) {
 			foundRecipient = true
-			t.Logf("Found recipient in witness state under key: %d", key)
 		}
 	}
 
