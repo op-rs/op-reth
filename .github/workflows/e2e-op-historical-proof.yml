@@ -30,16 +30,11 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
       - name: Install Foundry
-        run: |
-          curl -L https://foundry.paradigm.xyz | bash
-          # Ensure foundry binaries are in PATH for the rest of the job
-          source $HOME/.bashrc
-          foundryup || true
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Verify tools
         run: |
           echo "forge: $(command -v forge || true)"
-          echo "anvil: $(command -v anvil || true)"
           go version
 
       - name: Build contract artifacts with forge
