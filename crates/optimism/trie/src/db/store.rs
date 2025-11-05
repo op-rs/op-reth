@@ -192,9 +192,9 @@ impl MdbxProofsStorage {
         Ok(keys)
     }
 
-    /// Prune versioned history over `block_range` using `BlockChangeSet`.
+    /// Delete versioned history over `block_range` using `BlockChangeSet`.
     /// For each block: delete referenced rows at that block and drop the changeset entry.
-    fn delete_versioned_entries(
+    fn delete_history_ranged(
         &self,
         tx: &(impl DbTxMut + DbTx),
         block_range: impl RangeBounds<u64>,
@@ -669,7 +669,7 @@ impl OpProofsStore for MdbxProofsStorage {
 
         let _ = self.env.update(|tx| {
             // First, delete the old entries for the block range excluding block 0
-            self.delete_versioned_entries(
+            self.delete_history_ranged(
                 tx,
                 max(old_earliest_block_number, 1)..new_earliest_block_number,
             )?;
@@ -697,7 +697,7 @@ impl OpProofsStore for MdbxProofsStorage {
         blocks_to_add: HashMap<BlockWithParent, BlockStateDiff>,
     ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
-            self.delete_versioned_entries(tx, latest_common_block_number + 1..)?;
+            self.delete_history_ranged(tx, latest_common_block_number + 1..)?;
 
             // Sort by block number: Hashmap does not guarantee order
             // todo: use a sorted vec instead
