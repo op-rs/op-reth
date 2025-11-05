@@ -25,8 +25,7 @@ use reth_db::{
 };
 use reth_primitives_traits::Account;
 use reth_trie::{updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles};
-use std::{ops::RangeBounds, path::Path};
-use std::cmp::max;
+use std::{cmp::max, ops::RangeBounds, path::Path};
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
@@ -87,6 +86,9 @@ impl MdbxProofsStorage {
         Ok(())
     }
 
+    /// Write a batch into a dup-sorted history at `block_number`.
+    /// If `soft_delete`: append all (incl. tombstones).
+    /// Else: hard-delete tombstone entries at this block, then append non-tombstones.
     fn append_or_delete_dup_sorted<Tab, I, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
@@ -135,6 +137,8 @@ impl MdbxProofsStorage {
         Ok(keys)
     }
 
+    /// Delete entries for `items` at exactly `block_number` in a dup-sorted table.
+    /// Seeks (key, block) and deletes current if the subkey matches.
     fn delete_dup_sorted<Tab, I, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
@@ -159,6 +163,9 @@ impl MdbxProofsStorage {
         Ok(())
     }
 
+    /// Append deletion tombstones for all existing storage items of `hashed_address` at
+    /// `block_number`. Iterates via `next()` from a RO cursor and writes MaybeDeleted(None)
+    /// rows.
     fn wipe_storage<T, Next, K, VV, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
@@ -185,6 +192,8 @@ impl MdbxProofsStorage {
         Ok(keys)
     }
 
+    /// Prune versioned history over `block_range` using `BlockChangeSet`.
+    /// For each block: delete referenced rows at that block and drop the changeset entry.
     fn delete_versioned_entries(
         &self,
         tx: &(impl DbTxMut + DbTx),
@@ -219,6 +228,7 @@ impl MdbxProofsStorage {
         Ok(())
     }
 
+    /// Write trie/state history for `block_number` from `block_state_diff`.
     fn store_trie_updates_for_block(
         &self,
         tx: &<DatabaseEnv as Database>::TXMut,
@@ -318,6 +328,8 @@ impl MdbxProofsStorage {
         })
     }
 
+    /// Append-only writer for a block: validates parent, persists diff (soft-delete=true),
+    /// records a `BlockChangeSet`, and advances `ProofWindow::LatestBlock`.
     fn store_trie_updates_append_only(
         &self,
         tx: &<DatabaseEnv as Database>::TXMut,
@@ -347,7 +359,7 @@ impl MdbxProofsStorage {
         let mut change_set_cursor = tx.new_cursor::<BlockChangeSet>()?;
         change_set_cursor.append(block_number, change_set)?;
 
-        // update proof window's latest block
+        // Update proof window's latest block
         let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
         proof_window_cursor.append(
             ProofWindowKey::LatestBlock,
@@ -656,14 +668,15 @@ impl OpProofsStore for MdbxProofsStorage {
         }
 
         let _ = self.env.update(|tx| {
-            // First, store the new entries for block 0
-            self.store_trie_updates_for_block(tx, 0, diff, false)?;
-
-            // Then, delete the old entries for the block range excluding block 0
+            // First, delete the old entries for the block range excluding block 0
             self.delete_versioned_entries(
                 tx,
                 max(old_earliest_block_number, 1)..new_earliest_block_number,
             )?;
+
+            // Then, store the new entries for block 0.
+            // The removed entries in diff from block 0 will also be removed(hard-delete) by this
+            self.store_trie_updates_for_block(tx, 0, diff, false)?;
 
             // Set the earliest block number to the new value
             Self::inner_set_earliest_block_number(
@@ -684,7 +697,7 @@ impl OpProofsStore for MdbxProofsStorage {
         blocks_to_add: HashMap<BlockWithParent, BlockStateDiff>,
     ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
-            self.delete_versioned_entries(tx, latest_common_block_number+1..)?;
+            self.delete_versioned_entries(tx, latest_common_block_number + 1..)?;
 
             // Sort by block number: Hashmap does not guarantee order
             // todo: use a sorted vec instead
