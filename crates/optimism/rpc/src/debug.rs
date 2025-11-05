@@ -232,31 +232,34 @@ where
 
         let block_number = block.header().number();
 
-        let (mut exec_witness, lowest_block_number) = self.inner
+        let (mut exec_witness, lowest_block_number) = self
+            .inner
             .eth_api
-            .spawn_with_state_at_block(
-                block.parent_hash().into(),
-                move |state_provider| {
-                    let db = StateProviderDatabase::new(&state_provider);
-                    let block_executor = this.eth_api.evm_config().executor(db);
+            .spawn_with_state_at_block(block.parent_hash().into(), move |state_provider| {
+                let db = StateProviderDatabase::new(&state_provider);
+                let block_executor = this.eth_api.evm_config().executor(db);
 
-                    let mut witness_record = ExecutionWitnessRecord::default();
+                let mut witness_record = ExecutionWitnessRecord::default();
 
-                    let _ = block_executor
-                        .execute_with_state_closure(&block, |statedb: &State<_>| {
-                            witness_record.record_executed_state(statedb);
-                        })
-                        .map_err(EthApiError::from)?;
+                let _ = block_executor
+                    .execute_with_state_closure(&block, |statedb: &State<_>| {
+                        witness_record.record_executed_state(statedb);
+                    })
+                    .map_err(EthApiError::from)?;
 
-                    let ExecutionWitnessRecord { hashed_state, codes, keys, lowest_block_number } =
-                        witness_record;
+                let ExecutionWitnessRecord { hashed_state, codes, keys, lowest_block_number } =
+                    witness_record;
 
-                    let state =
-                        state_provider.0.witness(Default::default(), hashed_state).map_err(EthApiError::from)?;
-                    Ok((ExecutionWitness { state, codes, keys, ..Default::default() }, lowest_block_number))
-
-        }).await?;
-
+                let state = state_provider
+                    .0
+                    .witness(Default::default(), hashed_state)
+                    .map_err(EthApiError::from)?;
+                Ok((
+                    ExecutionWitness { state, codes, keys, ..Default::default() },
+                    lowest_block_number,
+                ))
+            })
+            .await?;
 
         let smallest = match lowest_block_number {
             Some(smallest) => smallest,
