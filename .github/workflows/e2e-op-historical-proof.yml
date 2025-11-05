@@ -50,8 +50,6 @@ jobs:
 
       - name: Run DEVNET
         working-directory: crates/optimism/tests
-        env:
-          DEVNET: destruct-historical-proof
         run: |
           make all
 
