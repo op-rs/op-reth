@@ -58,5 +58,5 @@ normal = [
     "reth-node-builder",
     "reth-optimism-node",
     "reth-optimism-chainspec",
-    "tempfile.workspace"
+    "tempfile.workspace",
 ]
