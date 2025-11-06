@@ -89,24 +89,24 @@ impl MdbxProofsStorage {
     /// Write a batch into a dup-sorted history at `block_number`.
     /// If `soft_delete`: append all (incl. tombstones).
     /// Else: hard-delete tombstone entries at this block, then append non-tombstones.
-    fn append_or_delete_dup_sorted<Tab, I, V>(
+    fn append_or_delete_dup_sorted<T, I, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
-        block_number: Tab::SubKey,
+        block_number: T::SubKey,
         items: I,
         soft_delete: bool,
-    ) -> OpProofsStorageResult<Vec<Tab::Key>>
+    ) -> OpProofsStorageResult<Vec<T::Key>>
     where
-        Tab: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
-        Tab::Key: Clone,
+        T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
+        T::Key: Clone,
         I: IntoIterator,
-        I::Item: IntoKV<Tab>,
+        I::Item: IntoKV<T>,
     {
-        let mut cur = tx.cursor_dup_write::<Tab>()?;
-        let mut keys = Vec::<Tab::Key>::new();
+        let mut cur = tx.cursor_dup_write::<T>()?;
+        let mut keys = Vec::<T::Key>::new();
 
         // Materialize once to avoid recomputing into_kv and to allow partitioning.
-        let mut pairs: Vec<(Tab::Key, Tab::Value)> = Vec::new();
+        let mut pairs: Vec<(T::Key, T::Value)> = Vec::new();
         for it in items {
             let (k, vv) = it.into_kv(block_number);
             pairs.push((k.clone(), vv));
@@ -124,11 +124,7 @@ impl MdbxProofsStorage {
         let (to_delete, to_append): (Vec<_>, Vec<_>) =
             pairs.into_iter().partition(|(_, vv)| vv.value.0.is_none());
 
-        self.delete_dup_sorted::<Tab, _, V>(
-            tx,
-            block_number,
-            to_delete.into_iter().map(|(k, _)| k),
-        )?;
+        self.delete_dup_sorted::<T, _, V>(tx, block_number, to_delete.into_iter().map(|(k, _)| k))?;
 
         for (k, vv) in to_append {
             cur.append_dup(k, vv)?;
@@ -139,19 +135,19 @@ impl MdbxProofsStorage {
 
     /// Delete entries for `items` at exactly `block_number` in a dup-sorted table.
     /// Seeks (key, block) and deletes current if the subkey matches.
-    fn delete_dup_sorted<Tab, I, V>(
+    fn delete_dup_sorted<T, I, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
         block_number: u64,
         items: I,
     ) -> OpProofsStorageResult<()>
     where
-        Tab: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
-        Tab::Key: Clone,
-        Tab::SubKey: PartialEq + Clone,
-        I: IntoIterator<Item = Tab::Key>,
+        T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
+        T::Key: Clone,
+        T::SubKey: PartialEq + Clone,
+        I: IntoIterator<Item = T::Key>,
     {
-        let mut cur = tx.cursor_dup_write::<Tab>()?;
+        let mut cur = tx.cursor_dup_write::<T>()?;
         for key in items {
             if let Some(vv) = cur.seek_by_key_subkey(key.clone(), block_number)? {
                 // ensure we didn't land on a >subkey
