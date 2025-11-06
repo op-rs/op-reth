@@ -7,6 +7,7 @@
 )]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
+#![allow(unused_crate_dependencies)]
 
 use alloy_consensus::BlockHeader;
 use derive_more::Constructor;
@@ -62,14 +63,13 @@ use tracing::{debug, error};
 ///
 /// let storage_exec = storage.clone();
 /// let proofs_history_window = 1_296_000u64;
-/// // Set enable_proofs_history based on your configuration or CLI args
-/// // Can also use install_exex instead of install_exex_if
-/// let enable_proofs_history = true;
+/// // Can also use install_exex_if along with a boolean flag
+/// // Set this based on your configuration or CLI args
 /// let _builder = NodeBuilder::new(config)
 ///     .with_database(db)
 ///     .with_types_and_provider::<OpNode, BlockchainProvider<NodeTypesWithDBAdapter<OpNode, _>>>()
 ///     .with_components(op_node.components())
-///     .install_exex_if("proofs-history", enable_proofs_history, move |exex_context| async move {
+///     .install_exex("proofs-history", move |exex_context| async move {
 ///         Ok(OpProofsExEx::new(exex_context, storage_exec, proofs_history_window).run().boxed())
 ///     })
 ///     .on_node_started(|_full_node| Ok(()))

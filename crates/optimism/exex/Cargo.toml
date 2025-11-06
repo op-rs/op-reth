@@ -19,6 +19,13 @@ reth-node-api.workspace = true
 reth-provider.workspace = true
 reth-chainspec.workspace = true
 
+# Following are only used for doc test
+
+reth-node-builder.workspace = true
+reth-optimism-node.workspace = true
+reth-optimism-chainspec.workspace = true
+tempfile.workspace = true
+
 # op-reth
 # proofs exex handles `TrieUpdates` in notifications
 reth-optimism-trie = { workspace = true, features = ["serde-bincode-compat"] }
@@ -35,13 +42,7 @@ tracing.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 futures.workspace = true
-tempfile.workspace = true
 reth-db = { workspace = true, features = ["op", "test-utils"] }
-reth-node-builder.workspace = true
-reth-node-api.workspace = true
-reth-provider.workspace = true
-reth-optimism-chainspec.workspace = true
-reth-optimism-node.workspace = true
 
 [features]
 test-utils = [
@@ -50,4 +51,12 @@ test-utils = [
     "reth-chainspec/test-utils",
     "reth-node-builder/test-utils",
     "reth-optimism-node/test-utils",
+]
+
+[package.metadata.cargo-udeps.ignore]
+normal = [
+    "reth-node-builder",
+    "reth-optimism-node",
+    "reth-optimism-chainspec",
+    "tempfile.workspace"
 ]
