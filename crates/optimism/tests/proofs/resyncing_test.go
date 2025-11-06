@@ -46,6 +46,8 @@ func TestResyncing(gt *testing.T) {
 	sys.L2ELB.Start()
 	sys.L2CLB.Start()
 
+	time.Sleep(3 * time.Second)
+
 	err = wait.For(t.Ctx(), 2*time.Second, func() (bool, error) {
 		status := sys.L2CLB.SyncStatus()
 		return status.UnsafeL2.Number > blockNumbers[len(blockNumbers)-1], nil
