@@ -55,7 +55,7 @@ func TestResyncing(gt *testing.T) {
 	require.NoError(gt, err, "L2 CLB failed to resync to latest block")
 
 	t.Logf("Fetching and verifying proofs for transactions produced while node was down")
-	// verify the Proofs for the transactions produced while the node was down
+	// verify the proofs for the transactions produced while the node was down
 	for _, blockNumber := range blockNumbers {
 		fetchAndVerifyProofs(t, sys, bob.Address(), []common.Hash{}, blockNumber)
 		fetchAndVerifyProofs(t, sys, alice.Address(), []common.Hash{}, blockNumber)
