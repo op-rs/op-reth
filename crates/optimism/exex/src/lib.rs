@@ -27,9 +27,9 @@ use tracing::{debug, error};
 ///
 /// # Examples
 ///
-/// ## The following example shows how to install the ExEx with either in-memory or persistent storage.
-/// ## This can be used when launching an OP-Reth node via a binary.
-/// ## We are currently using it in optimism/bin/src/main.rs.
+/// The following example shows how to install the ExEx with either in-memory or persistent storage.
+/// This can be used when launching an OP-Reth node via a binary.
+/// We are currently using it in optimism/bin/src/main.rs.
 ///
 /// ```
 /// use futures_util::FutureExt;
@@ -62,12 +62,14 @@ use tracing::{debug, error};
 ///
 /// let storage_exec = storage.clone();
 /// let proofs_history_window = 1_296_000u64;
-///
+/// // Set enable_proofs_history based on your configuration or CLI args
+/// // Can also use install_exex instead of install_exex_if
+/// let enable_proofs_history = true;
 /// let _builder = NodeBuilder::new(config)
 ///     .with_database(db)
 ///     .with_types_and_provider::<OpNode, BlockchainProvider<NodeTypesWithDBAdapter<OpNode, _>>>()
 ///     .with_components(op_node.components())
-///     .install_exex("proofs-history", move |exex_context| async move {
+///     .install_exex_if("proofs-history", enable_proofs_history, move |exex_context| async move {
 ///         Ok(OpProofsExEx::new(exex_context, storage_exec, proofs_history_window).run().boxed())
 ///     })
 ///     .on_node_started(|_full_node| Ok(()))
