@@ -51,7 +51,7 @@ test-utils = [
 ]
 
 [package.metadata.cargo-udeps.ignore]
-normal = [
+development = [
     "reth-node-builder",
     "reth-optimism-node",
     "reth-optimism-chainspec",
