@@ -26,7 +26,7 @@ trait OptimismApi {
     async fn proofs_sync_status(&self) -> RpcResult<ProofsSyncStatus>;
 }
 
-/// Overrides applied to the `eth_` namespace of the RPC API for historical proofs ExEx.
+/// Implements the `optimism_` namespace of the RPC API for fetching proofs sync status.
 #[derive(Debug, Constructor)]
 pub struct OptimismApi<P> {
     external_storage: P,
