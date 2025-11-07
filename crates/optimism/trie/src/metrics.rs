@@ -222,9 +222,9 @@ pub struct BlockMetrics {
     /// Number of hashed storages written
     pub hashed_storages_written_total: Counter,
     /// Earliest block number that the proofs storage has stored.
-    pub earliest_number: Gauge,
+    pub earliest_block_number: Gauge,
     /// Latest block number that the proofs storage has stored.
-    pub latest_number: Gauge,
+    pub latest_block_number: Gauge,
 }
 
 impl BlockMetrics {
@@ -525,7 +525,7 @@ where
         block_state_diff: BlockStateDiff,
     ) -> OpProofsStorageResult<WriteCounts> {
         let result = self.storage.store_trie_updates(block_ref, block_state_diff).await?;
-        self.metrics.block_metrics.latest_number.set(block_ref.block.number as f64);
+        self.metrics.block_metrics.latest_block_number.set(block_ref.block.number as f64);
         Ok(result)
     }
 
@@ -563,7 +563,7 @@ where
         block_number: u64,
         hash: B256,
     ) -> OpProofsStorageResult<()> {
-        self.metrics.block_metrics.earliest_number.set(block_number as f64);
+        self.metrics.block_metrics.earliest_block_number.set(block_number as f64);
         self.storage.set_earliest_block_number(block_number, hash).await
     }
 }

@@ -93,7 +93,7 @@ where
                 let debug_ext = DebugApiExt::new(
                     ctx.node().provider().clone(),
                     ctx.registry.eth_api().clone(),
-                    storage_rpc,
+                    storage_rpc.clone(),
                     Box::new(ctx.node().task_executor().clone()),
                     ctx.node().evm_config().clone(),
                 );
