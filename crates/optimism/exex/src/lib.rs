@@ -7,7 +7,6 @@
 )]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
-#![allow(unused_crate_dependencies)]
 
 use alloy_consensus::BlockHeader;
 use derive_more::Constructor;
