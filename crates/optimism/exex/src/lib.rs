@@ -121,7 +121,26 @@ where
                         new_block_hash = ?new.tip().hash(),
                         "ChainReorged notification received",
                     );
-                    unimplemented!("Chain reorg handling not yet implemented in OpProofsExEx");
+
+                    // find the common ancestor
+                    let mut common_block_number: u64 = 0;
+                    for block_number in (0..=old.tip().number()).rev() {
+                        let old_block = old.blocks().get(&block_number);
+                        let new_block = new.blocks().get(&block_number);
+                        if let (Some(old_block), Some(new_block)) = (old_block, new_block) {
+                            if old_block.hash() == new_block.hash() {
+                                common_block_number = old_block.number();
+                                break;
+                            }
+
+                            if old_block.parent_hash() == new_block.parent_hash() {
+                                common_block_number = old_block.parent_num_hash().number;
+                                break;
+                            }
+                        }
+                    }
+
+                    unimplemented!("Chain reorged at {}. Chain reorg handling not yet implemented in OpProofsExEx", common_block_number);
                 }
                 ExExNotification::ChainReverted { old } => {
                     debug!(
