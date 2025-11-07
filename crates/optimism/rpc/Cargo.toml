@@ -39,7 +39,11 @@ reth-optimism-flashblocks.workspace = true
 reth-optimism-payload-builder.workspace = true
 reth-optimism-txpool.workspace = true
 # TODO remove node-builder import
-reth-optimism-primitives = { workspace = true, features = ["reth-codec", "serde-bincode-compat", "serde"] }
+reth-optimism-primitives = { workspace = true, features = [
+    "reth-codec",
+    "serde-bincode-compat",
+    "serde",
+] }
 reth-optimism-forks.workspace = true
 reth-optimism-trie.workspace = true
 
@@ -65,6 +69,7 @@ revm.workspace = true
 op-revm.workspace = true
 
 # async
+serde.workspace = true
 tokio.workspace = true
 futures.workspace = true
 tokio-stream.workspace = true
