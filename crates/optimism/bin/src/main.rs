@@ -94,11 +94,11 @@ where
                 let debug_ext = DebugApiExt::new(
                     ctx.node().provider().clone(),
                     ctx.registry.eth_api().clone(),
-                    storage_rpc,
+                    storage_rpc.clone(),
                     Box::new(ctx.node().task_executor().clone()),
                     ctx.node().evm_config().clone(),
                 );
-                let status_rpc = OptimismApi::new(storage_rpc.clone());
+                let status_rpc = OptimismApi::new(storage_rpc);
                 ctx.modules.replace_configured(api_ext.into_rpc())?;
                 ctx.modules.replace_configured(debug_ext.into_rpc())?;
                 ctx.modules.replace_configured(status_rpc.into_rpc())?;
