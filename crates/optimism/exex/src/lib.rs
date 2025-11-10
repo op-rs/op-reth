@@ -18,7 +18,7 @@ use reth_node_types::NodeTypes;
 use reth_optimism_trie::{live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
-use tracing::{debug, info, error};
+use tracing::{debug, error, info};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
 ///
@@ -174,20 +174,17 @@ where
                     );
 
                     // find the common ancestor
-                    let mut common_block_number: u64 = 0;
                     let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> = Vec::new();
                     for block_number in (0..=new.tip().number()).rev() {
                         let old_block = old.blocks().get(&block_number);
                         let new_block = new.blocks().get(&block_number);
                         if let (Some(old_block), Some(new_block)) = (old_block, new_block) {
                             if old_block.hash() == new_block.hash() {
-                                common_block_number = old_block.number();
                                 break;
                             }
 
                             new_blocks.push(new_block);
                             if old_block.parent_hash() == new_block.parent_hash() {
-                                common_block_number = old_block.parent_num_hash().number;
                                 break;
                             }
                         }

@@ -4,8 +4,8 @@ use crate::{
     api::OperationDurations, provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage,
     OpProofsStorageError, OpProofsStore,
 };
-use alloy_primitives::map::{HashMap, DefaultHashBuilder};
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
+use alloy_primitives::map::{DefaultHashBuilder, HashMap};
 use derive_more::Constructor;
 use reth_evm::{execute::Executor, ConfigureEvm};
 use reth_primitives_traits::{AlloyBlockHeader, BlockTy, RecoveredBlock};
@@ -140,9 +140,9 @@ where
         );
         let mut block_trie_updates: HashMap<BlockWithParent, BlockStateDiff> =
             HashMap::with_hasher(DefaultHashBuilder::default());
-        
-        for block_ref in new_blocks.iter() {
-            let block = (*block_ref).clone(); 
+
+        for block_ref in &new_blocks {
+            let block = (*block_ref).clone();
 
             let state_provider = self.provider.state_by_block_hash(block.parent_hash())?;
             let db = StateProviderDatabase::new(&state_provider);
@@ -159,22 +159,19 @@ where
                     block_number: block.number(),
                     current_state_hash: state_root,
                     expected_state_hash: block.state_root(),
-                }.into());
+                }
+                .into());
             }
 
             let block_ref = BlockWithParent::new(
                 block.parent_hash(),
                 NumHash::new(block.number(), block.hash()),
             );
-            block_trie_updates.insert(block_ref, BlockStateDiff {
-                trie_updates,
-                post_state: hashed_state,
-            });
+            block_trie_updates
+                .insert(block_ref, BlockStateDiff { trie_updates, post_state: hashed_state });
         }
 
-        self
-            .storage
-            .replace_updates(new_blocks[0].number()-1, block_trie_updates).await?;
+        self.storage.replace_updates(new_blocks[0].number() - 1, block_trie_updates).await?;
         Ok(())
     }
 }
