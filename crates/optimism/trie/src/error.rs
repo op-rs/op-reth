@@ -14,6 +14,9 @@ pub enum OpProofsStorageError {
     /// Parent block number is less than earliest stored block number
     #[error("Parent block number is less than earliest stored block number")]
     UnknownParent,
+    /// Failed to acquire read lock.
+    #[error("Failed to acquire read lock")]
+    ReadLockError,
     /// Block is out of order
     #[error("Block {block_number} is out of order (parent: {parent_block_hash}, latest stored block hash: {latest_block_hash})")]
     OutOfOrder {
