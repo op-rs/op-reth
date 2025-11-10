@@ -193,10 +193,6 @@ where
                         }
                     }
 
-                    info!(
-                        common_block_number,
-                        "Common ancestor found at block number",
-                    );
                     // reverse to get the new blocks in the correct order
                     new_blocks.reverse();
                     collector.unwind_and_store_block_updates(new_blocks).await?;
