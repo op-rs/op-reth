@@ -9348,6 +9348,7 @@ dependencies = [
  "reth-node-api",
  "reth-node-types",
  "reth-optimism-trie",
+ "reth-primitives-traits",
  "reth-provider",
  "tokio",
  "tracing",

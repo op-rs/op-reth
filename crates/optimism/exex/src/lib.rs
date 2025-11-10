@@ -16,8 +16,9 @@ use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_optimism_trie::{live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
+use reth_primitives_traits::{BlockTy, RecoveredBlock};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
-use tracing::{debug, error};
+use tracing::{debug, info, error};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
 ///
@@ -114,7 +115,7 @@ where
                     }
                 }
                 ExExNotification::ChainReorged { old, new } => {
-                    debug!(
+                    info!(
                         old_block_number = old.tip().number(),
                         old_block_hash = ?old.tip().hash(),
                         new_block_number = new.tip().number(),
@@ -124,7 +125,8 @@ where
 
                     // find the common ancestor
                     let mut common_block_number: u64 = 0;
-                    for block_number in (0..=old.tip().number()).rev() {
+                    let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> = Vec::new();
+                    for block_number in (0..=new.tip().number()).rev() {
                         let old_block = old.blocks().get(&block_number);
                         let new_block = new.blocks().get(&block_number);
                         if let (Some(old_block), Some(new_block)) = (old_block, new_block) {
@@ -133,6 +135,7 @@ where
                                 break;
                             }
 
+                            new_blocks.push(new_block);
                             if old_block.parent_hash() == new_block.parent_hash() {
                                 common_block_number = old_block.parent_num_hash().number;
                                 break;
@@ -140,7 +143,13 @@ where
                         }
                     }
 
-                    unimplemented!("Chain reorged at {}. Chain reorg handling not yet implemented in OpProofsExEx", common_block_number);
+                    info!(
+                        common_block_number,
+                        "Common ancestor found at block number",
+                    );
+                    // reverse to get the new blocks in the correct order
+                    new_blocks.reverse();
+                    collector.unwind_and_store_block_updates(new_blocks).await?;
                 }
                 ExExNotification::ChainReverted { old } => {
                     debug!(

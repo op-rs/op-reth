@@ -4,6 +4,7 @@ use crate::{
     api::OperationDurations, provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage,
     OpProofsStorageError, OpProofsStore,
 };
+use alloy_primitives::map::{HashMap, DefaultHashBuilder};
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use derive_more::Constructor;
 use reth_evm::{execute::Executor, ConfigureEvm};
@@ -124,6 +125,56 @@ where
             "Trie updates stored successfully",
         );
 
+        Ok(())
+    }
+
+    /// Unwind blocks and store the new block updates in the storage.
+    pub async fn unwind_and_store_block_updates(
+        &self,
+        new_blocks: Vec<&RecoveredBlock<BlockTy<Evm::Primitives>>>,
+    ) -> eyre::Result<()> {
+        info!(
+            start_block_number = new_blocks.first().map(|b| b.number()),
+            end_block_number = new_blocks.last().map(|b| b.number()),
+            "Unwinding and storing trie updates for new blocks",
+        );
+        let mut block_trie_updates: HashMap<BlockWithParent, BlockStateDiff> =
+            HashMap::with_hasher(DefaultHashBuilder::default());
+        
+        for block_ref in new_blocks.iter() {
+            let block = (*block_ref).clone(); 
+
+            let state_provider = self.provider.state_by_block_hash(block.parent_hash())?;
+            let db = StateProviderDatabase::new(&state_provider);
+            let block_executor = self.evm_config.batch_executor(db);
+            let execution_result =
+                block_executor.execute(&block).map_err(|err| eyre::eyre!(err))?;
+
+            let hashed_state = state_provider.hashed_post_state(&execution_result.state);
+            let (state_root, trie_updates) =
+                state_provider.state_root_with_updates(hashed_state.clone())?;
+
+            if state_root != block.state_root() {
+                return Err(OpProofsStorageError::StateRootMismatch {
+                    block_number: block.number(),
+                    current_state_hash: state_root,
+                    expected_state_hash: block.state_root(),
+                }.into());
+            }
+
+            let block_ref = BlockWithParent::new(
+                block.parent_hash(),
+                NumHash::new(block.number(), block.hash()),
+            );
+            block_trie_updates.insert(block_ref, BlockStateDiff {
+                trie_updates,
+                post_state: hashed_state,
+            });
+        }
+
+        self
+            .storage
+            .replace_updates(new_blocks[0].number()-1, block_trie_updates).await?;
         Ok(())
     }
 }
