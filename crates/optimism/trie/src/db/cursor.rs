@@ -55,15 +55,12 @@ where
         let seek_res = self
             .cursor
             .seek_by_key_subkey(key.clone(), self.max_block_number)
-            .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?;
+            .map_err(OpProofsStorageError::DatabaseError)?;
 
         if let Some(vv) = seek_res {
             if vv.block_number > self.max_block_number {
                 // step back to the last dup < max
-                return self
-                    .cursor
-                    .prev_dup()
-                    .map_err(|e| OpProofsStorageError::DatabaseError(e.into()));
+                return self.cursor.prev_dup().map_err(OpProofsStorageError::DatabaseError);
             }
             // already at the dup = max
             return Ok(Some((key, vv)))
@@ -73,16 +70,14 @@ where
         if self
             .cursor
             .seek_exact(key.clone())
-            .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?
+            .map_err(OpProofsStorageError::DatabaseError)?
             .is_none()
         {
             return Ok(None);
         }
 
         // Key exists ⇒ take last dup (< max).
-        if let Some(vv) =
-            self.cursor.last_dup().map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?
-        {
+        if let Some(vv) = self.cursor.last_dup().map_err(OpProofsStorageError::DatabaseError)? {
             return Ok(Some((key, vv)))
         }
         Ok(None)
@@ -111,10 +106,8 @@ where
             }
 
             // Move to next distinct key, or EOF
-            let Some((next_key, _)) = self
-                .cursor
-                .next_no_dup()
-                .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?
+            let Some((next_key, _)) =
+                self.cursor.next_no_dup().map_err(OpProofsStorageError::DatabaseError)?
             else {
                 return Ok(None);
             };
@@ -129,10 +122,8 @@ where
     /// - Otherwise hop to next distinct key and repeat until we find a live version or hit EOF.
     fn seek(&mut self, start_key: T::Key) -> OpProofsStorageResult<Option<(T::Key, V)>> {
         // Position MDBX at first key >= start_key
-        if let Some((first_key, _)) = self
-            .cursor
-            .seek(start_key)
-            .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?
+        if let Some((first_key, _)) =
+            self.cursor.seek(start_key).map_err(OpProofsStorageError::DatabaseError)?
         {
             return self.next_live_from(first_key)
         }
@@ -147,16 +138,9 @@ where
         T::Key: Default,
     {
         // If not positioned, start from the beginning (default key).
-        if self
-            .cursor
-            .current()
-            .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?
-            .is_none()
-        {
-            let Some((first_key, _)) = self
-                .cursor
-                .seek(T::Key::default())
-                .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?
+        if self.cursor.current().map_err(OpProofsStorageError::DatabaseError)?.is_none() {
+            let Some((first_key, _)) =
+                self.cursor.seek(T::Key::default()).map_err(OpProofsStorageError::DatabaseError)?
             else {
                 return Ok(None);
             };
@@ -165,7 +149,7 @@ where
 
         // Otherwise advance to next distinct key and resume the walk.
         let Some((next_key, _)) =
-            self.cursor.next_no_dup().map_err(|e| OpProofsStorageError::DatabaseError(e.into()))?
+            self.cursor.next_no_dup().map_err(OpProofsStorageError::DatabaseError)?
         else {
             return Ok(None);
         };
@@ -222,7 +206,7 @@ where
         self.inner
             .cursor
             .current()
-            .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))
+            .map_err(OpProofsStorageError::DatabaseError)
             .map(|opt| opt.map(|(StoredNibbles(n), _)| n))
     }
 }
@@ -272,7 +256,7 @@ where
                 .inner
                 .cursor
                 .current()
-                .map_err(|e| OpProofsStorageError::DatabaseError(e.into()))
+                .map_err(OpProofsStorageError::DatabaseError)
                 .map(|opt| opt.and_then(|(k, _)| (k.hashed_address == address).then_some(k.path.0)))
         }
         Ok(None)
