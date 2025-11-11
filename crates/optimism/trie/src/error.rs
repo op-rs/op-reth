@@ -4,6 +4,7 @@ use alloy_primitives::B256;
 use reth_db::DatabaseError;
 use reth_trie::Nibbles;
 use thiserror::Error;
+use tokio::sync::TryLockError;
 
 /// Error type for storage operations
 #[derive(Debug, Error)]
@@ -14,9 +15,6 @@ pub enum OpProofsStorageError {
     /// Parent block number is less than earliest stored block number
     #[error("Parent block number is less than earliest stored block number")]
     UnknownParent,
-    /// Failed to acquire read lock.
-    #[error("Failed to acquire read lock")]
-    ReadLockError,
     /// Block is out of order
     #[error("Block {block_number} is out of order (parent: {parent_block_hash}, latest stored block hash: {latest_block_hash})")]
     OutOfOrder {
@@ -72,6 +70,9 @@ pub enum OpProofsStorageError {
     /// Error occurred while interacting with the database.
     #[error(transparent)]
     DatabaseError(#[from] DatabaseError),
+    /// Error occurred while trying to acquire a lock.
+    #[error(transparent)]
+    TryLockError(#[from] TryLockError),
     /// Other error
     #[error("Other error: {0}")]
     Other(eyre::Error),

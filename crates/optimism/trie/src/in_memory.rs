@@ -1,8 +1,8 @@
 //! In-memory implementation of [`OpProofsStore`] for testing purposes
 
 use crate::{
-    api::WriteCounts, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError,
-    OpProofsStorageResult, OpProofsStore, OpProofsTrieCursorRO,
+    api::WriteCounts, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageResult, OpProofsStore,
+    OpProofsTrieCursorRO,
 };
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
@@ -479,7 +479,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::StorageTrieCursor<'tx>> {
         // For synchronous methods, we need to try_read() and handle potential blocking
-        let inner = self.inner.try_read().map_err(|_| OpProofsStorageError::ReadLockError)?;
+        let inner = self.inner.try_read()?;
         Ok(InMemoryTrieCursor::new(&inner, Some(hashed_address), max_block_number))
     }
 
@@ -487,7 +487,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         &self,
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::AccountTrieCursor<'tx>> {
-        let inner = self.inner.try_read().map_err(|_| OpProofsStorageError::ReadLockError)?;
+        let inner = self.inner.try_read()?;
         Ok(InMemoryTrieCursor::new(&inner, None, max_block_number))
     }
 
@@ -496,7 +496,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         hashed_address: B256,
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::StorageCursor<'tx>> {
-        let inner = self.inner.try_read().map_err(|_| OpProofsStorageError::ReadLockError)?;
+        let inner = self.inner.try_read()?;
         Ok(InMemoryStorageCursor::new(&inner, hashed_address, max_block_number))
     }
 
@@ -504,7 +504,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         &self,
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::AccountHashedCursor<'tx>> {
-        let inner = self.inner.try_read().map_err(|_| OpProofsStorageError::ReadLockError)?;
+        let inner = self.inner.try_read()?;
         Ok(InMemoryAccountCursor::new(&inner, max_block_number))
     }
 
@@ -630,6 +630,8 @@ impl OpProofsStore for InMemoryProofsStorage {
 
 #[cfg(test)]
 mod tests {
+    use crate::OpProofsStorageError;
+
     use super::*;
     use alloy_eips::NumHash;
     use alloy_primitives::U256;
