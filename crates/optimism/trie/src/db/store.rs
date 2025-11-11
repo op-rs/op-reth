@@ -40,8 +40,7 @@ impl MdbxProofsStorage {
         let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())
             .map_err(|e| {
                 Into::<OpProofsStorageError>::into(DatabaseError::Other(format!(
-                    "Failed to open database: {}",
-                    e
+                    "Failed to open database: {e}"
                 )))
             })?;
         Ok(Self { env })
@@ -372,10 +371,8 @@ impl OpProofsStore for MdbxProofsStorage {
         hashed_address: B256,
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::StorageTrieCursor<'tx>> {
-        let tx = self.env.tx().map_err(OpProofsStorageError::DatabaseError)?;
-        let cursor = tx
-            .cursor_dup_read::<StorageTrieHistory>()
-            .map_err(OpProofsStorageError::DatabaseError)?;
+        let tx = self.env.tx()?;
+        let cursor = tx.cursor_dup_read::<StorageTrieHistory>()?;
 
         Ok(MdbxTrieCursor::new(cursor, max_block_number, Some(hashed_address)))
     }
@@ -384,10 +381,8 @@ impl OpProofsStore for MdbxProofsStorage {
         &self,
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::AccountTrieCursor<'tx>> {
-        let tx = self.env.tx().map_err(OpProofsStorageError::DatabaseError)?;
-        let cursor = tx
-            .cursor_dup_read::<AccountTrieHistory>()
-            .map_err(OpProofsStorageError::DatabaseError)?;
+        let tx = self.env.tx()?;
+        let cursor = tx.cursor_dup_read::<AccountTrieHistory>()?;
 
         Ok(MdbxTrieCursor::new(cursor, max_block_number, None))
     }
@@ -397,10 +392,8 @@ impl OpProofsStore for MdbxProofsStorage {
         hashed_address: B256,
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::StorageCursor<'tx>> {
-        let tx = self.env.tx().map_err(OpProofsStorageError::DatabaseError)?;
-        let cursor = tx
-            .cursor_dup_read::<HashedStorageHistory>()
-            .map_err(OpProofsStorageError::DatabaseError)?;
+        let tx = self.env.tx()?;
+        let cursor = tx.cursor_dup_read::<HashedStorageHistory>()?;
 
         Ok(MdbxStorageCursor::new(cursor, max_block_number, hashed_address))
     }
@@ -409,10 +402,8 @@ impl OpProofsStore for MdbxProofsStorage {
         &self,
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::AccountHashedCursor<'tx>> {
-        let tx = self.env.tx().map_err(OpProofsStorageError::DatabaseError)?;
-        let cursor = tx
-            .cursor_dup_read::<HashedAccountHistory>()
-            .map_err(OpProofsStorageError::DatabaseError)?;
+        let tx = self.env.tx()?;
+        let cursor = tx.cursor_dup_read::<HashedAccountHistory>()?;
 
         Ok(MdbxAccountCursor::new(cursor, max_block_number))
     }
