@@ -40,8 +40,8 @@ default = ["jemalloc", "otlp", "reth-optimism-evm/portable", "js-tracer"]
 otlp = ["reth-optimism-cli/otlp"]
 
 js-tracer = [
-	"reth-optimism-node/js-tracer",
-	"reth-node-builder/js-tracer"
+    "reth-optimism-node/js-tracer",
+    "reth-node-builder/js-tracer",
 ]
 
 jemalloc = ["reth-cli-util/jemalloc", "reth-optimism-cli/jemalloc"]
