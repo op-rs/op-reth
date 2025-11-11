@@ -128,7 +128,16 @@ where
         Ok(())
     }
 
-    /// Unwind blocks and store the new block updates in the storage.
+    /// Handles chain reorganizations by replacing block updates after a common ancestor.
+    ///
+    /// This method removes all block updates after the latest common ancestor (the block before
+    /// the first block in `new_blocks`) and replaces them with the updates from the provided new
+    /// chain.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_blocks` - A vector of references to `RecoveredBlock` instances representing the new
+    ///   blocks to be added to the trie storage.
     pub async fn unwind_and_store_block_updates(
         &self,
         new_blocks: Vec<&RecoveredBlock<BlockTy<Evm::Primitives>>>,
@@ -141,36 +150,34 @@ where
         if new_blocks.is_empty() {
             return Ok(());
         }
-        let latest_common_block_number = new_blocks[0].number() - 1;
+        let latest_common_block_number = new_blocks[0].number().saturating_sub(1);
 
         let mut block_trie_updates: HashMap<BlockWithParent, BlockStateDiff> =
             HashMap::with_hasher(DefaultHashBuilder::default());
 
         for block_ref in &new_blocks {
-            let block = (*block_ref).clone();
-
-            let state_provider = self.provider.state_by_block_hash(block.parent_hash())?;
+            let state_provider = self.provider.state_by_block_hash(block_ref.parent_hash())?;
             let db = StateProviderDatabase::new(&state_provider);
             let block_executor = self.evm_config.batch_executor(db);
             let execution_result =
-                block_executor.execute(&block).map_err(|err| eyre::eyre!(err))?;
+                block_executor.execute(block_ref).map_err(|err| eyre::eyre!(err))?;
 
             let hashed_state = state_provider.hashed_post_state(&execution_result.state);
             let (state_root, trie_updates) =
                 state_provider.state_root_with_updates(hashed_state.clone())?;
 
-            if state_root != block.state_root() {
+            if state_root != block_ref.state_root() {
                 return Err(OpProofsStorageError::StateRootMismatch {
-                    block_number: block.number(),
+                    block_number: block_ref.number(),
                     current_state_hash: state_root,
-                    expected_state_hash: block.state_root(),
+                    expected_state_hash: block_ref.state_root(),
                 }
                 .into());
             }
 
             let block_ref = BlockWithParent::new(
-                block.parent_hash(),
-                NumHash::new(block.number(), block.hash()),
+                block_ref.parent_hash(),
+                NumHash::new(block_ref.number(), block_ref.hash()),
             );
             block_trie_updates
                 .insert(block_ref, BlockStateDiff { trie_updates, post_state: hashed_state });

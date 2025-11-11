@@ -177,9 +177,9 @@ where
 
                     // find the common ancestor
                     let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> = Vec::new();
-                    for block_number in (0..=new.tip().number()).rev() {
-                        let old_block = old.blocks().get(&block_number);
-                        let new_block = new.blocks().get(&block_number);
+                    for block_number in new.blocks().keys().rev() {
+                        let old_block = old.blocks().get(block_number);
+                        let new_block = new.blocks().get(block_number);
                         match (new_block, old_block) {
                             (Some(new_block), Some(old_block)) => {
                                 if new_block.hash() == old_block.hash() {
