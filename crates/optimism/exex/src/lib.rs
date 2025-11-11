@@ -180,14 +180,30 @@ where
                     for block_number in (0..=new.tip().number()).rev() {
                         let old_block = old.blocks().get(&block_number);
                         let new_block = new.blocks().get(&block_number);
-                        if let (Some(old_block), Some(new_block)) = (old_block, new_block) {
-                            if old_block.hash() == new_block.hash() {
-                                break;
-                            }
+                        match (new_block, old_block) {
+                            (Some(new_block), Some(old_block)) => {
+                                if new_block.hash() == old_block.hash() {
+                                    break;
+                                }
 
-                            new_blocks.push(new_block);
-                            if old_block.parent_hash() == new_block.parent_hash() {
-                                break;
+                                new_blocks.push(new_block);
+                                if new_block.parent_hash() == old_block.parent_hash() {
+                                    break;
+                                }
+                            }
+                            (Some(new_block), None) => {
+                                // Block only exists in new chain, collect it
+                                new_blocks.push(new_block);
+                            }
+                            _ => {
+                                error!(
+                                    block_number,
+                                    "Missing block in new chain during reorg detection",
+                                );
+                                return Err(eyre::eyre!(
+                                    "Missing block {} in new chain during reorg detection",
+                                    block_number
+                                ));
                             }
                         }
                     }
