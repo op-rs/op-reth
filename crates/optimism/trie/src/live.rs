@@ -138,6 +138,11 @@ where
             end_block_number = new_blocks.last().map(|b| b.number()),
             "Unwinding and storing trie updates for new blocks",
         );
+        if new_blocks.is_empty() {
+            return Ok(());
+        }
+        let latest_common_block_number = new_blocks[0].number() - 1;
+
         let mut block_trie_updates: HashMap<BlockWithParent, BlockStateDiff> =
             HashMap::with_hasher(DefaultHashBuilder::default());
 
@@ -171,7 +176,7 @@ where
                 .insert(block_ref, BlockStateDiff { trie_updates, post_state: hashed_state });
         }
 
-        self.storage.replace_updates(new_blocks[0].number() - 1, block_trie_updates).await?;
+        self.storage.replace_updates(latest_common_block_number, block_trie_updates).await?;
         Ok(())
     }
 }
