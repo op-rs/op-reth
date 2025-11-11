@@ -11,14 +11,11 @@
 use alloy_consensus::BlockHeader;
 use derive_more::Constructor;
 use futures_util::TryStreamExt;
-use reth_chainspec::ChainInfo;
-use reth_exex::{ExExContext, ExExEvent, ExExNotification};
+use reth_exex::{ExExContext, ExExEvent, ExExHead, ExExNotification, ExExNotificationsStream};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_optimism_trie::{live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
-use reth_provider::{
-    BlockNumReader, BlockReader, DBProvider, DatabaseProviderFactory, TransactionVariant,
-};
+use reth_provider::{DBProvider, DatabaseProviderFactory};
 use tracing::{debug, error};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
@@ -103,14 +100,17 @@ where
         let db_provider =
             self.ctx.provider().database_provider_ro()?.disable_long_read_transaction_safety();
         let db_tx = db_provider.into_tx();
-        let ChainInfo { best_number, best_hash } = self.ctx.provider().chain_info()?;
-        BackfillJob::new(self.storage.clone(), &db_tx).run(best_number, best_hash).await?;
+        BackfillJob::new(self.storage.clone(), &db_tx)
+            .run(self.ctx.head.number, self.ctx.head.hash)
+            .await?;
 
         let collector = LiveTrieCollector::new(
             self.ctx.evm_config().clone(),
             self.ctx.provider().clone(),
             &self.storage,
         );
+
+        self.ctx.notifications.set_with_head(ExExHead { block: self.ctx.head });
 
         while let Some(notification) = self.ctx.notifications.try_next().await? {
             match &notification {
@@ -148,13 +148,9 @@ where
                         "Applying updates for blocks in committed chain"
                     );
                     for block_number in start..=new.tip().number() {
-                        let block = self
-                            .ctx
-                            .provider()
-                            .recovered_block(block_number.into(), TransactionVariant::NoHash)?;
-                        match block {
+                        match new.blocks().get(&block_number) {
                             Some(block) => {
-                                collector.execute_and_store_block_updates(&block).await?;
+                                collector.execute_and_store_block_updates(block).await?;
                             }
                             None => {
                                 error!(

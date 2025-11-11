@@ -9342,7 +9342,6 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
- "reth-chainspec",
  "reth-db",
  "reth-exex",
  "reth-node-api",
