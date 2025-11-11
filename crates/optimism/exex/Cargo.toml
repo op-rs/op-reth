@@ -49,6 +49,7 @@ test-utils = [
     "reth-chainspec/test-utils",
     "reth-node-builder/test-utils",
     "reth-optimism-node/test-utils",
+    "reth-primitives-traits/test-utils",
 ]
 
 [package.metadata.cargo-udeps.ignore]
