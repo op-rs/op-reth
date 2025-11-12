@@ -290,8 +290,6 @@ impl<T: Table> DbCursorRO<T> for CursorMock {
 }
 
 impl<T: DupSort> DbDupCursorRO<T> for CursorMock {
-    /// Moves to the next duplicate entry.
-    /// **Mock behavior**: Always returns `None`.
     fn next_dup(&mut self) -> PairResult<T> {
         Ok(None)
     }
