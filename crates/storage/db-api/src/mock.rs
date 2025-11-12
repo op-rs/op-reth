@@ -302,6 +302,14 @@ impl<T: DupSort> DbDupCursorRO<T> for CursorMock {
         Ok(None)
     }
 
+    fn next_dup(&mut self) -> PairResult<T> {
+        Ok(None)
+    }
+
+    fn last_dup(&mut self) -> ValueOnlyResult<T> {
+        Ok(None)
+    }
+
     /// Moves to the next entry with a different key.
     /// **Mock behavior**: Always returns `None`.
     fn next_no_dup(&mut self) -> PairResult<T> {
