@@ -7,7 +7,6 @@ use derive_more::{Constructor, From};
 use reth_db::{
     common::{PairResult, ValueOnlyResult},
     cursor::DbDupCursorRO,
-    mdbx::{self, cursor::Cursor, TransactionKind},
     mock::CursorMock,
     table::DupSort,
     DatabaseError,
