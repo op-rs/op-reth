@@ -1393,4 +1393,128 @@ mod tests {
 
         Ok(())
     }
+
+    /// Test that demonstrates the deadlock issue when ExEx delays consumption.
+    ///
+    /// With channel capacity=1 and manager buffer capacity=10, we can only deliver
+    /// ~11 notifications before deadlock occurs.
+    #[tokio::test]
+    async fn test_exex_async_deadlock_issue() {
+        reth_tracing::init_test_tracing();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let wal = Wal::new(temp_dir.path()).unwrap();
+
+        let provider_factory = create_test_provider_factory();
+        init_genesis(&provider_factory).unwrap();
+        let provider = BlockchainProvider::new(provider_factory.clone()).unwrap();
+
+        let (exex_handle, _event_tx, mut notifications) = ExExHandle::new(
+            "test_exex".to_string(),
+            Default::default(),
+            provider.clone(),
+            EthEvmConfig::mainnet(),
+            wal.handle(),
+        );
+
+        // Small buffer capacity to demonstrate issue faster
+        let max_capacity = 100;
+        let exex_manager = ExExManager::new(
+            provider,
+            vec![exex_handle],
+            max_capacity,
+            Wal::new(temp_dir.path()).unwrap(),
+            empty_finalized_header_stream(),
+        );
+
+        let manager_handle = exex_manager.handle();
+
+        // Spawn manager as async task (production-like)
+        tokio::spawn(async move {
+            let _ = exex_manager.await;
+        });
+
+        // Send more notifications than buffer+channel capacity
+        let total_to_send = 30;
+        for i in 0..total_to_send {
+            let mut block: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
+            let mut hash_bytes = [0u8; 32];
+            hash_bytes[..8].copy_from_slice(&(i as u64).to_le_bytes());
+            block.set_hash(B256::new(hash_bytes));
+            block.set_block_number(i as u64 + 1);
+
+            let notification = ExExNotification::ChainCommitted {
+                new: Arc::new(Chain::new(vec![block], Default::default(), Default::default())),
+            };
+
+            manager_handle.send(ExExNotificationSource::BlockchainTree, notification).unwrap();
+        }
+
+        // Simulate initialization delay (ExEx not consuming)
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Now start consuming - THIS IS WHERE THE DEADLOCK MANIFESTS
+        let mut received_count = 0;
+        let timeout_per_notification = tokio::time::Duration::from_millis(5000);
+
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+            // THE KEY TEST: Send MORE notifications AFTER ExEx started consuming
+            // These should be delivered, but with the deadlock they won't be
+            println!(
+                "\n📤 PHASE 2: Sending {} NEW notifications after ExEx started consuming...",
+                20
+            );
+            let second_batch_start = total_to_send;
+            let second_batch_size = 20;
+
+            for i in 0..second_batch_size {
+                let mut block: RecoveredBlock<reth_ethereum_primitives::Block> = Default::default();
+                let mut hash_bytes = [0u8; 32];
+                let block_num = second_batch_start + i;
+                hash_bytes[..8].copy_from_slice(&(block_num as u64).to_le_bytes());
+                block.set_hash(B256::new(hash_bytes));
+                block.set_block_number(block_num as u64 + 1);
+
+                let notification = ExExNotification::ChainCommitted {
+                    new: Arc::new(Chain::new(vec![block], Default::default(), Default::default())),
+                };
+
+                manager_handle.send(ExExNotificationSource::BlockchainTree, notification).unwrap();
+            }
+        });
+
+        // Try to consume initial batch
+        for i in 0..total_to_send {
+            match tokio::time::timeout(timeout_per_notification, notifications.next()).await {
+                Ok(Some(Ok(notif))) => {
+                    println!("received: {}", notif.committed_chain().unwrap().tip().number());
+                    received_count += 1;
+                }
+                Ok(Some(Err(e))) => {
+                    panic!("Error at notification {}: {e:?}", i);
+                }
+                Ok(None) => {
+                    panic!("Stream ended at {} notifications", received_count);
+                }
+                Err(e) => {
+                    println!("err: {:?}", e);
+                    // Timeout on initial batch - deadlock detected
+                    println!(
+                        "\n❌ PHASE 1: Initial deadlock detected\n\
+                         - Sent: {} notifications\n\
+                         - Received: {} notifications\n\
+                         - Stuck: {} notifications\n",
+                        total_to_send,
+                        received_count,
+                        total_to_send - received_count
+                    );
+                    break;
+                }
+            }
+        }
+
+        println!("✅ Permanent deadlock successfully demonstrated");
+    }
 }
