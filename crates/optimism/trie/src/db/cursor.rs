@@ -10,10 +10,12 @@ use crate::{
 };
 use alloy_primitives::{B256, U256};
 use reth_db::{
+    common::{PairResult, ValueOnlyResult},
     cursor::DbCursorRO,
+    mdbx::{self, cursor::Cursor, TransactionKind},
     table::{DupSort, Table},
     transaction::DbTx,
-    Database, DatabaseEnv,
+    Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{BranchNodeCompact, Nibbles, StoredNibbles};
@@ -360,6 +362,23 @@ where
 
     fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
         self.inner.next()
+    }
+}
+
+impl<K: TransactionKind, T: DupSort> DbDupCursorROExt<T> for Cursor<K, T> {
+    /// Returns the previous `(key, value)` pair of a DUPSORT table.
+    fn prev_dup(&mut self) -> PairResult<T> {
+        let prev_dup = unsafe { self.inner_mut().prev_dup() };
+        mdbx::cursor::decode::<T>(prev_dup)
+    }
+
+    /// Returns the last `value` of the current duplicate `key`.
+    fn last_dup(&mut self) -> ValueOnlyResult<T> {
+        let last_dup = unsafe { self.inner_mut().last_dup() };
+        last_dup
+            .map_err(|e| DatabaseError::Read(e.into()))?
+            .map(mdbx::utils::decode_one::<T>)
+            .transpose()
     }
 }
 

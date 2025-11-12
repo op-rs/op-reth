@@ -115,23 +115,6 @@ pub trait DbDupCursorROExt<T: DupSort>: DbDupCursorRO<T> {
     fn last_dup(&mut self) -> ValueOnlyResult<T>;
 }
 
-impl<K: TransactionKind, T: DupSort> DbDupCursorROExt<T> for Cursor<K, T> {
-    /// Returns the previous `(key, value)` pair of a DUPSORT table.
-    fn prev_dup(&mut self) -> PairResult<T> {
-        let prev_dup = unsafe { self.inner_mut().prev_dup() };
-        mdbx::cursor::decode::<T>(prev_dup)
-    }
-
-    /// Returns the last `value` of the current duplicate `key`.
-    fn last_dup(&mut self) -> ValueOnlyResult<T> {
-        let last_dup = unsafe { self.inner_mut().last_dup() };
-        last_dup
-            .map_err(|e| DatabaseError::Read(e.into()))?
-            .map(mdbx::utils::decode_one::<T>)
-            .transpose()
-    }
-}
-
 impl<T: DupSort> DbDupCursorROExt<T> for CursorMock {
     fn prev_dup(&mut self) -> PairResult<T> {
         Ok(None)
