@@ -1,5 +1,7 @@
 use crate::{
-    providers::{ConsistentProvider, ProviderNodeTypes, StaticFileProvider},
+    providers::{
+        ConsistentProvider, ProviderNodeTypes, StaticFileProvider, StaticFileProviderRWRefMut,
+    },
     AccountReader, BlockHashReader, BlockIdReader, BlockNumReader, BlockReader, BlockReaderIdExt,
     BlockSource, CanonChainTracker, CanonStateNotifications, CanonStateSubscriptions,
     ChainSpecProvider, ChainStateBlockReader, ChangeSetReader, DatabaseProviderFactory,
@@ -10,7 +12,7 @@ use crate::{
 };
 use alloy_consensus::transaction::TransactionMeta;
 use alloy_eips::{BlockHashOrNumber, BlockId, BlockNumHash, BlockNumberOrTag};
-use alloy_primitives::{Address, BlockHash, BlockNumber, TxHash, TxNumber, B256, U256};
+use alloy_primitives::{Address, BlockHash, BlockNumber, TxHash, TxNumber, B256};
 use alloy_rpc_types_engine::ForkchoiceState;
 use reth_chain_state::{
     BlockState, CanonicalInMemoryState, ForkChoiceNotifications, ForkChoiceSubscriptions,
@@ -23,6 +25,7 @@ use reth_node_types::{BlockTy, HeaderTy, NodeTypesWithDB, ReceiptTy, TxTy};
 use reth_primitives_traits::{Account, RecoveredBlock, SealedHeader, StorageEntry};
 use reth_prune_types::{PruneCheckpoint, PruneSegment};
 use reth_stages_types::{StageCheckpoint, StageId};
+use reth_static_file_types::StaticFileSegment;
 use reth_storage_api::{BlockBodyIndicesProvider, NodePrimitivesProvider, StorageChangeSetReader};
 use reth_storage_errors::provider::ProviderResult;
 use reth_trie::{updates::TrieUpdatesSorted, HashedPostState, KeccakKeyHasher};
@@ -163,6 +166,14 @@ impl<N: ProviderNodeTypes> StaticFileProviderFactory for BlockchainProvider<N> {
     fn static_file_provider(&self) -> StaticFileProvider<Self::Primitives> {
         self.database.static_file_provider()
     }
+
+    fn get_static_file_writer(
+        &self,
+        block: BlockNumber,
+        segment: StaticFileSegment,
+    ) -> ProviderResult<StaticFileProviderRWRefMut<'_, Self::Primitives>> {
+        self.database.get_static_file_writer(block, segment)
+    }
 }
 
 impl<N: ProviderNodeTypes> HeaderProvider for BlockchainProvider<N> {
@@ -174,14 +185,6 @@ impl<N: ProviderNodeTypes> HeaderProvider for BlockchainProvider<N> {
 
     fn header_by_number(&self, num: BlockNumber) -> ProviderResult<Option<Self::Header>> {
         self.consistent_provider()?.header_by_number(num)
-    }
-
-    fn header_td(&self, hash: BlockHash) -> ProviderResult<Option<U256>> {
-        self.consistent_provider()?.header_td(hash)
-    }
-
-    fn header_td_by_number(&self, number: BlockNumber) -> ProviderResult<Option<U256>> {
-        self.consistent_provider()?.header_td_by_number(number)
     }
 
     fn headers_range(
@@ -361,10 +364,6 @@ impl<N: ProviderNodeTypes> TransactionsProvider for BlockchainProvider<N> {
         tx_hash: TxHash,
     ) -> ProviderResult<Option<(Self::Transaction, TransactionMeta)>> {
         self.consistent_provider()?.transaction_by_hash_with_meta(tx_hash)
-    }
-
-    fn transaction_block(&self, id: TxNumber) -> ProviderResult<Option<BlockNumber>> {
-        self.consistent_provider()?.transaction_block(id)
     }
 
     fn transactions_by_block(
@@ -1280,23 +1279,11 @@ mod tests {
             BlockRangeParams::default(),
         )?;
 
-        let database_block = database_blocks.first().unwrap().clone();
-        let in_memory_block = in_memory_blocks.last().unwrap().clone();
         // make sure that the finalized block is on db
         let finalized_block = database_blocks.get(database_blocks.len() - 3).unwrap();
         provider.set_finalized(finalized_block.clone_sealed_header());
 
         let blocks = [database_blocks, in_memory_blocks].concat();
-
-        assert_eq!(
-            provider.header_td_by_number(database_block.number)?,
-            Some(database_block.difficulty)
-        );
-
-        assert_eq!(
-            provider.header_td_by_number(in_memory_block.number)?,
-            Some(in_memory_block.difficulty)
-        );
 
         assert_eq!(
             provider.sealed_headers_while(0..=10, |header| header.number <= 8)?,
@@ -2417,7 +2404,7 @@ mod tests {
             ),
             (
                 ONE,
-                transaction_block,
+                block_by_transaction_id,
                 |block: &SealedBlock<Block>, tx_num: TxNumber, _: B256, _: &Vec<Vec<Receipt>>| (
                     tx_num,
                     Some(block.number)
