@@ -34,7 +34,7 @@ use tx::Tx;
 pub mod cursor;
 pub mod tx;
 
-mod utils;
+pub mod utils;
 
 /// 1 KB in bytes
 pub const KILOBYTE: usize = 1024;

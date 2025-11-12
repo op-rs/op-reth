@@ -41,7 +41,7 @@ where
 }
 
 /// Helper function to decode a value. It can be a key or subkey.
-pub(crate) fn decode_one<T>(value: Cow<'_, [u8]>) -> Result<T::Value, DatabaseError>
+pub fn decode_one<T>(value: Cow<'_, [u8]>) -> Result<T::Value, DatabaseError>
 where
     T: Table,
 {
