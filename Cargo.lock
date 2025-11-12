@@ -7757,6 +7757,7 @@ dependencies = [
  "reth-network-types",
  "reth-prune-types",
  "reth-stages-types",
+ "reth-static-file-types",
  "serde",
  "tempfile",
  "toml",
