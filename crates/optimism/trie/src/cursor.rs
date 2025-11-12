@@ -106,7 +106,7 @@ where
     }
 }
 
-/// A read-only cursor over the dup table `T`.
+/// Extension of [`DbDupCursorRO`] trait.
 pub trait DbDupCursorROExt<T: DupSort>: DbDupCursorRO<T> {
     /// Positions the cursor at the prev KV pair of the table, returning it.
     fn prev_dup(&mut self) -> PairResult<T>;
