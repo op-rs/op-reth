@@ -176,7 +176,8 @@ where
                     );
 
                     // find the common ancestor
-                    let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> = Vec::new();
+                    let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> =
+                        Vec::with_capacity(new.len());
                     for block_number in new.blocks().keys().rev() {
                         let old_block = old.blocks().get(block_number);
                         let new_block = new.blocks().get(block_number);

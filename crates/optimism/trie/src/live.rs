@@ -153,7 +153,7 @@ where
         let latest_common_block_number = new_blocks[0].number().saturating_sub(1);
 
         let mut block_trie_updates: HashMap<BlockWithParent, BlockStateDiff> =
-            HashMap::with_hasher(DefaultHashBuilder::default());
+            HashMap::with_capacity_and_hasher(new_blocks.len(), DefaultHashBuilder::default());
 
         for block_ref in &new_blocks {
             let state_provider = self.provider.state_by_block_hash(block_ref.parent_hash())?;
