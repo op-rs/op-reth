@@ -5,7 +5,7 @@ use crate::{
         AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
         MaybeDeleted, StorageTrieHistory, StorageTrieKey, VersionedValue,
     },
-    OpProofsHashedCursorRO, OpProofsStorageResult, OpProofsTrieCursorRO,
+    OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult, OpProofsTrieCursorRO,
 };
 use alloy_primitives::{B256, U256};
 use reth_db::{
@@ -57,7 +57,7 @@ where
         if let Some(vv) = seek_res {
             if vv.block_number > self.max_block_number {
                 // step back to the last dup < max
-                return Ok(self.cursor.prev_dup()?);
+                return self.cursor.prev_dup().map_err(OpProofsStorageError::DatabaseError);
             }
             // already at the dup = max
             return Ok(Some((key, vv)))
@@ -70,7 +70,7 @@ where
 
         // Key exists ⇒ take last dup (< max).
         if let Some(vv) = self.cursor.last_dup()? {
-            return Ok(Some((key, vv)));
+            return Ok(Some((key, vv)))
         }
         Ok(None)
     }
@@ -113,7 +113,7 @@ where
     fn seek(&mut self, start_key: T::Key) -> OpProofsStorageResult<Option<(T::Key, V)>> {
         // Position MDBX at first key >= start_key
         if let Some((first_key, _)) = self.cursor.seek(start_key)? {
-            return self.next_live_from(first_key);
+            return self.next_live_from(first_key)
         }
         Ok(None)
     }
@@ -187,7 +187,11 @@ where
     }
 
     fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
-        Ok(self.inner.cursor.current().map(|opt| opt.map(|(StoredNibbles(n), _)| n))?)
+        self.inner
+            .cursor
+            .current()
+            .map_err(OpProofsStorageError::DatabaseError)
+            .map(|opt| opt.map(|(StoredNibbles(n), _)| n))
     }
 }
 
@@ -232,9 +236,12 @@ where
 
     fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
         if let Some(address) = self.hashed_address {
-            return Ok(self.inner.cursor.current().map(|opt| {
-                opt.and_then(|(k, _)| (k.hashed_address == address).then_some(k.path.0))
-            })?);
+            return self
+                .inner
+                .cursor
+                .current()
+                .map_err(OpProofsStorageError::DatabaseError)
+                .map(|opt| opt.and_then(|(k, _)| (k.hashed_address == address).then_some(k.path.0)))
         }
         Ok(None)
     }

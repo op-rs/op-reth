@@ -191,10 +191,11 @@ where
     ///
     /// NOTE: The iteration will start from the key of the previous hashed entry if it was supplied.
     #[instrument(
+        level = "trace",
         target = "trie::node_iter",
         skip_all,
         fields(trie_type = ?self.trie_type),
-        ret(level = "trace")
+        ret
     )]
     pub fn try_next(
         &mut self,
@@ -305,10 +306,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::{TrieElement, TrieNodeIter};
     use crate::{
         hashed_cursor::{
-            mock::MockHashedCursorFactory, noop::NoopHashedAccountCursor, HashedCursorFactory,
-            HashedPostStateAccountCursor,
+            mock::MockHashedCursorFactory, noop::NoopHashedCursor, HashedCursorFactory,
+            HashedPostStateCursor,
         },
         mock::{KeyVisit, KeyVisitType},
         trie_cursor::{
@@ -331,8 +333,6 @@ mod tests {
     };
     use std::collections::BTreeMap;
 
-    use super::{TrieElement, TrieNodeIter};
-
     /// Calculate the branch node stored in the database by feeding the provided state to the hash
     /// builder and taking the trie updates.
     fn get_hash_builder_branch_nodes(
@@ -352,8 +352,8 @@ mod tests {
 
         let mut node_iter = TrieNodeIter::state_trie(
             walker,
-            HashedPostStateAccountCursor::new(
-                NoopHashedAccountCursor::default(),
+            HashedPostStateCursor::new(
+                Option::<NoopHashedCursor<Account>>::None,
                 hashed_post_state.accounts(),
             ),
         );
