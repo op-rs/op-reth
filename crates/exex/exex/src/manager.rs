@@ -1418,7 +1418,7 @@ mod tests {
         );
 
         // Small buffer capacity to demonstrate issue faster
-        let max_capacity = 100;
+        let max_capacity = 10;
         let exex_manager = ExExManager::new(
             provider,
             vec![exex_handle],
