@@ -61,7 +61,7 @@ impl<K: TransactionKind, T: Table> Cursor<K, T> {
     }
 
     #[doc(hidden)]
-    pub unsafe fn inner_mut(&mut self) -> &mut reth_libmdbx::Cursor<K> {
+    pub const unsafe fn inner_mut(&mut self) -> &mut reth_libmdbx::Cursor<K> {
         &mut self.inner
     }
 }

@@ -44,6 +44,7 @@ pub mod provider;
 pub mod live;
 
 pub mod cursor;
+pub use cursor::DbDupCursorROExt;
 #[cfg(not(feature = "metrics"))]
 pub use cursor::{OpProofsHashedAccountCursor, OpProofsHashedStorageCursor, OpProofsTrieCursor};
 

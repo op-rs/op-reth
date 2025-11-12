@@ -4,7 +4,14 @@
 use crate::{OpProofsHashedCursorRO, OpProofsTrieCursorRO};
 use alloy_primitives::{B256, U256};
 use derive_more::{Constructor, From};
-use reth_db::{mdbx::cursor::Cursor, DatabaseError, common::{PairResult, ValueOnlyResult}, cursor::DbDupCursorRO, mdbx::{self, TransactionKind}, mock::CursorMock, table::DupSort};
+use reth_db::{
+    common::{PairResult, ValueOnlyResult},
+    cursor::DbDupCursorRO,
+    mdbx::{self, cursor::Cursor, TransactionKind},
+    mock::CursorMock,
+    table::DupSort,
+    DatabaseError,
+};
 use reth_primitives_traits::Account;
 use reth_trie::{
     hashed_cursor::{HashedCursor, HashedStorageCursor},

@@ -5,11 +5,12 @@ use crate::{
         AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
         MaybeDeleted, StorageTrieHistory, StorageTrieKey, VersionedValue,
     },
-    OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult, OpProofsTrieCursorRO,
+    DbDupCursorROExt, OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult,
+    OpProofsTrieCursorRO,
 };
 use alloy_primitives::{B256, U256};
 use reth_db::{
-    cursor::{DbCursorRO, DbDupCursorRO},
+    cursor::DbCursorRO,
     table::{DupSort, Table},
     transaction::DbTx,
     Database, DatabaseEnv,
@@ -32,7 +33,7 @@ pub struct BlockNumberVersionedCursor<T: Table + DupSort, Cursor> {
 impl<V, T, Cursor> BlockNumberVersionedCursor<T, Cursor>
 where
     T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
-    Cursor: DbCursorRO<T> + DbDupCursorRO<T>,
+    Cursor: DbCursorRO<T> + DbDupCursorROExt<T>,
 {
     /// Initializes new [`BlockNumberVersionedCursor`].
     pub const fn new(cursor: Cursor, max_block_number: u64) -> Self {
@@ -171,7 +172,7 @@ pub struct MdbxTrieCursor<T: Table + DupSort, Cursor> {
 impl<
         V,
         T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
-        Cursor: DbCursorRO<T> + DbDupCursorRO<T>,
+        Cursor: DbCursorRO<T> + DbDupCursorROExt<T>,
     > MdbxTrieCursor<T, Cursor>
 {
     /// Initializes new [`MdbxTrieCursor`].
@@ -182,7 +183,7 @@ impl<
 
 impl<Cursor> OpProofsTrieCursorRO for MdbxTrieCursor<AccountTrieHistory, Cursor>
 where
-    Cursor: DbCursorRO<AccountTrieHistory> + DbDupCursorRO<AccountTrieHistory> + Send + Sync,
+    Cursor: DbCursorRO<AccountTrieHistory> + DbDupCursorROExt<AccountTrieHistory> + Send + Sync,
 {
     fn seek_exact(
         &mut self,
@@ -217,7 +218,7 @@ where
 
 impl<Cursor> OpProofsTrieCursorRO for MdbxTrieCursor<StorageTrieHistory, Cursor>
 where
-    Cursor: DbCursorRO<StorageTrieHistory> + DbDupCursorRO<StorageTrieHistory> + Send + Sync,
+    Cursor: DbCursorRO<StorageTrieHistory> + DbDupCursorROExt<StorageTrieHistory> + Send + Sync,
 {
     fn seek_exact(
         &mut self,
@@ -276,7 +277,7 @@ pub struct MdbxStorageCursor<Cursor> {
 
 impl<Cursor> MdbxStorageCursor<Cursor>
 where
-    Cursor: DbCursorRO<HashedStorageHistory> + DbDupCursorRO<HashedStorageHistory> + Send + Sync,
+    Cursor: DbCursorRO<HashedStorageHistory> + DbDupCursorROExt<HashedStorageHistory> + Send + Sync,
 {
     ///  Initializes new [`MdbxStorageCursor`]
     pub const fn new(cursor: Cursor, block_number: u64, hashed_address: B256) -> Self {
@@ -286,7 +287,7 @@ where
 
 impl<Cursor> OpProofsHashedCursorRO for MdbxStorageCursor<Cursor>
 where
-    Cursor: DbCursorRO<HashedStorageHistory> + DbDupCursorRO<HashedStorageHistory> + Send + Sync,
+    Cursor: DbCursorRO<HashedStorageHistory> + DbDupCursorROExt<HashedStorageHistory> + Send + Sync,
 {
     type Value = U256;
 
@@ -339,7 +340,7 @@ pub struct MdbxAccountCursor<Cursor> {
 
 impl<Cursor> MdbxAccountCursor<Cursor>
 where
-    Cursor: DbCursorRO<HashedAccountHistory> + DbDupCursorRO<HashedAccountHistory> + Send + Sync,
+    Cursor: DbCursorRO<HashedAccountHistory> + DbDupCursorROExt<HashedAccountHistory> + Send + Sync,
 {
     /// Initializes new `MdbxAccountCursor`
     pub const fn new(cursor: Cursor, block_number: u64) -> Self {
@@ -349,7 +350,7 @@ where
 
 impl<Cursor> OpProofsHashedCursorRO for MdbxAccountCursor<Cursor>
 where
-    Cursor: DbCursorRO<HashedAccountHistory> + DbDupCursorRO<HashedAccountHistory> + Send + Sync,
+    Cursor: DbCursorRO<HashedAccountHistory> + DbDupCursorROExt<HashedAccountHistory> + Send + Sync,
 {
     type Value = Account;
 
