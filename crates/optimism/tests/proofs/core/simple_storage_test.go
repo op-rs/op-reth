@@ -43,7 +43,7 @@ func TestStorageProofUsingSimpleStorageContract(gt *testing.T) {
 	ctx := t.Ctx()
 
 	sys := presets.NewSingleChainMultiNode(t)
-	artifactPath := "contracts/artifacts/SimpleStorage.sol/SimpleStorage.json"
+	artifactPath := "../contracts/artifacts/SimpleStorage.sol/SimpleStorage.json"
 	parsedABI, bin, err := utils.LoadArtifact(artifactPath)
 	if err != nil {
 		t.Error("failed to load artifact: %v", err)
@@ -124,7 +124,7 @@ func TestStorageProofUsingMultiStorageContract(gt *testing.T) {
 	ctx := t.Ctx()
 
 	sys := presets.NewSingleChainMultiNode(t)
-	artifactPath := "contracts/artifacts/MultiStorage.sol/MultiStorage.json"
+	artifactPath := "../contracts/artifacts/MultiStorage.sol/MultiStorage.json"
 	parsedABI, bin, err := utils.LoadArtifact(artifactPath)
 	if err != nil {
 		t.Error("failed to load artifact: %v", err)
@@ -221,7 +221,7 @@ func TestTokenVaultStorageProofs(gt *testing.T) {
 	ctx := t.Ctx()
 
 	sys := presets.NewSingleChainMultiNode(t)
-	artifactPath := "contracts/artifacts/TokenVault.sol/TokenVault.json"
+	artifactPath := "../contracts/artifacts/TokenVault.sol/TokenVault.json"
 	parsedABI, bin, err := utils.LoadArtifact(artifactPath)
 	if err != nil {
 		t.Errorf("failed to load artifact: %v", err)
