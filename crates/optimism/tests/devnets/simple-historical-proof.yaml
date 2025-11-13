@@ -19,6 +19,7 @@ optimism_package:
           cl:
             type: op-node
             log_level: "debug"
+            extra_params: [--experimental.sequencer-api=true]
           sequencer: true
         validator:
           el:
@@ -29,6 +30,7 @@ optimism_package:
           cl: 
             type: op-node
             log_level: "debug"
+            extra_params: [--experimental.sequencer-api=true]
           sequencer: false
       network_params:
         network: "kurtosis"
