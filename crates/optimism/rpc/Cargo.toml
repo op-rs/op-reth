@@ -39,7 +39,11 @@ reth-optimism-flashblocks.workspace = true
 reth-optimism-payload-builder.workspace = true
 reth-optimism-txpool.workspace = true
 # TODO remove node-builder import
-reth-optimism-primitives = { workspace = true, features = ["reth-codec", "serde-bincode-compat", "serde"] }
+reth-optimism-primitives = { workspace = true, features = [
+    "reth-codec",
+    "serde-bincode-compat",
+    "serde",
+] }
 reth-optimism-forks.workspace = true
 reth-optimism-trie.workspace = true
 
@@ -84,6 +88,7 @@ eyre.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 derive_more = { workspace = true, features = ["constructor"] }
+serde.workspace = true
 
 # metrics
 reth-metrics.workspace = true
