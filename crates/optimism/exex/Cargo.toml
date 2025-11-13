@@ -16,8 +16,6 @@ workspace = true
 reth-exex.workspace = true
 reth-node-types.workspace = true
 reth-node-api.workspace = true
-reth-provider.workspace = true
-reth-chainspec.workspace = true
 reth-primitives-traits.workspace = true
 
 # op-reth
@@ -34,7 +32,11 @@ derive_more.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = [
+    "test-util",
+    "rt-multi-thread",
+    "macros",
+] }
 futures.workspace = true
 reth-db = { workspace = true, features = ["op", "test-utils"] }
 reth-node-builder.workspace = true
