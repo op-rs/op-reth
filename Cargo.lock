@@ -9483,6 +9483,7 @@ dependencies = [
  "reth-optimism-evm",
  "reth-optimism-node",
  "reth-optimism-primitives",
+ "reth-optimism-trie",
  "reth-primitives-traits",
  "reth-provider",
  "reth-prune",

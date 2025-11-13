@@ -35,8 +35,11 @@ reth-node-metrics.workspace = true
 
 ## optimism
 reth-optimism-primitives.workspace = true
-reth-optimism-chainspec = { workspace = true, features = ["superchain-configs"] }
+reth-optimism-chainspec = { workspace = true, features = [
+    "superchain-configs",
+] }
 reth-optimism-consensus.workspace = true
+reth-optimism-trie.workspace = true
 
 reth-chainspec.workspace = true
 reth-node-events.workspace = true
@@ -57,7 +60,12 @@ derive_more.workspace = true
 serde.workspace = true
 clap = { workspace = true, features = ["derive", "env"] }
 
-tokio = { workspace = true, features = ["sync", "macros", "time", "rt-multi-thread"] }
+tokio = { workspace = true, features = [
+    "sync",
+    "macros",
+    "time",
+    "rt-multi-thread",
+] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing.workspace = true
 eyre.workspace = true
@@ -71,7 +79,10 @@ tempfile.workspace = true
 reth-stages = { workspace = true, features = ["test-utils"] }
 
 [build-dependencies]
-reth-optimism-chainspec = { workspace = true, features = ["std", "superchain-configs"] }
+reth-optimism-chainspec = { workspace = true, features = [
+    "std",
+    "superchain-configs",
+] }
 
 [features]
 default = []
@@ -86,15 +97,9 @@ asm-keccak = [
 ]
 
 # Jemalloc feature for vergen to generate correct env vars
-jemalloc = [
-    "reth-node-core/jemalloc",
-    "reth-node-metrics/jemalloc",
-]
+jemalloc = ["reth-node-core/jemalloc", "reth-node-metrics/jemalloc"]
 
-dev = [
-    "dep:proptest",
-    "reth-cli-commands/arbitrary",
-]
+dev = ["dep:proptest", "reth-cli-commands/arbitrary"]
 
 serde = [
     "alloy-consensus/serde",
