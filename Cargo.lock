@@ -9710,6 +9710,7 @@ dependencies = [
  "reth-optimism-chainspec",
  "reth-optimism-node",
  "reth-optimism-trie",
+ "reth-primitives-traits",
  "reth-provider",
  "tempfile",
  "tokio",
