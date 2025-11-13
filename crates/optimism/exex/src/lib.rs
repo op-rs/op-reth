@@ -103,7 +103,7 @@ where
         // Check if proofs storage is initialized
         if self.storage.get_earliest_block_number().await?.is_none() {
             return Err(eyre::eyre!(
-                "Proofs storage not initialized. Please run 'op-reth initialize-op-proofs --storage-path <PATH>' first."
+                "Proofs storage not initialized. Please run 'op-reth initialize-op-proofs --proofs-history.storage-path <PATH>' first."
             ));
         }
 
