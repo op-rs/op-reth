@@ -331,6 +331,10 @@ lto = "fat"
 codegen-units = 1
 
 [workspace.dependencies]
+# non-upstreamed dependencies
+reth-optimism-exex = { path = "crates/optimism/exex" }
+reth-optimism-trie = { path = "crates/optimism/trie" }
+
 # reth
 op-reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
 reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
@@ -414,13 +418,11 @@ reth-op = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2", default
 reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2", default-features = false }
 reth-optimism-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2", default-features = false }
 reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2", default-features = false }
-reth-optimism-exex = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
 reth-optimism-forks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2", default-features = false }
 reth-optimism-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
 reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2", default-features = false }
 reth-optimism-rpc = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
 reth-optimism-storage = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
-reth-optimism-trie = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
 reth-optimism-txpool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
 reth-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
 reth-payload-builder-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.9.2" }
@@ -801,140 +803,140 @@ vergen-git2 = "1.0.5"
 # alloy-op-evm = { git = "https://github.com/alloy-rs/evm", rev = "a69f0b45a6b0286e16072cb8399e02ce6ceca353" }
 
 # Patch reth dependencies to use local paths during development
-[patch."https://github.com/paradigmxyz/reth"]
-op-reth = { path = "crates/optimism/bin" }
-reth = { path = "bin/reth" }
-reth-storage-rpc-provider = { path = "crates/storage/rpc-provider" }
-reth-basic-payload-builder = { path = "crates/payload/basic" }
-reth-bench = { path = "bin/reth-bench" }
-reth-bench-compare = { path = "bin/reth-bench-compare" }
-reth-chain-state = { path = "crates/chain-state" }
-reth-chainspec = { path = "crates/chainspec" }
-reth-cli = { path = "crates/cli/cli" }
-reth-cli-commands = { path = "crates/cli/commands" }
-reth-cli-runner = { path = "crates/cli/runner" }
-reth-cli-util = { path = "crates/cli/util" }
-reth-codecs = { path = "crates/storage/codecs" }
-reth-codecs-derive = { path = "crates/storage/codecs/derive" }
-reth-config = { path = "crates/config" }
-reth-consensus = { path = "crates/consensus/consensus" }
-reth-consensus-common = { path = "crates/consensus/common" }
-reth-consensus-debug-client = { path = "crates/consensus/debug-client" }
-reth-db = { path = "crates/storage/db" }
-reth-db-api = { path = "crates/storage/db-api" }
-reth-db-common = { path = "crates/storage/db-common" }
-reth-db-models = { path = "crates/storage/db-models" }
-reth-discv4 = { path = "crates/net/discv4" }
-reth-discv5 = { path = "crates/net/discv5" }
-reth-dns-discovery = { path = "crates/net/dns" }
-reth-downloaders = { path = "crates/net/downloaders" }
-reth-e2e-test-utils = { path = "crates/e2e-test-utils" }
-reth-ecies = { path = "crates/net/ecies" }
-reth-engine-local = { path = "crates/engine/local" }
-reth-engine-primitives = { path = "crates/engine/primitives" }
-reth-engine-tree = { path = "crates/engine/tree" }
-reth-engine-service = { path = "crates/engine/service" }
-reth-engine-util = { path = "crates/engine/util" }
-reth-era = { path = "crates/era" }
-reth-era-downloader = { path = "crates/era-downloader" }
-reth-era-utils = { path = "crates/era-utils" }
-reth-errors = { path = "crates/errors" }
-reth-eth-wire = { path = "crates/net/eth-wire" }
-reth-eth-wire-types = { path = "crates/net/eth-wire-types" }
-reth-ethereum-cli = { path = "crates/ethereum/cli" }
-reth-ethereum-consensus = { path = "crates/ethereum/consensus" }
-reth-ethereum-engine-primitives = { path = "crates/ethereum/engine-primitives" }
-reth-ethereum-forks = { path = "crates/ethereum/hardforks" }
-reth-ethereum-payload-builder = { path = "crates/ethereum/payload" }
-reth-ethereum-primitives = { path = "crates/ethereum/primitives" }
-reth-ethereum = { path = "crates/ethereum/reth" }
-reth-etl = { path = "crates/etl" }
-reth-evm = { path = "crates/evm/evm" }
-reth-evm-ethereum = { path = "crates/ethereum/evm" }
-reth-optimism-evm = { path = "crates/optimism/evm" }
-reth-execution-errors = { path = "crates/evm/execution-errors" }
-reth-execution-types = { path = "crates/evm/execution-types" }
-reth-exex = { path = "crates/exex/exex" }
-reth-exex-test-utils = { path = "crates/exex/test-utils" }
-reth-exex-types = { path = "crates/exex/types" }
-reth-fs-util = { path = "crates/fs-util" }
-reth-invalid-block-hooks = { path = "crates/engine/invalid-block-hooks" }
-reth-ipc = { path = "crates/rpc/ipc" }
-reth-libmdbx = { path = "crates/storage/libmdbx-rs" }
-reth-mdbx-sys = { path = "crates/storage/libmdbx-rs/mdbx-sys" }
-reth-metrics = { path = "crates/metrics" }
-reth-net-banlist = { path = "crates/net/banlist" }
-reth-net-nat = { path = "crates/net/nat" }
-reth-network = { path = "crates/net/network" }
-reth-network-api = { path = "crates/net/network-api" }
-reth-network-p2p = { path = "crates/net/p2p" }
-reth-network-peers = { path = "crates/net/peers" }
-reth-network-types = { path = "crates/net/network-types" }
-reth-nippy-jar = { path = "crates/storage/nippy-jar" }
-reth-node-api = { path = "crates/node/api" }
-reth-node-builder = { path = "crates/node/builder" }
-reth-node-core = { path = "crates/node/core" }
-reth-node-ethereum = { path = "crates/ethereum/node" }
-reth-node-ethstats = { path = "crates/node/ethstats" }
-reth-node-events = { path = "crates/node/events" }
-reth-node-metrics = { path = "crates/node/metrics" }
-reth-optimism-node = { path = "crates/optimism/node" }
-reth-node-types = { path = "crates/node/types" }
-reth-op = { path = "crates/optimism/reth" }
-reth-optimism-chainspec = { path = "crates/optimism/chainspec" }
-reth-optimism-cli = { path = "crates/optimism/cli" }
-reth-optimism-consensus = { path = "crates/optimism/consensus" }
-reth-optimism-exex = { path = "crates/optimism/exex" }
-reth-optimism-forks = { path = "crates/optimism/hardforks" }
-reth-optimism-payload-builder = { path = "crates/optimism/payload" }
-reth-optimism-primitives = { path = "crates/optimism/primitives" }
-reth-optimism-rpc = { path = "crates/optimism/rpc" }
-reth-optimism-storage = { path = "crates/optimism/storage" }
-reth-optimism-trie = { path = "crates/optimism/trie" }
-reth-optimism-txpool = { path = "crates/optimism/txpool" }
-reth-payload-builder = { path = "crates/payload/builder" }
-reth-payload-builder-primitives = { path = "crates/payload/builder-primitives" }
-reth-payload-primitives = { path = "crates/payload/primitives" }
-reth-payload-validator = { path = "crates/payload/validator" }
-reth-payload-util = { path = "crates/payload/util" }
-reth-primitives = { path = "crates/primitives" }
-reth-primitives-traits = { path = "crates/primitives-traits" }
-reth-provider = { path = "crates/storage/provider" }
-reth-prune = { path = "crates/prune/prune" }
-reth-prune-types = { path = "crates/prune/types" }
-reth-revm = { path = "crates/revm" }
-reth-rpc = { path = "crates/rpc/rpc" }
-reth-rpc-api = { path = "crates/rpc/rpc-api" }
-reth-rpc-api-testing-util = { path = "crates/rpc/rpc-testing-util" }
-reth-rpc-builder = { path = "crates/rpc/rpc-builder" }
-reth-rpc-e2e-tests = { path = "crates/rpc/rpc-e2e-tests" }
-reth-rpc-engine-api = { path = "crates/rpc/rpc-engine-api" }
-reth-rpc-eth-api = { path = "crates/rpc/rpc-eth-api" }
-reth-rpc-eth-types = { path = "crates/rpc/rpc-eth-types" }
-reth-rpc-layer = { path = "crates/rpc/rpc-layer" }
-reth-optimism-flashblocks = { path = "crates/optimism/flashblocks" }
-reth-rpc-server-types = { path = "crates/rpc/rpc-server-types" }
-reth-rpc-convert = { path = "crates/rpc/rpc-convert" }
-reth-stages = { path = "crates/stages/stages" }
-reth-stages-api = { path = "crates/stages/api" }
-reth-stages-types = { path = "crates/stages/types" }
-reth-stateless = { path = "crates/stateless" }
-reth-static-file = { path = "crates/static-file/static-file" }
-reth-static-file-types = { path = "crates/static-file/types" }
-reth-storage-api = { path = "crates/storage/storage-api" }
-reth-storage-errors = { path = "crates/storage/errors" }
-reth-tasks = { path = "crates/tasks" }
-reth-testing-utils = { path = "testing/testing-utils" }
-reth-tokio-util = { path = "crates/tokio-util" }
-reth-tracing = { path = "crates/tracing" }
-reth-tracing-otlp = { path = "crates/tracing-otlp" }
-reth-transaction-pool = { path = "crates/transaction-pool" }
-reth-trie = { path = "crates/trie/trie" }
-reth-trie-common = { path = "crates/trie/common" }
-reth-trie-db = { path = "crates/trie/db" }
-reth-trie-parallel = { path = "crates/trie/parallel" }
-reth-trie-sparse = { path = "crates/trie/sparse" }
-reth-trie-sparse-parallel = { path = "crates/trie/sparse-parallel" }
-reth-zstd-compressors = { path = "crates/storage/zstd-compressors" }
-reth-ress-protocol = { path = "crates/ress/protocol" }
-reth-ress-provider = { path = "crates/ress/provider" }
+# [patch."https://github.com/paradigmxyz/reth"]
+# op-reth = { path = "crates/optimism/bin" }
+# reth = { path = "bin/reth" }
+# reth-storage-rpc-provider = { path = "crates/storage/rpc-provider" }
+# reth-basic-payload-builder = { path = "crates/payload/basic" }
+# reth-bench = { path = "bin/reth-bench" }
+# reth-bench-compare = { path = "bin/reth-bench-compare" }
+# reth-chain-state = { path = "crates/chain-state" }
+# reth-chainspec = { path = "crates/chainspec" }
+# reth-cli = { path = "crates/cli/cli" }
+# reth-cli-commands = { path = "crates/cli/commands" }
+# reth-cli-runner = { path = "crates/cli/runner" }
+# reth-cli-util = { path = "crates/cli/util" }
+# reth-codecs = { path = "crates/storage/codecs" }
+# reth-codecs-derive = { path = "crates/storage/codecs/derive" }
+# reth-config = { path = "crates/config" }
+# reth-consensus = { path = "crates/consensus/consensus" }
+# reth-consensus-common = { path = "crates/consensus/common" }
+# reth-consensus-debug-client = { path = "crates/consensus/debug-client" }
+# reth-db = { path = "crates/storage/db" }
+# reth-db-api = { path = "crates/storage/db-api" }
+# reth-db-common = { path = "crates/storage/db-common" }
+# reth-db-models = { path = "crates/storage/db-models" }
+# reth-discv4 = { path = "crates/net/discv4" }
+# reth-discv5 = { path = "crates/net/discv5" }
+# reth-dns-discovery = { path = "crates/net/dns" }
+# reth-downloaders = { path = "crates/net/downloaders" }
+# reth-e2e-test-utils = { path = "crates/e2e-test-utils" }
+# reth-ecies = { path = "crates/net/ecies" }
+# reth-engine-local = { path = "crates/engine/local" }
+# reth-engine-primitives = { path = "crates/engine/primitives" }
+# reth-engine-tree = { path = "crates/engine/tree" }
+# reth-engine-service = { path = "crates/engine/service" }
+# reth-engine-util = { path = "crates/engine/util" }
+# reth-era = { path = "crates/era" }
+# reth-era-downloader = { path = "crates/era-downloader" }
+# reth-era-utils = { path = "crates/era-utils" }
+# reth-errors = { path = "crates/errors" }
+# reth-eth-wire = { path = "crates/net/eth-wire" }
+# reth-eth-wire-types = { path = "crates/net/eth-wire-types" }
+# reth-ethereum-cli = { path = "crates/ethereum/cli" }
+# reth-ethereum-consensus = { path = "crates/ethereum/consensus" }
+# reth-ethereum-engine-primitives = { path = "crates/ethereum/engine-primitives" }
+# reth-ethereum-forks = { path = "crates/ethereum/hardforks" }
+# reth-ethereum-payload-builder = { path = "crates/ethereum/payload" }
+# reth-ethereum-primitives = { path = "crates/ethereum/primitives" }
+# reth-ethereum = { path = "crates/ethereum/reth" }
+# reth-etl = { path = "crates/etl" }
+# reth-evm = { path = "crates/evm/evm" }
+# reth-evm-ethereum = { path = "crates/ethereum/evm" }
+# reth-optimism-evm = { path = "crates/optimism/evm" }
+# reth-execution-errors = { path = "crates/evm/execution-errors" }
+# reth-execution-types = { path = "crates/evm/execution-types" }
+# reth-exex = { path = "crates/exex/exex" }
+# reth-exex-test-utils = { path = "crates/exex/test-utils" }
+# reth-exex-types = { path = "crates/exex/types" }
+# reth-fs-util = { path = "crates/fs-util" }
+# reth-invalid-block-hooks = { path = "crates/engine/invalid-block-hooks" }
+# reth-ipc = { path = "crates/rpc/ipc" }
+# reth-libmdbx = { path = "crates/storage/libmdbx-rs" }
+# reth-mdbx-sys = { path = "crates/storage/libmdbx-rs/mdbx-sys" }
+# reth-metrics = { path = "crates/metrics" }
+# reth-net-banlist = { path = "crates/net/banlist" }
+# reth-net-nat = { path = "crates/net/nat" }
+# reth-network = { path = "crates/net/network" }
+# reth-network-api = { path = "crates/net/network-api" }
+# reth-network-p2p = { path = "crates/net/p2p" }
+# reth-network-peers = { path = "crates/net/peers" }
+# reth-network-types = { path = "crates/net/network-types" }
+# reth-nippy-jar = { path = "crates/storage/nippy-jar" }
+# reth-node-api = { path = "crates/node/api" }
+# reth-node-builder = { path = "crates/node/builder" }
+# reth-node-core = { path = "crates/node/core" }
+# reth-node-ethereum = { path = "crates/ethereum/node" }
+# reth-node-ethstats = { path = "crates/node/ethstats" }
+# reth-node-events = { path = "crates/node/events" }
+# reth-node-metrics = { path = "crates/node/metrics" }
+# reth-optimism-node = { path = "crates/optimism/node" }
+# reth-node-types = { path = "crates/node/types" }
+# reth-op = { path = "crates/optimism/reth" }
+# reth-optimism-chainspec = { path = "crates/optimism/chainspec" }
+# reth-optimism-cli = { path = "crates/optimism/cli" }
+# reth-optimism-consensus = { path = "crates/optimism/consensus" }
+# reth-optimism-exex = { path = "crates/optimism/exex" }
+# reth-optimism-forks = { path = "crates/optimism/hardforks" }
+# reth-optimism-payload-builder = { path = "crates/optimism/payload" }
+# reth-optimism-primitives = { path = "crates/optimism/primitives" }
+# reth-optimism-rpc = { path = "crates/optimism/rpc" }
+# reth-optimism-storage = { path = "crates/optimism/storage" }
+# reth-optimism-trie = { path = "crates/optimism/trie" }
+# reth-optimism-txpool = { path = "crates/optimism/txpool" }
+# reth-payload-builder = { path = "crates/payload/builder" }
+# reth-payload-builder-primitives = { path = "crates/payload/builder-primitives" }
+# reth-payload-primitives = { path = "crates/payload/primitives" }
+# reth-payload-validator = { path = "crates/payload/validator" }
+# reth-payload-util = { path = "crates/payload/util" }
+# reth-primitives = { path = "crates/primitives" }
+# reth-primitives-traits = { path = "crates/primitives-traits" }
+# reth-provider = { path = "crates/storage/provider" }
+# reth-prune = { path = "crates/prune/prune" }
+# reth-prune-types = { path = "crates/prune/types" }
+# reth-revm = { path = "crates/revm" }
+# reth-rpc = { path = "crates/rpc/rpc" }
+# reth-rpc-api = { path = "crates/rpc/rpc-api" }
+# reth-rpc-api-testing-util = { path = "crates/rpc/rpc-testing-util" }
+# reth-rpc-builder = { path = "crates/rpc/rpc-builder" }
+# reth-rpc-e2e-tests = { path = "crates/rpc/rpc-e2e-tests" }
+# reth-rpc-engine-api = { path = "crates/rpc/rpc-engine-api" }
+# reth-rpc-eth-api = { path = "crates/rpc/rpc-eth-api" }
+# reth-rpc-eth-types = { path = "crates/rpc/rpc-eth-types" }
+# reth-rpc-layer = { path = "crates/rpc/rpc-layer" }
+# reth-optimism-flashblocks = { path = "crates/optimism/flashblocks" }
+# reth-rpc-server-types = { path = "crates/rpc/rpc-server-types" }
+# reth-rpc-convert = { path = "crates/rpc/rpc-convert" }
+# reth-stages = { path = "crates/stages/stages" }
+# reth-stages-api = { path = "crates/stages/api" }
+# reth-stages-types = { path = "crates/stages/types" }
+# reth-stateless = { path = "crates/stateless" }
+# reth-static-file = { path = "crates/static-file/static-file" }
+# reth-static-file-types = { path = "crates/static-file/types" }
+# reth-storage-api = { path = "crates/storage/storage-api" }
+# reth-storage-errors = { path = "crates/storage/errors" }
+# reth-tasks = { path = "crates/tasks" }
+# reth-testing-utils = { path = "testing/testing-utils" }
+# reth-tokio-util = { path = "crates/tokio-util" }
+# reth-tracing = { path = "crates/tracing" }
+# reth-tracing-otlp = { path = "crates/tracing-otlp" }
+# reth-transaction-pool = { path = "crates/transaction-pool" }
+# reth-trie = { path = "crates/trie/trie" }
+# reth-trie-common = { path = "crates/trie/common" }
+# reth-trie-db = { path = "crates/trie/db" }
+# reth-trie-parallel = { path = "crates/trie/parallel" }
+# reth-trie-sparse = { path = "crates/trie/sparse" }
+# reth-trie-sparse-parallel = { path = "crates/trie/sparse-parallel" }
+# reth-zstd-compressors = { path = "crates/storage/zstd-compressors" }
+# reth-ress-protocol = { path = "crates/ress/protocol" }
+# reth-ress-provider = { path = "crates/ress/provider" }
