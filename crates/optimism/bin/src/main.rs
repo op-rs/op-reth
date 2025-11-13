@@ -12,7 +12,6 @@ use reth_optimism_node::{args::RollupArgs, OpNode};
 use reth_optimism_rpc::{
     debug::{DebugApiExt, DebugApiOverrideServer},
     eth::proofs::{EthApiExt, EthApiOverrideServer},
-    status::{OptimismApi, OptimismApiServer},
 };
 use reth_optimism_trie::{
     db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage, OpProofsStore,
@@ -101,7 +100,6 @@ where
                 let status_rpc = OptimismApi::new(storage_rpc);
                 ctx.modules.replace_configured(api_ext.into_rpc())?;
                 ctx.modules.replace_configured(debug_ext.into_rpc())?;
-                ctx.modules.replace_configured(status_rpc.into_rpc())?;
             }
             Ok(())
         })

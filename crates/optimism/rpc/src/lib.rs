@@ -17,7 +17,6 @@ pub mod metrics;
 pub mod miner;
 pub mod sequencer;
 pub mod state;
-pub mod status;
 pub mod witness;
 
 #[cfg(feature = "client")]
