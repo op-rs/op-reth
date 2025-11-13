@@ -34,6 +34,14 @@ use reth_tasks::TaskSpawner;
 use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::{oneshot, Semaphore};
+/// Represents the current proofs sync status.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ProofsSyncStatus {
+    /// The earliest block number for which proofs are available.
+    earliest: Option<u64>,
+    /// The latest block number for which proofs are available.
+    latest: Option<u64>,
+}
 
 /// Represents the current proofs sync status.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
