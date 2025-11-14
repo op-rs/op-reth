@@ -609,9 +609,20 @@ impl OpProofsStore for InMemoryProofsStorage {
 
     async fn unwind_history(
         &self,
-        _unwind_upto_block: BlockNumberHash,
+        unwind_upto_block: BlockNumberHash,
     ) -> OpProofsStorageResult<()> {
-        unimplemented!("In-memory unwind_history is not implemented");
+        let mut inner = self.inner.write().await;
+        let unwind_upto_block_number = unwind_upto_block.number();
+
+        // Remove all updates after unwind_upto_block_number
+        inner.trie_updates.retain(|block, _| *block <= unwind_upto_block_number);
+        inner.post_states.retain(|block, _| *block <= unwind_upto_block_number);
+        inner.account_branches.retain(|(block, _), _| *block <= unwind_upto_block_number);
+        inner.storage_branches.retain(|(block, _, _), _| *block <= unwind_upto_block_number);
+        inner.hashed_accounts.retain(|(block, _), _| *block <= unwind_upto_block_number);
+        inner.hashed_storages.retain(|(block, _, _), _| *block <= unwind_upto_block_number);
+
+        Ok(())
     }
 
     async fn replace_updates(
