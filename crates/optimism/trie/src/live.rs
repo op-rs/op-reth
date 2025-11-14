@@ -1,7 +1,7 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-    api::OperationDurations, provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage,
+    api::OperationDurations, db::BlockNumberHash, provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage,
     OpProofsStorageError, OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
@@ -184,6 +184,15 @@ where
         }
 
         self.storage.replace_updates(latest_common_block_number, block_trie_updates).await?;
+        Ok(())
+    }
+
+    /// Remove blocks and state updates from storage up to the specified block.
+    pub async fn unwind_state(
+        &self,
+        unwind_upto_block: BlockNumberHash
+    ) -> eyre::Result<()> {
+        self.storage.unwind_state(unwind_upto_block).await?;
         Ok(())
     }
 }

@@ -15,7 +15,7 @@ use reth_chainspec::ChainInfo;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
-use reth_optimism_trie::{live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
+use reth_optimism_trie::{db::BlockNumberHash, live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
 use tracing::{debug, error, info};
@@ -217,13 +217,35 @@ where
                     collector.unwind_and_store_block_updates(new_blocks).await?;
                 }
                 ExExNotification::ChainReverted { old } => {
-                    debug!(
+                    info!(
                         target: "optimism::exex",
                         old_block_number = old.tip().number(),
                         old_block_hash = ?old.tip().hash(),
                         "ChainReverted notification received",
                     );
-                    unimplemented!("Chain revert handling not yet implemented");
+
+                    // Get latest stored number
+                    let latest_stored_block_number =
+                        match self.storage.get_latest_block_number().await? {
+                            Some((n, _)) => n,
+                            None => {
+                                return Err(eyre::eyre!("No blocks stored in proofs storage"));
+                            }
+                        };
+
+                    if old.tip().number() >= latest_stored_block_number {
+                        info!(
+                            old_block_number = old.tip().number(),
+                            latest_stored = latest_stored_block_number,
+                            "Old tip number is greater than or equal to latest stored, skipping",
+                        );
+                        continue;
+                    }
+
+                    collector.unwind_state(BlockNumberHash::new(
+                        old.tip().number(),
+                        old.tip().hash())
+                    ).await?;
                 }
             };
 

@@ -505,6 +505,14 @@ where
     }
 
     #[inline]
+    async fn unwind_state(
+        &self,
+        unwind_upto_block: crate::db::BlockNumberHash,
+    ) -> OpProofsStorageResult<()> {
+        self.storage.unwind_state(unwind_upto_block).await
+    }
+
+    #[inline]
     async fn replace_updates(
         &self,
         latest_common_block_number: u64,

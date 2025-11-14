@@ -686,6 +686,24 @@ impl OpProofsStore for MdbxProofsStorage {
         Ok(())
     }
 
+    async fn unwind_state(
+        &self,
+        unwind_upto_block: BlockNumberHash,
+    ) -> OpProofsStorageResult<()> {
+        self.env.update(|tx| {
+            self.delete_history_ranged(tx, (unwind_upto_block.number() + 1)..)?;
+
+            // update the proof window
+            let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
+            proof_window_cursor.append(
+                ProofWindowKey::LatestBlock,
+                &unwind_upto_block,
+            )?;
+
+            Ok(())
+        })?
+    }
+
     async fn replace_updates(
         &self,
         latest_common_block_number: u64,
