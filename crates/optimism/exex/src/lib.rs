@@ -118,7 +118,7 @@ where
         while let Some(notification) = self.ctx.notifications.try_next().await? {
             match &notification {
                 ExExNotification::ChainCommitted { new } => {
-                    info!(
+                    debug!(
                         target: "optimism::exex",
                         block_number = new.tip().number(),
                         block_hash = ?new.tip().hash(),
