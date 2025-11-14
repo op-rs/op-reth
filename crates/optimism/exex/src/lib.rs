@@ -16,9 +16,7 @@ use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_optimism_trie::{live::LiveTrieCollector, OpProofsStorage, OpProofsStore};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
-use reth_provider::{
-    BlockNumReader, BlockReader, DBProvider, DatabaseProviderFactory, TransactionVariant,
-};
+use reth_provider::{BlockReader, TransactionVariant};
 use tracing::{debug, error, info};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
