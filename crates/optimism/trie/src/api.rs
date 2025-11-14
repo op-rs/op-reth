@@ -199,8 +199,9 @@ pub trait OpProofsStore: Send + Sync + Debug {
         diff: BlockStateDiff,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
-    /// Remove blocks and state updates from storage up to the specified block number
-    fn unwind_state(
+    /// Remove account, storage and trie updates from historical storage up to the specified block
+    /// from the tip of the chain.
+    fn unwind_history(
         &self,
         unwind_upto_block: BlockNumberHash,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;

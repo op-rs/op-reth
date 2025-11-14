@@ -245,7 +245,7 @@ where
                     }
 
                     collector
-                        .unwind_state(BlockNumberHash::new(old.tip().number(), old.tip().hash()))
+                        .unwind_history(BlockNumberHash::new(old.tip().number(), old.tip().hash()))
                         .await?;
                 }
             };

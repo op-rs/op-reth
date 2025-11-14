@@ -187,10 +187,10 @@ where
         Ok(())
     }
 
-    /// Remove blocks and trie updates from storage up to the specified block from the tip of the
-    /// chain.
-    pub async fn unwind_state(&self, unwind_upto_block: BlockNumberHash) -> eyre::Result<()> {
-        self.storage.unwind_state(unwind_upto_block).await?;
+    /// Remove account, storage and trie updates from historical storage up to the specified block
+    /// from the tip of the chain.
+    pub async fn unwind_history(&self, unwind_upto_block: BlockNumberHash) -> eyre::Result<()> {
+        self.storage.unwind_history(unwind_upto_block).await?;
         Ok(())
     }
 }

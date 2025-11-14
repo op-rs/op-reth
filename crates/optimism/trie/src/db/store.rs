@@ -686,9 +686,12 @@ impl OpProofsStore for MdbxProofsStorage {
         Ok(())
     }
 
-    /// Unwind the state to `unwind_upto_block` (inclusive), deleting all history after it.
-    /// Also updates the `ProofWindow::LatestBlock` to `unwind_upto_block`.
-    async fn unwind_state(&self, unwind_upto_block: BlockNumberHash) -> OpProofsStorageResult<()> {
+    /// Unwind the historical state to `unwind_upto_block` (inclusive), deleting all history after
+    /// it. Also updates the `ProofWindow::LatestBlock` to `unwind_upto_block`.
+    async fn unwind_history(
+        &self,
+        unwind_upto_block: BlockNumberHash,
+    ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
             self.delete_history_ranged(tx, (unwind_upto_block.number() + 1)..)?;
 
@@ -2691,7 +2694,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unwind_state_basic() {
+    async fn test_unwind_history_basic() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
@@ -2714,7 +2717,7 @@ mod tests {
         store.store_trie_updates(b4, make_diff(40)).await.expect("store b4");
 
         // Unwind to block 2
-        store.unwind_state(b2.block.into()).await.expect("unwind");
+        store.unwind_history(b2.block.into()).await.expect("unwind");
 
         // Verify: blocks 1 and 2 remain, blocks 3 and 4 are removed
         let tx = store.env.tx().expect("tx");
@@ -2736,7 +2739,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unwind_state_to_genesis() {
+    async fn test_unwind_history_to_genesis() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
@@ -2759,7 +2762,7 @@ mod tests {
         // Unwind to block 0 (genesis)
         let genesis_hash = B256::ZERO;
         let unwind_to = BlockNumberHash::new(0, genesis_hash);
-        store.unwind_state(unwind_to).await.expect("unwind");
+        store.unwind_history(unwind_to).await.expect("unwind");
 
         // Verify: all blocks are removed
         let tx = store.env.tx().expect("tx");
@@ -2780,7 +2783,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unwind_state_with_storage() {
+    async fn test_unwind_history_with_storage() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
@@ -2806,7 +2809,7 @@ mod tests {
         store.store_trie_updates(b3, make_diff(30, 300)).await.expect("store b3");
 
         // Unwind to block 1
-        store.unwind_state(b1.block.into()).await.expect("unwind");
+        store.unwind_history(b1.block.into()).await.expect("unwind");
 
         // Verify account history
         let tx = store.env.tx().expect("tx");
@@ -2839,7 +2842,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unwind_state_with_trie_nodes() {
+    async fn test_unwind_history_with_trie_nodes() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
@@ -2864,7 +2867,7 @@ mod tests {
         store.store_trie_updates(b3, make_diff(path1, node2.clone())).await.expect("store b3");
 
         // Unwind to block 1
-        store.unwind_state(b1.block.into()).await.expect("unwind");
+        store.unwind_history(b1.block.into()).await.expect("unwind");
 
         // Verify trie node history
         let tx = store.env.tx().expect("tx");
@@ -2885,7 +2888,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unwind_state_comprehensive() {
+    async fn test_unwind_history_comprehensive() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
@@ -2934,7 +2937,7 @@ mod tests {
         store.store_trie_updates(b3, diff3).await.expect("store b3");
 
         // Unwind to block 1
-        store.unwind_state(b1.block.into()).await.expect("unwind");
+        store.unwind_history(b1.block.into()).await.expect("unwind");
 
         let tx = store.env.tx().expect("tx");
 
@@ -2984,20 +2987,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unwind_state_empty_chain() {
+    async fn test_unwind_history_empty_chain() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
         // Try to unwind when there's nothing stored yet
         let unwind_to = BlockNumberHash::new(0, B256::ZERO);
-        let result = store.unwind_state(unwind_to).await;
+        let result = store.unwind_history(unwind_to).await;
 
         // Should succeed (no-op)
         assert!(result.is_ok(), "Unwinding empty chain should succeed");
     }
 
     #[tokio::test]
-    async fn test_unwind_state_idempotent() {
+    async fn test_unwind_history_idempotent() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
@@ -3019,10 +3022,10 @@ mod tests {
 
         // Unwind to block 1
         let unwind_to = BlockNumberHash::new(1, b1.block.hash);
-        store.unwind_state(unwind_to).await.expect("first unwind");
+        store.unwind_history(unwind_to).await.expect("first unwind");
 
         // Unwind again to the same block (should be idempotent)
-        store.unwind_state(unwind_to).await.expect("second unwind");
+        store.unwind_history(unwind_to).await.expect("second unwind");
 
         // Verify state is still correct
         let tx = store.env.tx().expect("tx");

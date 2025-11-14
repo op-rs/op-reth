@@ -607,8 +607,11 @@ impl OpProofsStore for InMemoryProofsStorage {
         Ok(())
     }
 
-    async fn unwind_state(&self, _unwind_upto_block: BlockNumberHash) -> OpProofsStorageResult<()> {
-        unimplemented!("In-memory unwind_state is not implemented");
+    async fn unwind_history(
+        &self,
+        _unwind_upto_block: BlockNumberHash,
+    ) -> OpProofsStorageResult<()> {
+        unimplemented!("In-memory unwind_history is not implemented");
     }
 
     async fn replace_updates(
