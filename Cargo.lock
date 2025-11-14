@@ -9694,7 +9694,7 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-exex"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "alloy-consensus",
  "derive_more",
@@ -9974,7 +9974,7 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-trie"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12237,7 +12237,7 @@ checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.109",
+ "syn 2.0.111",
 ]
 
 [[package]]
