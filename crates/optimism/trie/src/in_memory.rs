@@ -1,8 +1,8 @@
 //! In-memory implementation of [`OpProofsStore`] for testing purposes
 
 use crate::{
-    api::WriteCounts, db::BlockNumberHash, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError,
-    OpProofsStorageResult, OpProofsStore, OpProofsTrieCursorRO,
+    api::WriteCounts, db::BlockNumberHash, BlockStateDiff, OpProofsHashedCursorRO,
+    OpProofsStorageError, OpProofsStorageResult, OpProofsStore, OpProofsTrieCursorRO,
 };
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
@@ -607,7 +607,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         Ok(())
     }
 
-    async  fn unwind_state(&self, _unwind_upto_block:BlockNumberHash) -> OpProofsStorageResult<()> {
+    async fn unwind_state(&self, _unwind_upto_block: BlockNumberHash) -> OpProofsStorageResult<()> {
         unimplemented!("In-memory unwind_state is not implemented");
     }
 

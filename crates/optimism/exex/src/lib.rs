@@ -15,7 +15,9 @@ use reth_chainspec::ChainInfo;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
-use reth_optimism_trie::{db::BlockNumberHash, live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
+use reth_optimism_trie::{
+    db::BlockNumberHash, live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore,
+};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
 use tracing::{debug, error, info};
@@ -242,10 +244,9 @@ where
                         continue;
                     }
 
-                    collector.unwind_state(BlockNumberHash::new(
-                        old.tip().number(),
-                        old.tip().hash())
-                    ).await?;
+                    collector
+                        .unwind_state(BlockNumberHash::new(old.tip().number(), old.tip().hash()))
+                        .await?;
                 }
             };
 
