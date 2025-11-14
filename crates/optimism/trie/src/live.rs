@@ -187,8 +187,8 @@ where
         Ok(())
     }
 
-    /// Remove account, storage and trie updates from historical storage up to the specified block
-    /// from the tip of the chain.
+    /// Remove account, storage and trie updates from historical storage for all blocks after
+    /// the specified block. The specified block itself is retained.
     pub async fn unwind_history(&self, unwind_upto_block: BlockNumberHash) -> eyre::Result<()> {
         self.storage.unwind_history(unwind_upto_block).await?;
         Ok(())

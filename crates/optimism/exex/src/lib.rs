@@ -231,21 +231,27 @@ where
                         match self.storage.get_latest_block_number().await? {
                             Some((n, _)) => n,
                             None => {
-                                return Err(eyre::eyre!("No blocks stored in proofs storage"));
+                                info!(
+                                    target: "optimism::exex",
+                                    "No blocks stored yet, skipping ChainReverted handling"
+                                );
+                                continue;
                             }
                         };
 
-                    if old.tip().number() >= latest_stored_block_number {
+                    let fork_block = old.fork_block();
+                    if fork_block.number > latest_stored_block_number {
                         info!(
-                            old_block_number = old.tip().number(),
+                            target: "optimism::exex",
+                            fork_block_number = fork_block.number,
                             latest_stored = latest_stored_block_number,
-                            "Old tip number is greater than or equal to latest stored, skipping",
+                            "Fork block number is greater than latest stored, skipping",
                         );
                         continue;
                     }
 
                     collector
-                        .unwind_history(BlockNumberHash::new(old.tip().number(), old.tip().hash()))
+                        .unwind_history(BlockNumberHash::new(fork_block.number, fork_block.hash))
                         .await?;
                 }
             };
