@@ -75,7 +75,7 @@ pub enum OpProofsStorageError {
     TryLockError(#[from] TryLockError),
     /// Other error
     #[error("Other error: {0}")]
-    Other(eyre::Error),
+    Other(#[from] eyre::Error),
 }
 
 impl From<OpProofsStorageError> for DatabaseError {

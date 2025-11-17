@@ -36,9 +36,7 @@ pub struct MdbxProofsStorage {
 impl MdbxProofsStorage {
     /// Creates a new [`MdbxProofsStorage`] instance with the given path.
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
-        let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())
-            .map_err(|e| DatabaseError::Other(format!("Failed to open database: {e}")))?;
-
+        let env = init_db_for::<_, super::models::Tables>(path, DatabaseArguments::default())?;
         Ok(Self { env })
     }
 
