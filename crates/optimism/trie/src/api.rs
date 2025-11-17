@@ -1,6 +1,6 @@
 //! Storage API for external storage of intermediary trie nodes.
 
-use crate::{db::BlockNumberHash, OpProofsStorageResult};
+use crate::OpProofsStorageResult;
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
@@ -199,11 +199,11 @@ pub trait OpProofsStore: Send + Sync + Debug {
         diff: BlockStateDiff,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
-    /// Remove account, storage and trie updates from historical storage for all blocks after
-    /// the specified block. The specified block itself is retained.
+    /// Remove account, storage and trie updates from historical storage for all blocks from
+    /// the specified block (inclusive).
     fn unwind_history(
         &self,
-        unwind_upto_block: BlockNumberHash,
+        unwind_upto_block: BlockWithParent,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Deletes all updates > `latest_common_block_number` and replaces them with the new updates.

@@ -26,6 +26,7 @@ reth-optimism-trie = { workspace = true, features = ["serde-bincode-compat"] }
 
 # alloy
 alloy-consensus.workspace = true
+alloy-eips.workspace = true
 
 # misc
 eyre.workspace = true

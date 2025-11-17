@@ -507,7 +507,7 @@ where
     #[inline]
     async fn unwind_history(
         &self,
-        unwind_upto_block: crate::db::BlockNumberHash,
+        unwind_upto_block: BlockWithParent,
     ) -> OpProofsStorageResult<()> {
         self.storage.unwind_history(unwind_upto_block).await
     }

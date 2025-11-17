@@ -1,8 +1,8 @@
 //! In-memory implementation of [`OpProofsStore`] for testing purposes
 
 use crate::{
-    api::WriteCounts, db::BlockNumberHash, BlockStateDiff, OpProofsHashedCursorRO,
-    OpProofsStorageError, OpProofsStorageResult, OpProofsStore, OpProofsTrieCursorRO,
+    api::WriteCounts, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError,
+    OpProofsStorageResult, OpProofsStore, OpProofsTrieCursorRO,
 };
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
@@ -609,10 +609,10 @@ impl OpProofsStore for InMemoryProofsStorage {
 
     async fn unwind_history(
         &self,
-        unwind_upto_block: BlockNumberHash,
+        unwind_upto_block: BlockWithParent,
     ) -> OpProofsStorageResult<()> {
         let mut inner = self.inner.write().await;
-        let unwind_upto_block_number = unwind_upto_block.number();
+        let unwind_upto_block_number = unwind_upto_block.block.number - 1;
 
         // Remove all updates after unwind_upto_block_number
         inner.trie_updates.retain(|block, _| *block <= unwind_upto_block_number);

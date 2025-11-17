@@ -9,15 +9,14 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 use alloy_consensus::BlockHeader;
+use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use derive_more::Constructor;
 use futures_util::TryStreamExt;
 use reth_chainspec::ChainInfo;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
-use reth_optimism_trie::{
-    db::BlockNumberHash, live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore,
-};
+use reth_optimism_trie::{live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
 use reth_provider::{BlockNumReader, DBProvider, DatabaseProviderFactory};
 use tracing::{debug, error, info};
@@ -250,8 +249,17 @@ where
                         continue;
                     }
 
+                    let fork_block_parent_hash = old
+                        .blocks()
+                        .get(&(fork_block.number - 1))
+                        .map(|b| b.hash())
+                        .unwrap_or(fork_block.hash);
+
                     collector
-                        .unwind_history(BlockNumberHash::new(fork_block.number, fork_block.hash))
+                        .unwind_history(BlockWithParent::new(
+                            fork_block.hash,
+                            NumHash::new(fork_block.number, fork_block_parent_hash),
+                        ))
                         .await?;
                 }
             };

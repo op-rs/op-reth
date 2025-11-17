@@ -1,8 +1,8 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-    api::OperationDurations, db::BlockNumberHash, provider::OpProofsStateProviderRef,
-    BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStore,
+    api::OperationDurations, provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage,
+    OpProofsStorageError, OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::map::{DefaultHashBuilder, HashMap};
@@ -187,9 +187,9 @@ where
         Ok(())
     }
 
-    /// Remove account, storage and trie updates from historical storage for all blocks after
-    /// the specified block. The specified block itself is retained.
-    pub async fn unwind_history(&self, unwind_upto_block: BlockNumberHash) -> eyre::Result<()> {
+    /// Remove account, storage and trie updates from historical storage for all blocks from
+    /// the specified block (inclusive).
+    pub async fn unwind_history(&self, unwind_upto_block: BlockWithParent) -> eyre::Result<()> {
         self.storage.unwind_history(unwind_upto_block).await?;
         Ok(())
     }
