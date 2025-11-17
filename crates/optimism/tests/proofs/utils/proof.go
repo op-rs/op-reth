@@ -104,19 +104,17 @@ func VerifyProof(res *eth.AccountResult, stateRoot common.Hash) error {
 	return err
 }
 
-// FetchAndVerifyProofs fetches account proofs from both L2EL and L2ELB for the given
-func FetchAndVerifyProofs(t devtest.T, sys *presets.SingleChainMultiNode, contractAddress common.Address, slots []common.Hash, block uint64) {
+// FetchAndVerifyProofs fetches account proofs from both L2EL and L2ELB for the given address
+func FetchAndVerifyProofs(t devtest.T, sys *presets.SingleChainMultiNode, address common.Address, slots []common.Hash, block uint64) {
 	ctx := t.Ctx()
-	gethProofRes, err := sys.L2EL.Escape().L2EthClient().GetProof(ctx, contractAddress, slots, hexutil.Uint64(block).String())
+	gethProofRes, err := sys.L2EL.Escape().L2EthClient().GetProof(ctx, address, slots, hexutil.Uint64(block).String())
 	if err != nil {
-		t.Errorf("failed to get proof from L2EL at block %d: %v", block, err)
-		t.FailNow()
+		require.NoError(t, err, "failed to get proof from L2EL at block %d", block)
 	}
 
-	rethProofRes, err := sys.L2ELB.Escape().L2EthClient().GetProof(ctx, contractAddress, slots, hexutil.Uint64(block).String())
+	rethProofRes, err := sys.L2ELB.Escape().L2EthClient().GetProof(ctx, address, slots, hexutil.Uint64(block).String())
 	if err != nil {
-		t.Errorf("failed to get proof from L2ELB at block %d: %v", block, err)
-		t.FailNow()
+		require.NoError(t, err, "failed to get proof from L2ELB at block %d", block)
 	}
 	NormalizeProofResponse(rethProofRes)
 
@@ -124,19 +122,16 @@ func FetchAndVerifyProofs(t devtest.T, sys *presets.SingleChainMultiNode, contra
 
 	blockInfo, err := sys.L2EL.Escape().L2EthClient().InfoByNumber(ctx, block)
 	if err != nil {
-		t.Errorf("failed to get L2 block %d: %v", block, err)
-		t.FailNow()
+		require.NoError(t, err, "failed to get block info for block %d", block)
 	}
 
 	err = VerifyProof(gethProofRes, blockInfo.Root())
 	if err != nil {
-		t.Errorf("geth proof verification failed at block %d: %v", block, err)
-		t.FailNow()
+		require.NoError(t, err, "geth proof verification failed at block %d", block)
 	}
 
 	err = VerifyProof(rethProofRes, blockInfo.Root())
 	if err != nil {
-		t.Errorf("reth proof verification failed at block %d: %v", block, err)
-		t.FailNow()
+		require.NoError(t, err, "reth proof verification failed at block %d", block)
 	}
 }

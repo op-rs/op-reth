@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/require"
 )
 
 // minimal parts of artifact
@@ -27,26 +28,22 @@ type Artifact struct {
 func LoadArtifact(t devtest.T, artifactPath string) (abi.ABI, []byte) {
 	data, err := os.ReadFile(artifactPath)
 	if err != nil {
-		t.Errorf("failed to read artifact file: %v", err)
-		t.FailNow()
+		require.NoError(t, err, "failed to read artifact file")
 	}
 
 	var art Artifact
 	if err := json.Unmarshal(data, &art); err != nil {
-		t.Errorf("failed to unmarshal artifact JSON: %v", err)
-		t.FailNow()
+		require.NoError(t, err, "failed to unmarshal artifact JSON")
 	}
 
 	parsedABI, err := abi.JSON(strings.NewReader(string(art.ABI)))
 	if err != nil {
-		t.Errorf("failed to parse ABI: %v", err)
-		t.FailNow()
+		require.NoError(t, err, "failed to parse contract ABI")
 	}
 
 	binHex := strings.TrimSpace(art.Bytecode.Object)
 	if binHex == "" {
-		t.Errorf("artifact bytecode is empty")
-		t.FailNow()
+		require.NoError(t, err, "artifact has no bytecode")
 	}
 
 	return parsedABI, common.FromHex(binHex)
@@ -58,13 +55,11 @@ func DeployContract(t devtest.T, user *dsl.EOA, bin []byte) (common.Address, *ty
 	tx := txplan.NewPlannedTx(user.Plan(), txplan.WithData(bin))
 	res, err := tx.Included.Eval(t.Ctx())
 	if err != nil {
-		t.Errorf("failed to deploy contract: %v", err)
-		t.FailNow()
+		require.NoError(t, err, "contract deployment tx failed")
 	}
 
 	if res.Status != types.ReceiptStatusSuccessful {
-		t.Error("contract deployment transaction failed")
-		t.FailNow()
+		require.NoError(t, err, "contract deployment transaction failed")
 	}
 
 	return res.ContractAddress, res

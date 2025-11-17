@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 const TokenVaultArtifact = "../contracts/artifacts/TokenVault.sol/TokenVault.json"
@@ -25,19 +26,16 @@ type TokenVault struct {
 func (c *TokenVault) Deposit(user *dsl.EOA, amount eth.ETH) *types.Receipt {
 	depositCalldata, err := c.Contract.parsedABI.Pack("deposit")
 	if err != nil {
-		c.t.Errorf("failed to pack deposit: %v", err)
-		c.t.FailNow()
+		require.NoError(c.t, err, "failed to pack deposit calldata")
 	}
 	depTx := txplan.NewPlannedTx(user.Plan(), txplan.WithTo(&c.Contract.address), txplan.WithData(depositCalldata), txplan.WithValue(amount))
 	depRes, err := depTx.Included.Eval(c.t.Ctx())
 	if err != nil {
-		c.t.Errorf("deposit tx failed: %v", err)
-		c.t.FailNow()
+		require.NoError(c.t, err, "deposit tx failed")
 	}
 
 	if depRes.Status != types.ReceiptStatusSuccessful {
-		c.t.Error("deposit transaction failed")
-		c.t.FailNow()
+		require.NoError(c.t, err, "deposit transaction failed")
 	}
 
 	return depRes
@@ -46,20 +44,17 @@ func (c *TokenVault) Deposit(user *dsl.EOA, amount eth.ETH) *types.Receipt {
 func (c *TokenVault) Approve(user *dsl.EOA, spender common.Address, amount *big.Int) *types.Receipt {
 	approveCalldata, err := c.Contract.parsedABI.Pack("approve", spender, amount)
 	if err != nil {
-		c.t.Errorf("failed to pack approve: %v", err)
-		c.t.FailNow()
+		require.NoError(c.t, err, "failed to pack approve calldata")
 	}
 
 	approveTx := txplan.NewPlannedTx(user.Plan(), txplan.WithTo(&c.Contract.address), txplan.WithData(approveCalldata))
 	approveRes, err := approveTx.Included.Eval(c.t.Ctx())
 	if err != nil {
-		c.t.Errorf("approve tx failed: %v", err)
-		c.t.FailNow()
+		require.NoError(c.t, err, "approve tx failed")
 	}
 
 	if approveRes.Status != types.ReceiptStatusSuccessful {
-		c.t.Error("approve transaction failed")
-		c.t.FailNow()
+		require.NoError(c.t, err, "approve transaction failed")
 	}
 	return approveRes
 }
@@ -67,19 +62,16 @@ func (c *TokenVault) Approve(user *dsl.EOA, spender common.Address, amount *big.
 func (c *TokenVault) DeactivateAllowance(user *dsl.EOA, spender common.Address) *types.Receipt {
 	deactCalldata, err := c.Contract.parsedABI.Pack("deactivateAllowance", spender)
 	if err != nil {
-		c.t.Errorf("failed to pack deactivateAllowance: %v", err)
-		c.t.FailNow()
+		require.NoError(c.t, err, "failed to pack deactivateAllowance calldata")
 	}
 	deactTx := txplan.NewPlannedTx(user.Plan(), txplan.WithTo(&c.Contract.address), txplan.WithData(deactCalldata))
 	deactRes, err := deactTx.Included.Eval(c.t.Ctx())
 	if err != nil {
-		c.t.Errorf("deactivateAllowance tx failed: %v", err)
-		c.t.FailNow()
+		require.NoError(c.t, err, "deactivateAllowance tx failed")
 	}
 
 	if deactRes.Status != types.ReceiptStatusSuccessful {
-		c.t.Error("deactivateAllowance transaction failed")
-		c.t.FailNow()
+		require.NoError(c.t, err, "deactivateAllowance transaction failed")
 	}
 	return deactRes
 }
