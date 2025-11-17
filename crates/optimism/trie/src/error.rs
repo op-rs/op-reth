@@ -73,9 +73,6 @@ pub enum OpProofsStorageError {
     /// Error occurred while trying to acquire a lock.
     #[error(transparent)]
     TryLockError(#[from] TryLockError),
-    /// Other error
-    #[error("Other error: {0}")]
-    Other(#[from] eyre::Error),
 }
 
 impl From<OpProofsStorageError> for DatabaseError {
