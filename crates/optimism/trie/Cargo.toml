@@ -45,6 +45,7 @@ strum.workspace = true
 tracing.workspace = true
 derive_more.workspace = true
 itertools.workspace = true
+tokio-util = "0.7.17"
 
 [dev-dependencies]
 reth-codecs = { workspace = true, features = ["test-utils"] }
