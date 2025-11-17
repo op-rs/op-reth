@@ -147,8 +147,13 @@ impl MdbxProofsStorage {
             return Ok(keys);
         }
         // We need hard deletions at the time of pruning where we need to perform these steps:
+<<<<<<< HEAD
         // - Hard delete all the tombstones
         // - Update new state to block zero (not append)
+=======
+        // Hard delete all the tombstones
+        // Update new state to block zero (not append)
+>>>>>>> 0542704d88 (implemented pruner for proof storage)
         let (to_delete, to_append): (Vec<_>, Vec<_>) =
             pairs.into_iter().partition(|(_, vv)| vv.value.0.is_none());
 
@@ -704,6 +709,7 @@ impl OpProofsStore for MdbxProofsStorage {
                 new_earliest_block_ref.block.hash,
             )
         })?
+<<<<<<< HEAD
     }
 
     /// Unwind the historical state to `unwind_upto_block` (inclusive), deleting all history
@@ -736,6 +742,8 @@ impl OpProofsStore for MdbxProofsStorage {
 
             Ok(())
         })?
+=======
+>>>>>>> 0542704d88 (implemented pruner for proof storage)
     }
 
     async fn replace_updates(
