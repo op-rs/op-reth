@@ -6327,6 +6327,7 @@ dependencies = [
  "clap",
  "eyre",
  "futures-util",
+ "humantime",
  "reth-chainspec",
  "reth-cli-util",
  "reth-db",
@@ -9578,8 +9579,10 @@ dependencies = [
  "reth-optimism-trie",
  "reth-primitives-traits",
  "reth-provider",
+ "reth-tasks",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
@@ -9878,6 +9881,7 @@ dependencies = [
  "test-case",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

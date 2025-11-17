@@ -15,11 +15,16 @@ use reth_chainspec::ChainInfo;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
-use reth_optimism_trie::{live::LiveTrieCollector, BackfillJob, OpProofsStorage, OpProofsStore};
+use reth_optimism_trie::{
+    live::LiveTrieCollector, BackfillJob, OpProofStoragePrunerTask, OpProofsStorage, OpProofsStore,
+};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
 use reth_provider::{
     BlockNumReader, BlockReader, DBProvider, DatabaseProviderFactory, TransactionVariant,
 };
+use reth_tasks::{TaskSpawner, TokioTaskExecutor};
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
@@ -44,7 +49,7 @@ use tracing::{debug, error, info};
 /// use reth_optimism_node::{args::RollupArgs, OpNode};
 /// use reth_optimism_trie::{db::MdbxProofsStorage, InMemoryProofsStorage, OpProofsStorage};
 /// use reth_provider::providers::BlockchainProvider;
-/// use std::sync::Arc;
+/// use std::{sync::Arc, time::Duration};
 ///
 /// let config = NodeConfig::new(BASE_MAINNET.clone());
 /// let db = create_test_rw_db();
@@ -65,6 +70,7 @@ use tracing::{debug, error, info};
 ///
 /// let storage_exec = storage.clone();
 /// let proofs_history_window = 1_296_000u64;
+/// let proofs_history_prune_interval = Duration::from_secs(3600);
 /// // Can also use install_exex_if along with a boolean flag
 /// // Set this based on your configuration or CLI args
 /// let _builder = NodeBuilder::new(config)
@@ -72,7 +78,14 @@ use tracing::{debug, error, info};
 ///     .with_types_and_provider::<OpNode, BlockchainProvider<NodeTypesWithDBAdapter<OpNode, _>>>()
 ///     .with_components(op_node.components())
 ///     .install_exex("proofs-history", move |exex_context| async move {
-///         Ok(OpProofsExEx::new(exex_context, storage_exec, proofs_history_window).run().boxed())
+///         Ok(OpProofsExEx::new(
+///             exex_context,
+///             storage_exec,
+///             proofs_history_window,
+///             proofs_history_prune_interval,
+///         )
+///         .run()
+///         .boxed())
 ///     })
 ///     .on_node_started(|_full_node| Ok(()))
 ///     .check_launch();
@@ -89,8 +102,9 @@ where
     storage: OpProofsStorage<Storage>,
     /// The window to span blocks for proofs history. Value is the number of blocks, received as
     /// cli arg.
-    #[expect(dead_code)]
     proofs_history_window: u64,
+    /// Interval between proof-storage prune runs
+    proofs_history_prune_interval: Duration,
 }
 
 impl<Node, Storage, Primitives> OpProofsExEx<Node, Storage>
@@ -108,6 +122,15 @@ where
             let ChainInfo { best_number, best_hash } = self.ctx.provider().chain_info()?;
             BackfillJob::new(self.storage.clone(), &db_tx).run(best_number, best_hash).await?;
         }
+
+        let prune_task = OpProofStoragePrunerTask::new(
+            self.storage.clone(),
+            self.ctx.provider().clone(),
+            self.proofs_history_window,
+            self.proofs_history_prune_interval,
+            CancellationToken::new(),
+        );
+        TokioTaskExecutor::default().spawn(Box::pin(prune_task.run()));
 
         let collector = LiveTrieCollector::new(
             self.ctx.evm_config().clone(),

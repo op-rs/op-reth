@@ -23,11 +23,7 @@ pub struct BlockStateDiff {
 }
 
 impl BlockStateDiff {
-<<<<<<< HEAD
     /// Extend the [` BlockStateDiff`] from other latest [`BlockStateDiff`]
-=======
-    /// Extend the `BlockStateDiff` from other latest `BlockStateDiff`
->>>>>>> 0542704d88 (implemented pruner for proof storage)
     pub fn extend(&mut self, other: Self) {
         self.trie_updates.extend(other.trie_updates);
         self.post_state.extend(other.post_state);
