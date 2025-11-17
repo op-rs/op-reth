@@ -101,7 +101,7 @@ func VerifyProof(res *eth.AccountResult, stateRoot common.Hash) error {
 			"  claimed: %x\n"+
 			"  proof:   %x", accountClaimedValue, accountProofValue)
 	}
-	return err
+	return nil
 }
 
 // FetchAndVerifyProofs fetches account proofs from both L2EL and L2ELB for the given address
