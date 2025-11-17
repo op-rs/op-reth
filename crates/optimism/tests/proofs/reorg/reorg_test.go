@@ -1,6 +1,7 @@
 package reorg
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReorgUnsafeHead(gt *testing.T) {
+func TestReorgUsingAccountProof(gt *testing.T) {
 	t := devtest.SerialT(gt)
 	ctx := t.Ctx()
 
@@ -31,11 +32,7 @@ func TestReorgUnsafeHead(gt *testing.T) {
 	alice := sys.FunderL2.NewFundedEOA(eth.OneHundredthEther)
 	bob := sys.FunderL2.NewFundedEOA(eth.OneHundredthEther)
 
-	// sys.L1Network.WaitForBlock()
 	time.Sleep(12 * time.Second)
-
-	sys.L2Chain.WaitForBlock()
-
 	divergenceHead := sys.L2Chain.WaitForBlock()
 	// build up some blocks that will be reorged away
 
@@ -152,5 +149,106 @@ func TestReorgUnsafeHead(gt *testing.T) {
 	// verify that the accounts involved in the conflicting blocks
 	for _, c := range cases {
 		utils.FetchAndVerifyProofs(t, &sys.SingleChainMultiNode, c.addr, []common.Hash{}, c.Block)
+	}
+}
+
+func TestReorgUsingStorageProof(gt *testing.T) {
+	t := devtest.SerialT(gt)
+	ctx := t.Ctx()
+
+	sys := presets.NewSingleChainMultiNodeWithTestSeq(t)
+	l := sys.Log
+	ia := sys.TestSequencer.Escape().ControlAPI(sys.L2Chain.ChainID())
+
+	// stop batcher on chain A
+	sys.L2Batcher.Stop()
+
+	user := sys.FunderL2.NewFundedEOA(eth.OneEther)
+	contract, deployBlock := utils.DeploySimpleStorage(t, user)
+	t.Logf("SimpleStorage deployed at %s block=%d", contract.Address().Hex(), deployBlock.BlockNumber.Uint64())
+
+	time.Sleep(12 * time.Second)
+	divergenceHead := sys.L2Chain.WaitForBlock()
+
+	type caseEntry struct {
+		Block uint64
+		addr  common.Address
+		slots []common.Hash
+	}
+	var cases []caseEntry
+	for i := 0; i < 3; i++ {
+		val := big.NewInt(int64(i * 10))
+		callRes := contract.SetValue(user, val)
+
+		cases = append(cases, caseEntry{
+			Block: callRes.BlockNumber.Uint64(),
+			addr:  contract.Address(),
+			slots: []common.Hash{common.HexToHash("0x0")},
+		})
+	}
+
+	// deploy another contract in the reorged blocks
+	{
+		rContract, rDeployBlock := utils.DeploySimpleStorage(t, user)
+		t.Logf("Reorg SimpleStorage deployed at %s block=%d", rContract.Address().Hex(), rDeployBlock.BlockNumber.Uint64())
+
+		cases = append(cases, caseEntry{
+			Block: rDeployBlock.BlockNumber.Uint64(),
+			addr:  rContract.Address(),
+			slots: []common.Hash{common.HexToHash("0x0")},
+		})
+	}
+
+	sys.L2CL.StopSequencer()
+
+	var divergenceBlockNumber uint64
+	var originalRef eth.L2BlockRef
+	// prepare and sequence a conflicting block for the L2A chain
+	{
+		divergenceBlockRef := sys.L2EL.BlockRefByNumber(divergenceHead.Number)
+
+		t.Logf("Expect to reorg the chain on block number=%d head=%s parent=%s", divergenceBlockRef.Number, divergenceHead.Hash, divergenceBlockRef.ParentID().Hash)
+		divergenceBlockNumber = divergenceBlockRef.Number
+		originalRef = divergenceBlockRef
+		parentOfDivergenceHead := divergenceBlockRef.ParentID()
+		t.Logf("Sequencing a conflicting block divergenceBlockRef=%s parent=%s", divergenceBlockRef.Hash, parentOfDivergenceHead.Hash)
+
+		// sequence a conflicting block with a simple transfer tx, based on the parent of the parent of the unsafe head
+		{
+			err := ia.New(ctx, seqtypes.BuildOpts{
+				Parent:   parentOfDivergenceHead.Hash,
+				L1Origin: nil,
+			})
+			require.NoError(t, err, "Expected to be able to create a new block job for sequencing on op-test-sequencer, but got error")
+
+			err = ia.Next(ctx)
+			require.NoError(t, err, "Expected to be able to call Next() after New() on op-test-sequencer, but got error")
+		}
+
+		// start batcher on chain A
+		sys.L2Batcher.Start()
+
+		// continue sequencing with consensus node (op-node)
+		sys.L2CL.StartSequencer()
+
+		for i := 0; i < 3; i++ {
+			sys.L2Chain.WaitForBlock()
+		}
+
+		// wait for the reorg to be processed
+		time.Sleep(30 * time.Second)
+
+		reorgedRef_A, err := sys.L2EL.Escape().EthClient().BlockRefByNumber(ctx, divergenceBlockNumber)
+		require.NoError(t, err, "Expected to be able to call BlockRefByNumber API, but got error")
+
+		l.Info("Reorged chain on divergence block number (prior the reorg)", "number", divergenceBlockNumber, "head", originalRef.Hash, "parent", originalRef.ParentID().Hash)
+		l.Info("Reorged chain on divergence block number (after the reorg)", "number", divergenceBlockNumber, "head", reorgedRef_A.Hash, "parent", reorgedRef_A.ParentID().Hash)
+		require.NotEqual(t, originalRef.Hash, reorgedRef_A.Hash, "Expected to get different heads on divergence block number, but got the same hash, so no reorg happened on chain A")
+		require.Equal(t, originalRef.ParentID().Hash, reorgedRef_A.ParentHash, "Expected to get same parent hashes on divergence block number, but got different hashes")
+
+		// verify that the storage proof involved in the conflicting blocks
+		for _, c := range cases {
+			utils.FetchAndVerifyProofs(t, &sys.SingleChainMultiNode, c.addr, c.slots, c.Block)
+		}
 	}
 }
