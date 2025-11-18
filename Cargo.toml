@@ -748,6 +748,7 @@ vergen = "9.1.0"
 visibility = "0.1.1"
 walkdir = "2.3.3"
 vergen-git2 = "9.1.0"
+mockall = "0.13.1"
 
 # networking
 ipnet = "2.11"
