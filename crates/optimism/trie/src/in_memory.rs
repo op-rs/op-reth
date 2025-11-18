@@ -2,12 +2,14 @@
 
 use crate::{
     api::WriteCounts, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageResult, OpProofsStore,
-    OpProofsTrieCursorRO,
 };
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
+use reth_db::DatabaseError;
 use reth_primitives_traits::Account;
-use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
+use reth_trie::{
+    trie_cursor::TrieCursor, updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles,
+};
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -156,7 +158,7 @@ impl InMemoryProofsStorage {
     }
 }
 
-/// In-memory implementation of [`OpProofsTrieCursorRO`].
+/// In-memory implementation of [`TrieCursor`].
 #[derive(Debug)]
 pub struct InMemoryTrieCursor {
     /// Current position in the iteration (-1 means not positioned yet)
@@ -223,11 +225,11 @@ impl InMemoryTrieCursor {
     }
 }
 
-impl OpProofsTrieCursorRO for InMemoryTrieCursor {
+impl TrieCursor for InMemoryTrieCursor {
     fn seek_exact(
         &mut self,
         path: Nibbles,
-    ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+    ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
         if let Some(pos) = self.entries.iter().position(|(p, _)| *p == path) {
             self.position = pos as isize;
             Ok(Some(self.entries[pos].clone()))
@@ -239,7 +241,7 @@ impl OpProofsTrieCursorRO for InMemoryTrieCursor {
     fn seek(
         &mut self,
         path: Nibbles,
-    ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+    ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
         if let Some(pos) = self.entries.iter().position(|(p, _)| *p >= path) {
             self.position = pos as isize;
             Ok(Some(self.entries[pos].clone()))
@@ -248,7 +250,7 @@ impl OpProofsTrieCursorRO for InMemoryTrieCursor {
         }
     }
 
-    fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>> {
+    fn next(&mut self) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
         self.position += 1;
         if self.position >= 0 && (self.position as usize) < self.entries.len() {
             Ok(Some(self.entries[self.position as usize].clone()))
@@ -257,7 +259,7 @@ impl OpProofsTrieCursorRO for InMemoryTrieCursor {
         }
     }
 
-    fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>> {
+    fn current(&mut self) -> Result<Option<Nibbles>, DatabaseError> {
         if self.position >= 0 && (self.position as usize) < self.entries.len() {
             Ok(Some(self.entries[self.position as usize].0))
         } else {

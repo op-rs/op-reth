@@ -4,7 +4,7 @@ use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_optimism_trie::{
     db::MdbxProofsStorage, BlockStateDiff, InMemoryProofsStorage, OpProofsHashedCursorRO,
-    OpProofsStorageError, OpProofsStore, OpProofsTrieCursorRO,
+    OpProofsStorageError, OpProofsStore, TrieCursor,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{

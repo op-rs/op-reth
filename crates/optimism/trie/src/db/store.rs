@@ -11,7 +11,7 @@ use crate::{
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
     BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult,
-    OpProofsStore, OpProofsTrieCursorRO,
+    OpProofsStore,
 };
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
@@ -24,7 +24,9 @@ use reth_db::{
     Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles};
+use reth_trie::{
+    trie_cursor::TrieCursor, updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles,
+};
 use std::{cmp::max, ops::RangeBounds, path::Path};
 
 /// MDBX implementation of [`OpProofsStore`].
@@ -275,7 +277,13 @@ impl MdbxProofsStorage {
                 // Yet to have any update for the current block number - So just using up to
                 // previous block number
                 let mut ro = self.storage_trie_cursor(hashed_address, block_number - 1)?;
-                let keys = self.wipe_storage(tx, block_number, hashed_address, || ro.next())?;
+                let Some(keys) = self
+                    .wipe_storage(tx, block_number, hashed_address, || ro.next())
+                    .map_err(|e| {
+                        e.downcast_ref::<OpProofsStorageError>()
+                            .expect("should be caught by catch all variant wrapping db error")
+                    })?;
+
                 storage_trie_keys.extend(keys);
 
                 // Skip any further processing for this hashed_address

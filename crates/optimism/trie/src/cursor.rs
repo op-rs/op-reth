@@ -1,7 +1,7 @@
 //! Implementation of [`HashedCursor`] and [`TrieCursor`] for
 //! [`OpProofsStorage`](crate::OpProofsStorage).
 
-use crate::{OpProofsHashedCursorRO, OpProofsTrieCursorRO};
+use crate::OpProofsHashedCursorRO;
 use alloy_primitives::{B256, U256};
 use derive_more::{Constructor, From};
 use reth_db::DatabaseError;
@@ -12,13 +12,13 @@ use reth_trie::{
     BranchNodeCompact, Nibbles,
 };
 
-/// Manages reading storage or account trie nodes from [`OpProofsTrieCursorRO`].
+/// Manages reading storage or account trie nodes from [`TrieCursor`].
 #[derive(Debug, Clone, Constructor, From)]
-pub struct OpProofsTrieCursor<C: OpProofsTrieCursorRO>(pub C);
+pub struct OpProofsTrieCursor<C: TrieCursor>(pub C);
 
 impl<C> TrieCursor for OpProofsTrieCursor<C>
 where
-    C: OpProofsTrieCursorRO,
+    C: TrieCursor,
 {
     #[inline]
     fn seek_exact(

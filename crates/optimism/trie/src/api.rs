@@ -5,30 +5,10 @@ use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
 use reth_primitives_traits::Account;
-use reth_trie::{updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles};
+use reth_trie::{
+    trie_cursor::TrieCursor, updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles,
+};
 use std::{fmt::Debug, time::Duration};
-
-/// Seeks and iterates over trie nodes in the database by path (lexicographical order)
-pub trait OpProofsTrieCursorRO: Send + Sync {
-    /// Seek to an exact path, otherwise return None if not found.
-    fn seek_exact(
-        &mut self,
-        path: Nibbles,
-    ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>>;
-
-    /// Seek to a path, otherwise return the first path greater than the given path
-    /// lexicographically.
-    fn seek(
-        &mut self,
-        path: Nibbles,
-    ) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>>;
-
-    /// Move the cursor to the next path and return it.
-    fn next(&mut self) -> OpProofsStorageResult<Option<(Nibbles, BranchNodeCompact)>>;
-
-    /// Get the current path.
-    fn current(&mut self) -> OpProofsStorageResult<Option<Nibbles>>;
-}
 
 /// Seeks and iterates over hashed entries in the database by key.
 pub trait OpProofsHashedCursorRO: Send + Sync {
@@ -90,12 +70,12 @@ pub struct OperationDurations {
 #[auto_impl(Arc)]
 pub trait OpProofsStore: Send + Sync + Debug {
     /// Cursor for iterating over trie branches.
-    type StorageTrieCursor<'tx>: OpProofsTrieCursorRO + 'tx
+    type StorageTrieCursor<'tx>: TrieCursor + 'tx
     where
         Self: 'tx;
 
     /// Cursor for iterating over account trie branches.
-    type AccountTrieCursor<'tx>: OpProofsTrieCursorRO + 'tx
+    type AccountTrieCursor<'tx>: TrieCursor + 'tx
     where
         Self: 'tx;
 
