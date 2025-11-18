@@ -691,18 +691,27 @@ impl OpProofsStore for MdbxProofsStorage {
     /// `unwind_upto_block`.
     async fn unwind_history(
         &self,
-        unwind_upto_block: BlockWithParent,
+        to: BlockWithParent,
     ) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
-            self.delete_history_ranged(tx, (unwind_upto_block.block.number)..)?;
+            let earliest_block = match self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock)? {
+                Some(block) => block,
+                None => return Err(OpProofsStorageError::NoBlocksFound),
+            };
+
+            if to.block.number <= earliest_block.0 {
+                return Err(OpProofsStorageError::UnwindBeyondEarliest {
+                    unwind_block_number: to.block.number,
+                    earliest_block_number: earliest_block.0,
+                });
+            }
+
+            self.delete_history_ranged(tx, (to.block.number)..)?;
 
             let new_latest_block = BlockNumberHash::new(
-                unwind_upto_block.block.number.saturating_sub(1),
-                unwind_upto_block.parent,
+                to.block.number.saturating_sub(1),
+                to.parent,
             );
-
-            // todo: handle genesis unwind
-            // update the proof window
             let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
             proof_window_cursor.append(ProofWindowKey::LatestBlock, &new_latest_block)?;
 
@@ -2746,7 +2755,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unwind_history_to_genesis() {
+    async fn test_unwind_history_to_earliest() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
 
@@ -2762,31 +2771,19 @@ mod tests {
         let b2 = BlockWithParent::new(b1.block.hash, NumHash::new(2, B256::random()));
         let b3 = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random()));
 
+        store.set_earliest_block_number_hash(b1.block.number, b1.block.hash).await.expect("set earliest");
         store.store_trie_updates(b1, make_diff(10)).await.expect("store b1");
         store.store_trie_updates(b2, make_diff(20)).await.expect("store b2");
         store.store_trie_updates(b3, make_diff(30)).await.expect("store b3");
 
-        // Unwind to block 0 (genesis)
-        let genesis_hash = B256::ZERO;
-        let unwind_to = BlockWithParent::new(B256::ZERO, NumHash::new(0, genesis_hash));
-        store.unwind_history(unwind_to).await.expect("unwind");
-
-        // Verify: all blocks are removed
-        let tx = store.env.tx().expect("tx");
-        let mut cur = tx.new_cursor::<HashedAccountHistory>().expect("cursor");
-
-        assert!(cur.seek_by_key_subkey(addr, 1).unwrap().is_none(), "Block 1 should be removed");
-        assert!(cur.seek_by_key_subkey(addr, 2).unwrap().is_none(), "Block 2 should be removed");
-        assert!(cur.seek_by_key_subkey(addr, 3).unwrap().is_none(), "Block 3 should be removed");
-
-        // Verify ProofWindow LatestBlock points to genesis
-        let mut proof_window_cur = tx.cursor_read::<ProofWindow>().expect("cursor");
-        let latest = proof_window_cur
-            .seek_exact(ProofWindowKey::LatestBlock)
-            .expect("seek")
-            .expect("latest exists");
-        assert_eq!(latest.1.number(), 0);
-        assert_eq!(*latest.1.hash(), genesis_hash);
+        // Unwind to block b1
+        let res = store.unwind_history(b1).await;
+        // should fail as we cannot unwind past earliest block
+        assert!(res.is_err(), "unwind to earliest block should error");
+        assert_eq!(res.unwrap_err(), OpProofsStorageError::UnwindBeyondEarliest {
+            unwind_block_number: b1.block.number,
+            earliest_block_number: b1.block.number,
+        });
     }
 
     #[tokio::test]

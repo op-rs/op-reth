@@ -9,7 +9,6 @@
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
 use alloy_consensus::BlockHeader;
-use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use derive_more::Constructor;
 use futures_util::TryStreamExt;
 use reth_chainspec::ChainInfo;
@@ -238,28 +237,19 @@ where
                             }
                         };
 
-                    let fork_block = old.fork_block();
-                    if fork_block.number > latest_stored_block_number {
+                    let first_block = old.first();
+                    if first_block.number() > latest_stored_block_number {
                         info!(
                             target: "optimism::exex",
-                            fork_block_number = fork_block.number,
+                            first_block_number = first_block.number(),
                             latest_stored = latest_stored_block_number,
                             "Fork block number is greater than latest stored, skipping",
                         );
                         continue;
                     }
 
-                    let fork_block_parent_hash = old
-                        .blocks()
-                        .get(&(fork_block.number - 1))
-                        .map(|b| b.hash())
-                        .unwrap_or(fork_block.hash);
-
                     collector
-                        .unwind_history(BlockWithParent::new(
-                            fork_block.hash,
-                            NumHash::new(fork_block.number, fork_block_parent_hash),
-                        ))
+                        .unwind_history(first_block.block_with_parent())
                         .await?;
                 }
             };
