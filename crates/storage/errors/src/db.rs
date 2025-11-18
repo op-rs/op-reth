@@ -50,6 +50,9 @@ pub enum DatabaseError {
     /// Other unspecified error.
     #[error("{_0}")]
     Other(String),
+    /// Other unspecified error.
+    #[error(transparent)]
+    Custom(#[from] Arc<dyn Error + Send + Sync>),
 }
 
 /// Common error struct to propagate implementation-specific error information.
