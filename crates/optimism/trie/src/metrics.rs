@@ -511,11 +511,8 @@ where
     }
 
     #[inline]
-    async fn unwind_history(
-        &self,
-        unwind_upto_block: BlockWithParent,
-    ) -> OpProofsStorageResult<()> {
-        self.storage.unwind_history(unwind_upto_block).await
+    async fn unwind_history(&self, to: BlockWithParent) -> OpProofsStorageResult<()> {
+        self.storage.unwind_history(to).await
     }
 
     #[inline]
