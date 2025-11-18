@@ -101,7 +101,7 @@ where
     pub async fn run(self) {
         let res = self.run_inner().await;
         if let Err(e) = res {
-            error!(target: "trie::pruner", "Pruner failed: {:?}", e);
+            error!(target: "trie::pruner", err=%e, "Pruner failed");
             return;
         }
         info!(target: "trie::pruner", result = %res.unwrap(), "Finished pruning proof storage");
