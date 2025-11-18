@@ -42,7 +42,7 @@ impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> InitializeOpProofsCommand<C> {
         info!(target: "reth::cli", "Initializing OP proofs storage at: {:?}", self.storage_path);
 
         // Initialize the environment with read-only access
-        let Environment { provider_factory, .. } = self.env.init::<N>(AccessRights::RO)?;
+        let Environment { provider_factory, .. } = self.env.init::<N>(AccessRights::RW)?;
 
         // Create the proofs storage
         let storage: OpProofsStorage<Arc<MdbxProofsStorage>> = Arc::new(
