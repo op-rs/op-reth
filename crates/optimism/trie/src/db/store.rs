@@ -121,8 +121,8 @@ impl MdbxProofsStorage {
             return Ok(keys);
         }
         // We need hard deletions at the time of pruning where we need to perform these steps:
-        // Hard delete all the tombstones
-        // Update new state to block zero (not append)
+        // - Hard delete all the tombstones
+        // - Update new state to block zero (not append)
         let (to_delete, to_append): (Vec<_>, Vec<_>) =
             pairs.into_iter().partition(|(_, vv)| vv.value.0.is_none());
 
