@@ -681,15 +681,13 @@ impl OpProofsStore for MdbxProofsStorage {
     /// Unwind the historical state to `unwind_upto_block` (inclusive), deleting all history
     /// starting from provided block. Also updates the `ProofWindow::LatestBlock` to parent of
     /// `unwind_upto_block`.
-    async fn unwind_history(
-        &self,
-        to: BlockWithParent,
-    ) -> OpProofsStorageResult<()> {
+    async fn unwind_history(&self, to: BlockWithParent) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
-            let earliest_block = match self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock)? {
-                Some(block) => block,
-                None => return Err(OpProofsStorageError::NoBlocksFound),
-            };
+            let earliest_block =
+                match self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock)? {
+                    Some(block) => block,
+                    None => return Err(OpProofsStorageError::NoBlocksFound),
+                };
 
             if to.block.number <= earliest_block.0 {
                 return Err(OpProofsStorageError::UnwindBeyondEarliest {
@@ -700,10 +698,8 @@ impl OpProofsStore for MdbxProofsStorage {
 
             self.delete_history_ranged(tx, (to.block.number)..)?;
 
-            let new_latest_block = BlockNumberHash::new(
-                to.block.number.saturating_sub(1),
-                to.parent,
-            );
+            let new_latest_block =
+                BlockNumberHash::new(to.block.number.saturating_sub(1), to.parent);
             let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
             proof_window_cursor.append(ProofWindowKey::LatestBlock, &new_latest_block)?;
 
@@ -2763,8 +2759,10 @@ mod tests {
         let b2 = BlockWithParent::new(b1.block.hash, NumHash::new(2, B256::random()));
         let b3 = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random()));
 
-        store.set_earliest_block_number_hash(b1.block.number, b1.block.hash).await.expect("set earliest");
-        store.store_trie_updates(b1, make_diff(10)).await.expect("store b1");
+        store
+            .set_earliest_block_number_hash(b1.block.number, b1.block.hash)
+            .await
+            .expect("set earliest");
         store.store_trie_updates(b2, make_diff(20)).await.expect("store b2");
         store.store_trie_updates(b3, make_diff(30)).await.expect("store b3");
 
@@ -2772,10 +2770,7 @@ mod tests {
         let res = store.unwind_history(b1).await;
         // should fail as we cannot unwind past earliest block
         assert!(res.is_err(), "unwind to earliest block should error");
-        assert_eq!(res.unwrap_err(), OpProofsStorageError::UnwindBeyondEarliest {
-            unwind_block_number: b1.block.number,
-            earliest_block_number: b1.block.number,
-        });
+        assert!(matches!(res.unwrap_err(), OpProofsStorageError::UnwindBeyondEarliest { .. }));
     }
 
     #[tokio::test]

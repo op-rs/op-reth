@@ -254,9 +254,7 @@ where
                         continue;
                     }
 
-                    collector
-                        .unwind_history(first_block.block_with_parent())
-                        .await?;
+                    collector.unwind_history(first_block.block_with_parent()).await?;
                 }
             };
 

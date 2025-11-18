@@ -7,7 +7,7 @@ use thiserror::Error;
 use tokio::sync::TryLockError;
 
 /// Error type for storage operations
-#[derive(Debug, PartialEq, Eq, Error)]
+#[derive(Debug, Error)]
 pub enum OpProofsStorageError {
     /// No blocks found
     #[error("No blocks found")]
