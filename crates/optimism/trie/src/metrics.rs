@@ -24,8 +24,7 @@ use strum::{EnumCount, EnumIter, IntoEnumIterator};
 pub type OpProofsStorage<S> = OpProofsStorageWithMetrics<S>;
 
 /// Alias for [`TrieCursor`](cursor::OpProofsTrieCursor) with metrics layer.
-pub type OpProofsTrieCursor<C: TrieCursor> =
-    cursor::OpProofsTrieCursor<OpProofsTrieCursorWithMetrics<C>>;
+pub type OpProofsTrieCursor<C> = cursor::OpProofsTrieCursor<OpProofsTrieCursorWithMetrics<C>>;
 
 /// Alias for [`OpProofsHashedAccountCursor`](cursor::OpProofsHashedAccountCursor) with metrics
 /// layer.

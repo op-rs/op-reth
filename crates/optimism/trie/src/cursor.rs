@@ -25,7 +25,7 @@ where
         &mut self,
         key: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        Ok(self.0.seek_exact(key)?)
+        self.0.seek_exact(key)
     }
 
     #[inline]
@@ -33,17 +33,17 @@ where
         &mut self,
         key: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        Ok(self.0.seek(key)?)
+        self.0.seek(key)
     }
 
     #[inline]
     fn next(&mut self) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        Ok(self.0.next()?)
+        self.0.next()
     }
 
     #[inline]
     fn current(&mut self) -> Result<Option<Nibbles>, DatabaseError> {
-        Ok(self.0.current()?)
+        self.0.current()
     }
 }
 

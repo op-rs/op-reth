@@ -277,12 +277,8 @@ impl MdbxProofsStorage {
                 // Yet to have any update for the current block number - So just using up to
                 // previous block number
                 let mut ro = self.storage_trie_cursor(hashed_address, block_number - 1)?;
-                let Some(keys) = self
-                    .wipe_storage(tx, block_number, hashed_address, || ro.next())
-                    .map_err(|e| {
-                        e.downcast_ref::<OpProofsStorageError>()
-                            .expect("should be caught by catch all variant wrapping db error")
-                    })?;
+                let keys =
+                    self.wipe_storage(tx, block_number, hashed_address, || Ok(ro.next()?))?;
 
                 storage_trie_keys.extend(keys);
 

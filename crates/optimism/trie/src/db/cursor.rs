@@ -168,26 +168,28 @@ where
         &mut self,
         path: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.inner
+        Ok(self
+            .inner
             .seek_exact(StoredNibbles(path))
-            .map(|opt| opt.map(|(StoredNibbles(n), node)| (n, node)))
+            .map(|opt| opt.map(|(StoredNibbles(n), node)| (n, node)))?)
     }
 
     fn seek(
         &mut self,
         path: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.inner
+        Ok(self
+            .inner
             .seek(StoredNibbles(path))
-            .map(|opt| opt.map(|(StoredNibbles(n), node)| (n, node)))
+            .map(|opt| opt.map(|(StoredNibbles(n), node)| (n, node)))?)
     }
 
     fn next(&mut self) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.inner.next().map(|opt| opt.map(|(StoredNibbles(n), node)| (n, node)))
+        Ok(self.inner.next().map(|opt| opt.map(|(StoredNibbles(n), node)| (n, node)))?)
     }
 
     fn current(&mut self) -> Result<Option<Nibbles>, DatabaseError> {
-        Ok(self.inner.cursor.current().map(|opt| opt.map(|(StoredNibbles(n), _)| n))?)
+        self.inner.cursor.current().map(|opt| opt.map(|(StoredNibbles(n), _)| n))
     }
 }
 
@@ -201,9 +203,9 @@ where
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
         if let Some(address) = self.hashed_address {
             let key = StorageTrieKey::new(address, StoredNibbles(path));
-            return self.inner.seek_exact(key).map(|opt| {
+            return Ok(self.inner.seek_exact(key).map(|opt| {
                 opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
-            })
+            })?)
         }
         Ok(None)
     }
@@ -214,27 +216,27 @@ where
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
         if let Some(address) = self.hashed_address {
             let key = StorageTrieKey::new(address, StoredNibbles(path));
-            return self.inner.seek(key).map(|opt| {
+            return Ok(self.inner.seek(key).map(|opt| {
                 opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
-            })
+            })?)
         }
         Ok(None)
     }
 
     fn next(&mut self) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
         if let Some(address) = self.hashed_address {
-            return self.inner.next().map(|opt| {
+            return Ok(self.inner.next().map(|opt| {
                 opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
-            })
+            })?)
         }
         Ok(None)
     }
 
     fn current(&mut self) -> Result<Option<Nibbles>, DatabaseError> {
         if let Some(address) = self.hashed_address {
-            return Ok(self.inner.cursor.current().map(|opt| {
+            return self.inner.cursor.current().map(|opt| {
                 opt.and_then(|(k, _)| (k.hashed_address == address).then_some(k.path.0))
-            })?);
+            });
         }
         Ok(None)
     }

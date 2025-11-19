@@ -4,11 +4,12 @@ use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_optimism_trie::{
     db::MdbxProofsStorage, BlockStateDiff, InMemoryProofsStorage, OpProofsHashedCursorRO,
-    OpProofsStorageError, OpProofsStore, TrieCursor,
+    OpProofsStorageError, OpProofsStore,
 };
 use reth_primitives_traits::Account;
 use reth_trie::{
-    updates::TrieUpdates, BranchNodeCompact, HashedPostState, HashedStorage, Nibbles, TrieMask,
+    trie_cursor::TrieCursor, updates::TrieUpdates, BranchNodeCompact, HashedPostState,
+    HashedStorage, Nibbles, TrieMask,
 };
 use serial_test::serial;
 use std::sync::Arc;
