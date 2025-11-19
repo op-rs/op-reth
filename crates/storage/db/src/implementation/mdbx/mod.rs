@@ -1055,19 +1055,18 @@ mod tests {
 
         // Seek & delete key2
         cursor.seek_exact(key2).unwrap();
-        assert_eq!(cursor.delete_current(), Ok(()));
-        assert_eq!(cursor.seek_exact(key2), Ok(None));
+        assert!(cursor.delete_current().is_ok());
+        assert!(cursor.seek_exact(key2).unwrap().is_none());
 
         // Seek & delete key2 again
-        assert_eq!(cursor.seek_exact(key2), Ok(None));
-        assert_eq!(
-            cursor.delete_current(),
-            Err(DatabaseError::Delete(reth_libmdbx::Error::NoData.into()))
-        );
+        assert!(cursor.seek_exact(key2).unwrap().is_none());
+        assert!(matches!(
+            cursor.delete_current().unwrap_err(),
+            DatabaseError::Delete(err) if err = reth_libmdbx::Error::NoData.into()));
         // Assert that key1 is still there
-        assert_eq!(cursor.seek_exact(key1), Ok(Some((key1, Account::default()))));
+        assert!(matches!(cursor.seek_exact(key1).unwrap(), Some((key1, Account::default()))));
         // Assert that key3 is still there
-        assert_eq!(cursor.seek_exact(key3), Ok(Some((key3, Account::default()))));
+        assert!(matches!(cursor.seek_exact(key3).unwrap(), Some((key3, Account::default()))));
     }
 
     #[test]
@@ -1226,38 +1225,47 @@ mod tests {
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<AccountChangeSets>().unwrap();
         assert_eq!(
-            cursor.append_dup(
-                transition_id,
-                AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
-            ),
-            Err(DatabaseWriteError {
+            cursor
+                .append_dup(
+                    transition_id,
+                    AccountBeforeTx {
+                        address: Address::with_last_byte(subkey_to_append),
+                        info: None
+                    }
+                )
+                .unwrap_err(),
+            DatabaseWriteError {
                 info: Error::KeyMismatch.into(),
                 operation: DatabaseWriteOperation::CursorAppendDup,
                 table_name: AccountChangeSets::NAME,
                 key: transition_id.encode().into(),
             }
-            .into())
+            .into()
         );
         assert_eq!(
-            cursor.append(
-                transition_id - 1,
-                &AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
-            ),
-            Err(DatabaseWriteError {
+            cursor
+                .append(
+                    transition_id - 1,
+                    &AccountBeforeTx {
+                        address: Address::with_last_byte(subkey_to_append),
+                        info: None
+                    }
+                )
+                .unwrap_err(),
+            DatabaseWriteError {
                 info: Error::KeyMismatch.into(),
                 operation: DatabaseWriteOperation::CursorAppend,
                 table_name: AccountChangeSets::NAME,
                 key: (transition_id - 1).encode().into(),
             }
-            .into())
+            .into()
         );
-        assert_eq!(
-            cursor.append(
+        assert!(cursor
+            .append(
                 transition_id,
                 &AccountBeforeTx { address: Address::with_last_byte(subkey_to_append), info: None }
-            ),
-            Ok(())
-        );
+            )
+            .is_ok());
     }
 
     #[test]
