@@ -3,11 +3,12 @@
 use alloy_primitives::B256;
 use reth_db::DatabaseError;
 use reth_trie::Nibbles;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::TryLockError;
 
 /// Error type for storage operations
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum OpProofsStorageError {
     /// No blocks found
     #[error("No blocks found")]
@@ -69,15 +70,32 @@ pub enum OpProofsStorageError {
     },
     /// Error occurred while interacting with the database.
     #[error(transparent)]
-    DatabaseError(#[from] DatabaseError),
+    DatabaseError(DatabaseError),
     /// Error occurred while trying to acquire a lock.
-    #[error(transparent)]
-    TryLockError(#[from] TryLockError),
+    #[error("failed lock attempt")]
+    TryLockError,
+}
+
+impl From<TryLockError> for OpProofsStorageError {
+    fn from(_: TryLockError) -> Self {
+        Self::TryLockError
+    }
 }
 
 impl From<OpProofsStorageError> for DatabaseError {
     fn from(error: OpProofsStorageError) -> Self {
-        Self::Other(error.to_string())
+        Self::Custom(Arc::new(error))
+    }
+}
+
+impl From<DatabaseError> for OpProofsStorageError {
+    fn from(error: DatabaseError) -> Self {
+        if let DatabaseError::Custom(ref err) = error &&
+            let Some(err) = err.downcast_ref::<Self>()
+        {
+            return err.clone()
+        }
+        Self::DatabaseError(error)
     }
 }
 
