@@ -10,8 +10,7 @@ use crate::{
         },
         MdbxAccountCursor, MdbxStorageCursor, MdbxTrieCursor,
     },
-    BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageError, OpProofsStorageResult,
-    OpProofsStore,
+    BlockStateDiff, OpProofsStorageError, OpProofsStorageResult, OpProofsStore,
 };
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
@@ -25,7 +24,8 @@ use reth_db::{
 };
 use reth_primitives_traits::Account;
 use reth_trie::{
-    trie_cursor::TrieCursor, updates::StorageTrieUpdates, BranchNodeCompact, HashedStorage, Nibbles,
+    hashed_cursor::HashedCursor, trie_cursor::TrieCursor, updates::StorageTrieUpdates,
+    BranchNodeCompact, HashedStorage, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
 
@@ -302,7 +302,8 @@ impl MdbxProofsStorage {
                 // Yet to have any update for the current block number - So just using up to
                 // previous block number
                 let mut ro = self.storage_hashed_cursor(hashed_address, block_number - 1)?;
-                let keys = self.wipe_storage(tx, block_number, hashed_address, || ro.next())?;
+                let keys =
+                    self.wipe_storage(tx, block_number, hashed_address, || Ok(ro.next()?))?;
                 hashed_storage_keys.extend(keys);
                 // Skip any further processing for this hashed_address
                 continue;

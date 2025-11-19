@@ -6,27 +6,12 @@ use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
 use reth_primitives_traits::Account;
 use reth_trie::{
-    trie_cursor::TrieCursor, updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles,
+    hashed_cursor::{HashedCursor, HashedStorageCursor},
+    trie_cursor::TrieCursor,
+    updates::TrieUpdates,
+    BranchNodeCompact, HashedPostState, Nibbles,
 };
 use std::{fmt::Debug, time::Duration};
-
-/// Seeks and iterates over hashed entries in the database by key.
-pub trait OpProofsHashedCursorRO: Send + Sync {
-    /// Value returned by the cursor.
-    type Value: Debug;
-
-    /// Seek an entry greater or equal to the given key and position the cursor there.
-    /// Returns the first entry with the key greater or equal to the sought key.
-    fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>>;
-
-    /// Move the cursor to the next entry and return it.
-    fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>>;
-
-    /// Returns `true` if there are no entries for a given key.
-    fn is_storage_empty(&mut self) -> OpProofsStorageResult<bool> {
-        Ok(self.seek(B256::ZERO)?.is_none())
-    }
-}
 
 /// Diff of trie updates and post state for a block.
 #[derive(Debug, Clone, Default)]
@@ -80,12 +65,12 @@ pub trait OpProofsStore: Send + Sync + Debug {
         Self: 'tx;
 
     /// Cursor for iterating over storage leaves.
-    type StorageCursor<'tx>: OpProofsHashedCursorRO<Value = U256> + 'tx
+    type StorageCursor<'tx>: HashedStorageCursor<Value = U256> + Send + Sync + 'tx
     where
         Self: 'tx;
 
     /// Cursor for iterating over account leaves.
-    type AccountHashedCursor<'tx>: OpProofsHashedCursorRO<Value = Account> + 'tx
+    type AccountHashedCursor<'tx>: HashedCursor<Value = Account> + Send + Sync + 'tx
     where
         Self: 'tx;
 

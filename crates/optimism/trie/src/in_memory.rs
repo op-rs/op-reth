@@ -1,14 +1,15 @@
 //! In-memory implementation of [`OpProofsStore`] for testing purposes
 
-use crate::{
-    api::WriteCounts, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageResult, OpProofsStore,
-};
+use crate::{api::WriteCounts, BlockStateDiff, OpProofsStorageResult, OpProofsStore};
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
 use reth_db::DatabaseError;
 use reth_primitives_traits::Account;
 use reth_trie::{
-    trie_cursor::TrieCursor, updates::TrieUpdates, BranchNodeCompact, HashedPostState, Nibbles,
+    hashed_cursor::{HashedCursor, HashedStorageCursor},
+    trie_cursor::TrieCursor,
+    updates::TrieUpdates,
+    BranchNodeCompact, HashedPostState, Nibbles,
 };
 use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::RwLock;
@@ -268,7 +269,7 @@ impl TrieCursor for InMemoryTrieCursor {
     }
 }
 
-/// In-memory implementation of [`OpProofsHashedCursorRO`] for storage slots
+/// In-memory implementation of [`HashedCursor`] for storage slots
 #[derive(Debug)]
 pub struct InMemoryStorageCursor {
     /// Current position in the iteration (-1 means not positioned yet)
@@ -315,10 +316,10 @@ impl InMemoryStorageCursor {
     }
 }
 
-impl OpProofsHashedCursorRO for InMemoryStorageCursor {
+impl HashedCursor for InMemoryStorageCursor {
     type Value = U256;
 
-    fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         if let Some(pos) = self.entries.iter().position(|(k, _)| *k >= key) {
             self.position = pos as isize;
             Ok(Some(self.entries[pos]))
@@ -327,7 +328,7 @@ impl OpProofsHashedCursorRO for InMemoryStorageCursor {
         }
     }
 
-    fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         self.position += 1;
         if self.position >= 0 && (self.position as usize) < self.entries.len() {
             Ok(Some(self.entries[self.position as usize]))
@@ -337,7 +338,13 @@ impl OpProofsHashedCursorRO for InMemoryStorageCursor {
     }
 }
 
-/// In-memory implementation of [`OpProofsHashedCursorRO`] for accounts
+impl HashedStorageCursor for InMemoryStorageCursor {
+    fn is_storage_empty(&mut self) -> Result<bool, DatabaseError> {
+        Ok(self.seek(B256::ZERO)?.is_none())
+    }
+}
+
+/// In-memory implementation of [`HashedCursor`] for accounts
 #[derive(Debug)]
 pub struct InMemoryAccountCursor {
     /// Current position in the iteration (-1 means not positioned yet)
@@ -375,10 +382,10 @@ impl InMemoryAccountCursor {
     }
 }
 
-impl OpProofsHashedCursorRO for InMemoryAccountCursor {
+impl HashedCursor for InMemoryAccountCursor {
     type Value = Account;
 
-    fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         if let Some(pos) = self.entries.iter().position(|(k, _)| *k >= key) {
             self.position = pos as isize;
             Ok(Some(self.entries[pos]))
@@ -387,7 +394,7 @@ impl OpProofsHashedCursorRO for InMemoryAccountCursor {
         }
     }
 
-    fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         self.position += 1;
         if self.position >= 0 && (self.position as usize) < self.entries.len() {
             Ok(Some(self.entries[self.position as usize]))

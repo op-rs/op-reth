@@ -5,7 +5,7 @@ use crate::{
         AccountTrieHistory, HashedAccountHistory, HashedStorageHistory, HashedStorageKey,
         MaybeDeleted, StorageTrieHistory, StorageTrieKey, VersionedValue,
     },
-    OpProofsHashedCursorRO, OpProofsStorageResult,
+    OpProofsStorageResult,
 };
 use alloy_primitives::{B256, U256};
 use reth_db::{
@@ -15,7 +15,11 @@ use reth_db::{
     Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives_traits::Account;
-use reth_trie::{trie_cursor::TrieCursor, BranchNodeCompact, Nibbles, StoredNibbles};
+use reth_trie::{
+    hashed_cursor::{HashedCursor, HashedStorageCursor},
+    trie_cursor::TrieCursor,
+    BranchNodeCompact, Nibbles, StoredNibbles,
+};
 
 /// Generic alias for dup cursor for T
 pub(crate) type Dup<'tx, T> = <<DatabaseEnv as Database>::TX as DbTx>::DupCursor<T>;
@@ -242,7 +246,7 @@ where
     }
 }
 
-/// MDBX implementation of [`OpProofsHashedCursorRO`] for storage state.
+/// MDBX implementation of [`HashedCursor`] for storage state.
 #[derive(Debug)]
 pub struct MdbxStorageCursor<Cursor> {
     inner: BlockNumberVersionedCursor<HashedStorageHistory, Cursor>,
@@ -259,13 +263,13 @@ where
     }
 }
 
-impl<Cursor> OpProofsHashedCursorRO for MdbxStorageCursor<Cursor>
+impl<Cursor> HashedCursor for MdbxStorageCursor<Cursor>
 where
     Cursor: DbCursorRO<HashedStorageHistory> + DbDupCursorRO<HashedStorageHistory> + Send + Sync,
 {
     type Value = U256;
 
-    fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         let storage_key = HashedStorageKey::new(self.hashed_address, key);
 
         // hashed storage values can be zero, which means the storage slot is deleted, so we should
@@ -286,7 +290,7 @@ where
         Ok(result)
     }
 
-    fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         let result = self.inner.next().map(|opt| {
             opt.and_then(|(k, v)| {
                 // Only return entries that belong to the bound address
@@ -306,7 +310,14 @@ where
     }
 }
 
-/// MDBX implementation of [`OpProofsHashedCursorRO`] for account state.
+impl HashedStorageCursor for MdbxStorageCursor<Dup<'_, HashedStorageHistory>> {
+    #[inline]
+    fn is_storage_empty(&mut self) -> Result<bool, DatabaseError> {
+        Ok(self.seek(B256::ZERO)?.is_none())
+    }
+}
+
+/// MDBX implementation of [`HashedCursor`] for account state.
 #[derive(Debug)]
 pub struct MdbxAccountCursor<Cursor> {
     inner: BlockNumberVersionedCursor<HashedAccountHistory, Cursor>,
@@ -322,18 +333,18 @@ where
     }
 }
 
-impl<Cursor> OpProofsHashedCursorRO for MdbxAccountCursor<Cursor>
+impl<Cursor> HashedCursor for MdbxAccountCursor<Cursor>
 where
     Cursor: DbCursorRO<HashedAccountHistory> + DbDupCursorRO<HashedAccountHistory> + Send + Sync,
 {
     type Value = Account;
 
-    fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
-        self.inner.seek(key)
+    fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
+        Ok(self.inner.seek(key)?)
     }
 
-    fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
-        self.inner.next()
+    fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
+        Ok(self.inner.next()?)
     }
 }
 
@@ -1154,8 +1165,7 @@ mod tests {
         let tx = db.tx().expect("ro");
         let mut cur = storage_cursor(&tx, 100, addr);
 
-        let (got_slot, got_val) =
-            OpProofsHashedCursorRO::seek(&mut cur, slot).expect("ok").expect("some");
+        let (got_slot, got_val) = cur.seek(slot).expect("ok").expect("some");
         assert_eq!(got_slot, slot);
         assert_eq!(got_val, U256::from(7));
     }
@@ -1176,7 +1186,7 @@ mod tests {
         let tx = db.tx().expect("ro");
         let mut cur = storage_cursor(&tx, 10, addr);
 
-        let out = OpProofsHashedCursorRO::seek(&mut cur, slot).expect("ok");
+        let out = cur.seek(slot).expect("ok");
         assert!(out.is_none(), "wrapper must filter tombstoned latest");
     }
 
@@ -1197,10 +1207,10 @@ mod tests {
         let tx = db.tx().expect("ro");
         let mut cur = storage_cursor(&tx, 100, addr);
 
-        let (k1, v1) = OpProofsHashedCursorRO::seek(&mut cur, s1).expect("ok").expect("some");
+        let (k1, v1) = cur.seek(s1).expect("ok").expect("some");
         assert_eq!((k1, v1), (s1, U256::from(11)));
 
-        let (k2, v2) = OpProofsHashedCursorRO::next(&mut cur).expect("ok").expect("some");
+        let (k2, v2) = cur.next().expect("ok").expect("some");
         assert_eq!((k2, v2), (s2, U256::from(22)));
     }
 
@@ -1230,22 +1240,22 @@ mod tests {
         let tx = db.tx().expect("ro");
         let mut cur = storage_cursor(&tx, 100, addr1);
 
-        let (k1, v1) = OpProofsHashedCursorRO::next(&mut cur).expect("ok").expect("some");
+        let (k1, v1) = cur.next().expect("ok").expect("some");
         assert_eq!((k1, v1), (s1, U256::from(11)));
 
-        let (k2, v2) = OpProofsHashedCursorRO::next(&mut cur).expect("ok").expect("some");
+        let (k2, v2) = cur.next().expect("ok").expect("some");
         assert_eq!((k2, v2), (s2, U256::from(22)));
 
-        let out = OpProofsHashedCursorRO::next(&mut cur).expect("ok");
+        let out = cur.next().expect("ok");
         assert!(out.is_none(), "should stop at address boundary");
 
-        let (k1, v1) = OpProofsHashedCursorRO::seek(&mut cur, s1).expect("ok").expect("some");
+        let (k1, v1) = cur.seek(s1).expect("ok").expect("some");
         assert_eq!((k1, v1), (s1, U256::from(11)));
 
-        let (k2, v2) = OpProofsHashedCursorRO::seek(&mut cur, s2).expect("ok").expect("some");
+        let (k2, v2) = cur.seek(s2).expect("ok").expect("some");
         assert_eq!((k2, v2), (s2, U256::from(22)));
 
-        let out = OpProofsHashedCursorRO::seek(&mut cur, s3).expect("ok");
+        let out = cur.seek(s3).expect("ok");
         assert!(out.is_none(), "should not see keys from other address");
     }
 
@@ -1263,8 +1273,7 @@ mod tests {
         let tx = db.tx().expect("ro");
         let mut cur = account_cursor(&tx, 100);
 
-        let (got_key, _acc) =
-            OpProofsHashedCursorRO::seek(&mut cur, key).expect("ok").expect("some");
+        let (got_key, _acc) = cur.seek(key).expect("ok").expect("some");
         assert_eq!(got_key, key);
     }
 
@@ -1283,7 +1292,7 @@ mod tests {
         let tx = db.tx().expect("ro");
         let mut cur = account_cursor(&tx, 10);
 
-        let out = OpProofsHashedCursorRO::seek(&mut cur, key).expect("ok");
+        let out = cur.seek(key).expect("ok");
         assert!(out.is_none(), "wrapper must filter tombstoned latest");
     }
 
@@ -1303,10 +1312,10 @@ mod tests {
         let tx = db.tx().expect("ro");
         let mut cur = account_cursor(&tx, 100);
 
-        let (got1, _) = OpProofsHashedCursorRO::seek(&mut cur, k1).expect("ok").expect("some");
+        let (got1, _) = cur.seek(k1).expect("ok").expect("some");
         assert_eq!(got1, k1);
 
-        let (got2, _) = OpProofsHashedCursorRO::next(&mut cur).expect("ok").expect("some");
+        let (got2, _) = cur.next().expect("ok").expect("some");
         assert_eq!(got2, k2);
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::{
     api::{OperationDurations, WriteCounts},
-    cursor, BlockStateDiff, OpProofsHashedCursorRO, OpProofsStorageResult, OpProofsStore,
+    cursor, BlockStateDiff, OpProofsStorageResult, OpProofsStore,
 };
 use alloy_eips::eip1898::BlockWithParent;
 use alloy_primitives::{map::HashMap, B256, U256};
@@ -11,7 +11,11 @@ use metrics::{Counter, Gauge, Histogram};
 use reth_db::DatabaseError;
 use reth_metrics::Metrics;
 use reth_primitives_traits::Account;
-use reth_trie::{trie_cursor::TrieCursor, BranchNodeCompact, Nibbles};
+use reth_trie::{
+    hashed_cursor::{HashedCursor, HashedStorageCursor},
+    trie_cursor::TrieCursor,
+    BranchNodeCompact, Nibbles,
+};
 use std::{
     fmt::Debug,
     future::Future,
@@ -280,24 +284,31 @@ impl<C: TrieCursor> TrieCursor for OpProofsTrieCursorWithMetrics<C> {
     }
 }
 
-/// Wrapper for [`OpProofsHashedCursorRO`] type that records metrics.
+/// Wrapper for [`HashedCursor`] type that records metrics.
 #[derive(Debug, Constructor, Clone)]
 pub struct OpProofsHashedCursorWithMetrics<C> {
     cursor: C,
     metrics: Arc<StorageMetrics>,
 }
 
-impl<C: OpProofsHashedCursorRO> OpProofsHashedCursorRO for OpProofsHashedCursorWithMetrics<C> {
+impl<C: HashedCursor> HashedCursor for OpProofsHashedCursorWithMetrics<C> {
     type Value = C::Value;
 
     #[inline]
-    fn seek(&mut self, key: B256) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         self.metrics.record_operation(StorageOperation::HashedCursorSeek, || self.cursor.seek(key))
     }
 
     #[inline]
-    fn next(&mut self) -> OpProofsStorageResult<Option<(B256, Self::Value)>> {
+    fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
         self.metrics.record_operation(StorageOperation::HashedCursorNext, || self.cursor.next())
+    }
+}
+
+impl<C: HashedStorageCursor> HashedStorageCursor for OpProofsHashedCursorWithMetrics<C> {
+    #[inline]
+    fn is_storage_empty(&mut self) -> Result<bool, DatabaseError> {
+        self.cursor.is_storage_empty()
     }
 }
 
