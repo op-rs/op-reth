@@ -117,6 +117,7 @@ func FetchAndVerifyProofs(t devtest.T, sys *presets.SingleChainMultiNode, addres
 		require.NoError(t, err, "failed to get proof from L2ELB at block %d", block)
 	}
 	NormalizeProofResponse(rethProofRes)
+	NormalizeProofResponse(gethProofRes)
 
 	require.Equal(t, gethProofRes, rethProofRes, "geth and reth proofs should match")
 
