@@ -32,7 +32,7 @@ build-contracts:
 	@cd "$(SOURCE_DIR)/proofs/contracts" && forge build || { echo "forge build failed"; exit 1; }
 
 # Run E2E tests using Kurtosis
-test-e2e-kurtosis: build-contracts
+test-e2e-kurtosis:
 	@echo "Running E2E tests with Kurtosis for $(DEVNET)"
 	@DEVNET_PATH="$(SOURCE_DIR)/devnets/$(DEVNET).yaml"; \
     if [ ! -z "$(DEVNET_CUSTOM_PATH)" ]; then \

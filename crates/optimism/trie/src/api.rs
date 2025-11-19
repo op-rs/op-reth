@@ -58,7 +58,7 @@ pub struct BlockStateDiff {
 }
 
 impl BlockStateDiff {
-    /// Extend the `BlockStateDiff` from other latest `BlockStateDiff`
+    /// Extend the [` BlockStateDiff`] from other latest [`BlockStateDiff`]
     pub fn extend(&mut self, other: Self) {
         self.trie_updates.extend(other.trie_updates);
         self.post_state.extend(other.post_state);
