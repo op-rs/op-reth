@@ -670,14 +670,14 @@ mod tests {
         dup_cursor.upsert(Address::with_last_byte(1), &entry_1).expect(ERROR_UPSERT);
 
         assert_eq!(
-            dup_cursor.walk(None).unwrap().collect::<Result<Vec<_>, _>>(),
-            Ok(vec![(Address::with_last_byte(1), entry_0), (Address::with_last_byte(1), entry_1),])
+            dup_cursor.walk(None).unwrap().collect::<Result<Vec<_>, _>>().unwrap(),
+            vec![(Address::with_last_byte(1), entry_0), (Address::with_last_byte(1), entry_1),]
         );
 
         let mut walker = dup_cursor.walk(None).unwrap();
         walker.delete_current().expect(ERROR_DEL);
 
-        assert_eq!(walker.next(), Some(Ok((Address::with_last_byte(1), entry_1))));
+        assert_eq!(walker.next().unwrap().unwrap(), (Address::with_last_byte(1), entry_1));
 
         // Check the tx view - it correctly holds entry_1
         assert_eq!(
@@ -685,14 +685,15 @@ mod tests {
                 .unwrap()
                 .walk(None)
                 .unwrap()
-                .collect::<Result<Vec<_>, _>>(),
-            Ok(vec![
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap(),
+            vec![
                 (Address::with_last_byte(1), entry_1), // This is ok - we removed entry_0
-            ])
+            ]
         );
 
         // Check the remainder of walker
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
     }
 
     #[test]
@@ -737,51 +738,51 @@ mod tests {
 
         // [1, 3)
         let mut walker = cursor.walk_range(1..3).unwrap();
-        assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((2, B256::ZERO))));
-        assert_eq!(walker.next(), None);
+        assert_eq!(walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (2, B256::ZERO));
+        assert!(walker.next().is_none());
         // next() returns None after walker is done
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
 
         // [1, 2]
         let mut walker = cursor.walk_range(1..=2).unwrap();
-        assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((2, B256::ZERO))));
+        assert_eq!(walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (2, B256::ZERO));
         // next() returns None after walker is done
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
 
         // [1, ∞)
         let mut walker = cursor.walk_range(1..).unwrap();
-        assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((2, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((3, B256::ZERO))));
+        assert_eq!(walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (2, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (3, B256::ZERO));
         // next() returns None after walker is done
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
 
         // [2, 4)
         let mut walker = cursor.walk_range(2..4).unwrap();
-        assert_eq!(walker.next(), Some(Ok((2, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(walker.next(), None);
+        assert_eq!(walker.next().unwrap().unwrap(), (2, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (3, B256::ZERO));
+        assert!(walker.next().is_none());
         // next() returns None after walker is done
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
 
         // (∞, 3)
         let mut walker = cursor.walk_range(..3).unwrap();
-        assert_eq!(walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((2, B256::ZERO))));
+        assert_eq!(walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (2, B256::ZERO));
         // next() returns None after walker is done
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
 
         // (∞, ∞)
         let mut walker = cursor.walk_range(..).unwrap();
-        assert_eq!(walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((2, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((3, B256::ZERO))));
+        assert_eq!(walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (2, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (3, B256::ZERO));
         // next() returns None after walker is done
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
     }
 
     #[test]
@@ -822,7 +823,7 @@ mod tests {
         assert_eq!(walker.next(), Some(Ok((1, AccountBeforeTx { address: address0, info: None }))));
         assert_eq!(walker.next(), Some(Ok((1, AccountBeforeTx { address: address1, info: None }))));
         assert_eq!(walker.next(), Some(Ok((1, AccountBeforeTx { address: address2, info: None }))));
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
     }
 
     #[expect(clippy::reversed_empty_ranges)]
@@ -851,7 +852,7 @@ mod tests {
 
         // returning nothing
         let mut walker = cursor.walk_range(1..1).unwrap();
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
     }
 
     #[test]
@@ -874,7 +875,7 @@ mod tests {
         assert_eq!(walker.next(), Some(Ok((0, B256::ZERO))));
         assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
         assert_eq!(walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
 
         // transform to ReverseWalker
         let mut reverse_walker = walker.rev();
@@ -911,7 +912,7 @@ mod tests {
         assert_eq!(walker.next(), Some(Ok((0, B256::ZERO))));
         assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
         assert_eq!(walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(walker.next(), None);
+        assert!(walker.next().is_none());
     }
 
     #[test]
@@ -1364,7 +1365,7 @@ mod tests {
             let mut cursor = tx.cursor_dup_read::<PlainStorageState>().unwrap();
             let not_existing_key = Address::ZERO;
             let mut walker = cursor.walk_dup(Some(not_existing_key), None).unwrap();
-            assert_eq!(walker.next(), None);
+            assert!(walker.next().is_none());
         }
     }
 
@@ -1395,11 +1396,11 @@ mod tests {
             let mut walker = cursor.walk_dup(None, None).unwrap();
 
             // Notice that value11 and value22 have been ordered in the DB.
-            assert_eq!(Some(Ok((key1, value00))), walker.next());
-            assert_eq!(Some(Ok((key1, value11))), walker.next());
+            assert_eq!((key1, value00), walker.next().unwrap().unwrap());
+            assert_eq!((key1, value11), walker.next().unwrap().unwrap());
             // NOTE: Dup cursor does NOT iterates on all values but only on duplicated values of the
             // same key. assert_eq!(Ok(Some(value22.clone())), walker.next());
-            assert_eq!(None, walker.next());
+            assert!(walker.next().is_none());
         }
 
         // Iterate by using `walk`
@@ -1408,9 +1409,9 @@ mod tests {
             let mut cursor = tx.cursor_dup_read::<PlainStorageState>().unwrap();
             let first = cursor.first().unwrap().unwrap();
             let mut walker = cursor.walk(Some(first.0)).unwrap();
-            assert_eq!(Some(Ok((key1, value00))), walker.next());
-            assert_eq!(Some(Ok((key1, value11))), walker.next());
-            assert_eq!(Some(Ok((key2, value22))), walker.next());
+            assert_eq!((key1, value00), walker.next().unwrap().unwrap());
+            assert_eq!((key1, value11), walker.next().unwrap().unwrap());
+            assert_eq!((key2, value22), walker.next().unwrap().unwrap());
         }
     }
 
@@ -1440,9 +1441,9 @@ mod tests {
             let mut walker = cursor.walk(Some(first.0)).unwrap();
 
             // NOTE: Both values are present
-            assert_eq!(Some(Ok((key1, value00))), walker.next());
-            assert_eq!(Some(Ok((key1, value01))), walker.next());
-            assert_eq!(Some(Ok((key2, value22))), walker.next());
+            assert_eq!((key1, value00), walker.next().unwrap().unwrap());
+            assert_eq!((key1, value01), walker.next().unwrap().unwrap());
+            assert_eq!((key2, value22), walker.next().unwrap().unwrap());
         }
 
         // seek_by_key_subkey
@@ -1451,9 +1452,9 @@ mod tests {
             let mut cursor = tx.cursor_dup_read::<PlainStorageState>().unwrap();
 
             // NOTE: There are two values with same SubKey but only first one is shown
-            assert_eq!(Ok(Some(value00)), cursor.seek_by_key_subkey(key1, value00.key));
+            assert_eq!(value00, cursor.seek_by_key_subkey(key1, value00.key).unwrap().unwrap());
             // key1 but value is greater than the one in the DB
-            assert_eq!(Ok(None), cursor.seek_by_key_subkey(key1, value22.key));
+            assert_eq!(None, cursor.seek_by_key_subkey(key1, value22.key).unwrap());
         }
     }
 
