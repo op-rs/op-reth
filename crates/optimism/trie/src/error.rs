@@ -84,7 +84,10 @@ impl From<TryLockError> for OpProofsStorageError {
 
 impl From<OpProofsStorageError> for DatabaseError {
     fn from(error: OpProofsStorageError) -> Self {
-        Self::Custom(Arc::new(error))
+        match error {
+            OpProofsStorageError::DatabaseError(err) => err,
+            _ => Self::Custom(Arc::new(error)),
+        }
     }
 }
 
@@ -101,3 +104,27 @@ impl From<DatabaseError> for OpProofsStorageError {
 
 /// Result type for storage operations
 pub type OpProofsStorageResult<T> = Result<T, OpProofsStorageError>;
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_op_proofs_store_error_to_db_error() {
+        let original_error = OpProofsStorageError::NoBlocksFound;
+        let db_error: DatabaseError = original_error.into();
+        let converted_error: OpProofsStorageError = db_error.into();
+
+        assert!(matches!(converted_error, OpProofsStorageError::NoBlocksFound))
+    }
+
+    #[test]
+    fn test_db_error_to_op_proofs_store_error() {
+        let original_error = DatabaseError::Decode;
+        let op_proofs_store_error: OpProofsStorageError = original_error.into();
+        let converted_error: DatabaseError = op_proofs_store_error.into();
+        println!("{:?}", converted_error);
+
+        assert!(matches!(converted_error, DatabaseError::Decode))
+    }
+}
