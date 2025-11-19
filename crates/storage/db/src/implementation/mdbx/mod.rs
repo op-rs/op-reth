@@ -862,11 +862,11 @@ mod tests {
 
         // start bound greater than end bound
         let mut res = cursor.walk_range(3..1).unwrap();
-        assert_eq!(res.next(), None);
+        assert!(res.next().is_none());
 
         // start bound greater than end bound
         let mut res = cursor.walk_range(15..=2).unwrap();
-        assert_eq!(res.next(), None);
+        assert!(res.next().is_none());
 
         // returning nothing
         let mut walker = cursor.walk_range(1..1).unwrap();
@@ -890,17 +890,17 @@ mod tests {
 
         let mut walker = Walker::new(&mut cursor, None);
 
-        assert_eq!(walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((3, B256::ZERO))));
+        assert_eq!(walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (3, B256::ZERO));
         assert!(walker.next().is_none());
 
         // transform to ReverseWalker
         let mut reverse_walker = walker.rev();
-        assert_eq!(reverse_walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), None);
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (3, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert!(reverse_walker.next().is_none());
     }
 
     #[test]
@@ -920,16 +920,16 @@ mod tests {
 
         let mut reverse_walker = ReverseWalker::new(&mut cursor, None);
 
-        assert_eq!(reverse_walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), None);
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (3, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert!(reverse_walker.next().is_none());
 
         // transform to Walker
         let mut walker = reverse_walker.forward();
-        assert_eq!(walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(walker.next(), Some(Ok((3, B256::ZERO))));
+        assert_eq!(walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(walker.next().unwrap().unwrap(), (3, B256::ZERO));
         assert!(walker.next().is_none());
     }
 
@@ -949,27 +949,27 @@ mod tests {
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
 
         let mut reverse_walker = cursor.walk_back(Some(1)).unwrap();
-        assert_eq!(reverse_walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), None);
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert!(reverse_walker.next().is_none());
 
         let mut reverse_walker = cursor.walk_back(Some(2)).unwrap();
-        assert_eq!(reverse_walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), None);
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (3, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert!(reverse_walker.next().is_none());
 
         let mut reverse_walker = cursor.walk_back(Some(4)).unwrap();
-        assert_eq!(reverse_walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), None);
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (3, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert!(reverse_walker.next().is_none());
 
         let mut reverse_walker = cursor.walk_back(None).unwrap();
-        assert_eq!(reverse_walker.next(), Some(Ok((3, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((1, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), Some(Ok((0, B256::ZERO))));
-        assert_eq!(reverse_walker.next(), None);
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (3, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (1, B256::ZERO));
+        assert_eq!(reverse_walker.next().unwrap().unwrap(), (0, B256::ZERO));
+        assert!(reverse_walker.next().is_none());
     }
 
     #[test]
@@ -988,12 +988,12 @@ mod tests {
         let missing_key = 2;
         let tx = db.tx().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_read::<CanonicalHeaders>().unwrap();
-        assert_eq!(cursor.current(), Ok(None));
+        assert!(cursor.current().unwrap().is_none());
 
         // Seek exact
         let exact = cursor.seek_exact(missing_key).unwrap();
         assert_eq!(exact, None);
-        assert_eq!(cursor.current(), Ok(None));
+        assert!(cursor.current().unwrap().is_none());
     }
 
     #[test]
@@ -1013,21 +1013,18 @@ mod tests {
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
 
         // INSERT
-        assert_eq!(cursor.insert(key_to_insert, &B256::ZERO), Ok(()));
-        assert_eq!(cursor.current(), Ok(Some((key_to_insert, B256::ZERO))));
-
+        assert!(cursor.insert(key_to_insert, &B256::ZERO).is_ok());
+        assert_eq!(cursor.current().unwrap(), Some((key_to_insert, B256::ZERO)));
         // INSERT (failure)
-        assert_eq!(
-            cursor.insert(key_to_insert, &B256::ZERO),
-            Err(DatabaseWriteError {
-                info: Error::KeyExist.into(),
-                operation: DatabaseWriteOperation::CursorInsert,
-                table_name: CanonicalHeaders::NAME,
-                key: key_to_insert.encode().into(),
-            }
-            .into())
-        );
-        assert_eq!(cursor.current(), Ok(Some((key_to_insert, B256::ZERO))));
+        assert!(matches!(
+        cursor.insert(key_to_insert, &B256::ZERO).unwrap_err(),
+        DatabaseError::Write(err) if *err == DatabaseWriteError {
+            info: Error::KeyExist.into(),
+            operation: DatabaseWriteOperation::CursorInsert,
+            table_name: CanonicalHeaders::NAME,
+            key: key_to_insert.encode().into(),
+        }));
+        assert_eq!(cursor.current().unwrap(), Some((key_to_insert, B256::ZERO)));
 
         tx.commit().expect(ERROR_COMMIT);
 
@@ -1104,11 +1101,11 @@ mod tests {
 
         // INSERT (cursor starts at last)
         cursor.last().unwrap();
-        assert_eq!(cursor.current(), Ok(Some((9, B256::ZERO))));
+        assert_eq!(cursor.current().unwrap(), Some((9, B256::ZERO)));
 
         for pos in (2..=8).step_by(2) {
-            assert_eq!(cursor.insert(pos, &B256::ZERO), Ok(()));
-            assert_eq!(cursor.current(), Ok(Some((pos, B256::ZERO))));
+            assert!(cursor.insert(pos, &B256::ZERO).is_ok());
+            assert_eq!(cursor.current().unwrap(), Some((pos, B256::ZERO)));
         }
         tx.commit().expect(ERROR_COMMIT);
 
@@ -1136,7 +1133,7 @@ mod tests {
         let key_to_append = 5;
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
-        assert_eq!(cursor.append(key_to_append, &B256::ZERO), Ok(()));
+        assert!(cursor.append(key_to_append, &B256::ZERO).is_ok());
         tx.commit().expect(ERROR_COMMIT);
 
         // Confirm the result
@@ -1163,17 +1160,15 @@ mod tests {
         let key_to_append = 2;
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<CanonicalHeaders>().unwrap();
-        assert_eq!(
-            cursor.append(key_to_append, &B256::ZERO),
-            Err(DatabaseWriteError {
-                info: Error::KeyMismatch.into(),
-                operation: DatabaseWriteOperation::CursorAppend,
-                table_name: CanonicalHeaders::NAME,
-                key: key_to_append.encode().into(),
-            }
-            .into())
-        );
-        assert_eq!(cursor.current(), Ok(Some((5, B256::ZERO)))); // the end of table
+        assert!(matches!(
+        cursor.append(key_to_append, &B256::ZERO).unwrap_err(),
+        DatabaseError::Write(err) if *err == DatabaseWriteError {
+            info: Error::KeyMismatch.into(),
+            operation: DatabaseWriteOperation::CursorAppend,
+            table_name: CanonicalHeaders::NAME,
+            key: key_to_append.encode().into(),
+        }));
+        assert_eq!(cursor.current().unwrap(), Some((5, B256::ZERO))); // the end of table
         tx.commit().expect(ERROR_COMMIT);
 
         // Confirm the result
@@ -1194,15 +1189,15 @@ mod tests {
 
         let account = Account::default();
         cursor.upsert(key, &account).expect(ERROR_UPSERT);
-        assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
+        assert_eq!(cursor.seek_exact(key).unwrap(), Some((key, account)));
 
         let account = Account { nonce: 1, ..Default::default() };
         cursor.upsert(key, &account).expect(ERROR_UPSERT);
-        assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
+        assert_eq!(cursor.seek_exact(key).unwrap(), Some((key, account)));
 
         let account = Account { nonce: 2, ..Default::default() };
         cursor.upsert(key, &account).expect(ERROR_UPSERT);
-        assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
+        assert_eq!(cursor.seek_exact(key).unwrap(), Some((key, account)));
 
         let mut dup_cursor = tx.cursor_dup_write::<PlainStorageState>().unwrap();
         let subkey = B256::random();
@@ -1210,13 +1205,13 @@ mod tests {
         let value = U256::from(1);
         let entry1 = StorageEntry { key: subkey, value };
         dup_cursor.upsert(key, &entry1).expect(ERROR_UPSERT);
-        assert_eq!(dup_cursor.seek_by_key_subkey(key, subkey), Ok(Some(entry1)));
+        assert_eq!(dup_cursor.seek_by_key_subkey(key, subkey).unwrap(), Some(entry1));
 
         let value = U256::from(2);
         let entry2 = StorageEntry { key: subkey, value };
         dup_cursor.upsert(key, &entry2).expect(ERROR_UPSERT);
-        assert_eq!(dup_cursor.seek_by_key_subkey(key, subkey), Ok(Some(entry1)));
-        assert_eq!(dup_cursor.next_dup_val(), Ok(Some(entry2)));
+        assert_eq!(dup_cursor.seek_by_key_subkey(key, subkey).unwrap(), Some(entry1));
+        assert_eq!(dup_cursor.next_dup_val().unwrap(), Some(entry2));
     }
 
     #[test]
@@ -1242,25 +1237,23 @@ mod tests {
         let subkey_to_append = 2;
         let tx = db.tx_mut().expect(ERROR_INIT_TX);
         let mut cursor = tx.cursor_write::<AccountChangeSets>().unwrap();
-        assert_eq!(
-            cursor
-                .append_dup(
-                    transition_id,
-                    AccountBeforeTx {
-                        address: Address::with_last_byte(subkey_to_append),
-                        info: None
-                    }
-                )
-                .unwrap_err(),
-            DatabaseWriteError {
-                info: Error::KeyMismatch.into(),
-                operation: DatabaseWriteOperation::CursorAppendDup,
-                table_name: AccountChangeSets::NAME,
-                key: transition_id.encode().into(),
-            }
-            .into()
-        );
-        assert_eq!(
+        assert!(matches!(
+        cursor
+            .append_dup(
+                transition_id,
+                AccountBeforeTx {
+                    address: Address::with_last_byte(subkey_to_append),
+                    info: None
+                }
+            )
+            .unwrap_err(),
+        DatabaseError::Write(err) if *err == DatabaseWriteError {
+            info: Error::KeyMismatch.into(),
+            operation: DatabaseWriteOperation::CursorAppendDup,
+            table_name: AccountChangeSets::NAME,
+            key: transition_id.encode().into(),
+        }));
+        assert!(matches!(
             cursor
                 .append(
                     transition_id - 1,
@@ -1270,14 +1263,13 @@ mod tests {
                     }
                 )
                 .unwrap_err(),
-            DatabaseWriteError {
+            DatabaseError::Write(err) if *err == DatabaseWriteError {
                 info: Error::KeyMismatch.into(),
                 operation: DatabaseWriteOperation::CursorAppend,
                 table_name: AccountChangeSets::NAME,
                 key: (transition_id - 1).encode().into(),
             }
-            .into()
-        );
+        ));
         assert!(cursor
             .append(
                 transition_id,
