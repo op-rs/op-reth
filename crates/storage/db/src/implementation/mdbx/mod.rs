@@ -817,12 +817,30 @@ mod tests {
         assert_eq!(entries.len(), 7);
 
         let mut walker = cursor.walk_range(0..=1).unwrap();
-        assert_eq!(walker.next(), Some(Ok((0, AccountBeforeTx { address: address0, info: None }))));
-        assert_eq!(walker.next(), Some(Ok((0, AccountBeforeTx { address: address1, info: None }))));
-        assert_eq!(walker.next(), Some(Ok((0, AccountBeforeTx { address: address2, info: None }))));
-        assert_eq!(walker.next(), Some(Ok((1, AccountBeforeTx { address: address0, info: None }))));
-        assert_eq!(walker.next(), Some(Ok((1, AccountBeforeTx { address: address1, info: None }))));
-        assert_eq!(walker.next(), Some(Ok((1, AccountBeforeTx { address: address2, info: None }))));
+        assert_eq!(
+            walker.next().unwrap().unwrap(),
+            (0, AccountBeforeTx { address: address0, info: None })
+        );
+        assert_eq!(
+            walker.next().unwrap().unwrap(),
+            (0, AccountBeforeTx { address: address1, info: None })
+        );
+        assert_eq!(
+            walker.next().unwrap().unwrap(),
+            (0, AccountBeforeTx { address: address2, info: None })
+        );
+        assert_eq!(
+            walker.next().unwrap().unwrap(),
+            (1, AccountBeforeTx { address: address0, info: None })
+        );
+        assert_eq!(
+            walker.next().unwrap().unwrap(),
+            (1, AccountBeforeTx { address: address1, info: None })
+        );
+        assert_eq!(
+            walker.next().unwrap().unwrap(),
+            (1, AccountBeforeTx { address: address2, info: None })
+        );
         assert!(walker.next().is_none());
     }
 
@@ -1062,11 +1080,11 @@ mod tests {
         assert!(cursor.seek_exact(key2).unwrap().is_none());
         assert!(matches!(
             cursor.delete_current().unwrap_err(),
-            DatabaseError::Delete(err) if err = reth_libmdbx::Error::NoData.into()));
+            DatabaseError::Delete(err) if err == reth_libmdbx::Error::NoData.into()));
         // Assert that key1 is still there
-        assert!(matches!(cursor.seek_exact(key1).unwrap(), Some((key1, Account::default()))));
+        assert_eq!(cursor.seek_exact(key1).unwrap(), Some((key1, Account::default())));
         // Assert that key3 is still there
-        assert!(matches!(cursor.seek_exact(key3).unwrap(), Some((key3, Account::default()))));
+        assert_eq!(cursor.seek_exact(key3).unwrap(), Some((key3, Account::default())));
     }
 
     #[test]
