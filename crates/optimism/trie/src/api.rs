@@ -22,6 +22,14 @@ pub struct BlockStateDiff {
     pub post_state: HashedPostState,
 }
 
+impl BlockStateDiff {
+    /// Extend the [` BlockStateDiff`] from other latest [`BlockStateDiff`]
+    pub fn extend(&mut self, other: Self) {
+        self.trie_updates.extend(other.trie_updates);
+        self.post_state.extend(other.post_state);
+    }
+}
+
 /// Counts of trie updates written to storage.
 #[derive(Debug, Clone, Default)]
 pub struct WriteCounts {
@@ -162,6 +170,13 @@ pub trait OpProofsStore: Send + Sync + Debug {
         &self,
         new_earliest_block_ref: BlockWithParent,
         diff: BlockStateDiff,
+    ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
+
+    /// Remove account, storage and trie updates from historical storage for all blocks till
+    /// the specified block (inclusive).
+    fn unwind_history(
+        &self,
+        to: BlockWithParent,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Deletes all updates > `latest_common_block_number` and replaces them with the new updates.
