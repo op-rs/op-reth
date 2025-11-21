@@ -122,6 +122,7 @@ where
             let ChainInfo { best_number, best_hash } = self.ctx.provider().chain_info()?;
             BackfillJob::new(self.storage.clone(), &db_tx).run(best_number, best_hash).await?;
         }
+       
 
         let prune_task = OpProofStoragePrunerTask::new(
             self.storage.clone(),
@@ -130,7 +131,7 @@ where
             self.proofs_history_prune_interval,
             CancellationToken::new(),
         );
-        TokioTaskExecutor::default().spawn(Box::pin(prune_task.run()));
+        self.ctx.task_executor().spawn(Box::pin(prune_task.run()));
 
         let collector = LiveTrieCollector::new(
             self.ctx.evm_config().clone(),

@@ -18,7 +18,7 @@ where
     P: OpProofsStore,
     H: BlockHashReader,
 {
-    /// Initialize a new ` OpProofStoragePrunerTask `
+    /// Initialize a new [`OpProofStoragePrunerTask`]
     pub const fn new(
         provider: P,
         hash_reader: H,
@@ -42,7 +42,7 @@ where
         loop {
             tokio::select! {
                 _ = self.cancel.cancelled() => {
-                    info!(target: "trie::pruner_task", "pruner task cancelled; exiting");
+                    info!(target: "trie::pruner_task", "Pruner task cancelled; exiting");
                     break;
                 }
                 _ = self.pruner.run() => {
@@ -55,6 +55,6 @@ where
             }
         }
 
-        info!(target: "trie::pruner_task", "pruner task stopped");
+        info!(target: "trie::pruner_task", "Pruner task stopped");
     }
 }
