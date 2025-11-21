@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  op-reth-as-validator:
-    name: op-reth as validator e2e tests
+  op-reth-as-verifier:
+    name: op-reth as verifier e2e tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - op-reth-as-validator
+      - op-reth-as-verifier
       - op-reth-as-sequencer
     timeout-minutes: 60
     steps:
