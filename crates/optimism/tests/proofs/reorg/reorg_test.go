@@ -1,6 +1,7 @@
 package reorg
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
@@ -15,11 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReorgUnsafeHead(gt *testing.T) {
+func TestReorgUsingAccountProof(gt *testing.T) {
 	t := devtest.SerialT(gt)
 	ctx := t.Ctx()
 
 	sys := presets.NewSingleChainMultiNodeWithTestSeq(t)
+	opRethELNode, _ := utils.IdentifyELNodes(sys.L2EL, sys.L2ELB)
 	l := sys.Log
 
 	ia := sys.TestSequencer.Escape().ControlAPI(sys.L2Chain.ChainID())
@@ -31,17 +33,18 @@ func TestReorgUnsafeHead(gt *testing.T) {
 	alice := sys.FunderL2.NewFundedEOA(eth.OneHundredthEther)
 	bob := sys.FunderL2.NewFundedEOA(eth.OneHundredthEther)
 
-	// sys.L1Network.WaitForBlock()
+	user := sys.FunderL2.NewFundedEOA(eth.OneEther)
+	contract, deployBlock := utils.DeploySimpleStorage(t, user)
+	t.Logf("SimpleStorage deployed at %s block=%d", contract.Address().Hex(), deployBlock.BlockNumber.Uint64())
+
 	time.Sleep(12 * time.Second)
-
-	sys.L2Chain.WaitForBlock()
-
 	divergenceHead := sys.L2Chain.WaitForBlock()
 	// build up some blocks that will be reorged away
 
 	type caseEntry struct {
 		Block uint64
 		addr  common.Address
+		slots []common.Hash
 	}
 	var cases []caseEntry
 	for i := 0; i < 3; i++ {
@@ -53,10 +56,34 @@ func TestReorgUnsafeHead(gt *testing.T) {
 		cases = append(cases, caseEntry{
 			Block: receipt.BlockNumber.Uint64(),
 			addr:  alice.Address(),
+			slots: []common.Hash{},
 		})
 		cases = append(cases, caseEntry{
 			Block: receipt.BlockNumber.Uint64(),
 			addr:  bob.Address(),
+			slots: []common.Hash{},
+		})
+
+		// also include the contract account in the proofs to verify
+		val := big.NewInt(int64(i * 10))
+		callRes := contract.SetValue(user, val)
+
+		cases = append(cases, caseEntry{
+			Block: callRes.BlockNumber.Uint64(),
+			addr:  contract.Address(),
+			slots: []common.Hash{common.HexToHash("0x0")},
+		})
+	}
+
+	// deploy another contract in the reorged blocks
+	{
+		rContract, rDeployBlock := utils.DeploySimpleStorage(t, user)
+		t.Logf("Reorg SimpleStorage deployed at %s block=%d", rContract.Address().Hex(), rDeployBlock.BlockNumber.Uint64())
+
+		cases = append(cases, caseEntry{
+			Block: rDeployBlock.BlockNumber.Uint64(),
+			addr:  rContract.Address(),
+			slots: []common.Hash{common.HexToHash("0x0")},
 		})
 	}
 
@@ -66,7 +93,7 @@ func TestReorgUnsafeHead(gt *testing.T) {
 	var originalRef eth.L2BlockRef
 	// prepare and sequence a conflicting block for the L2A chain
 	{
-		divergenceBlockRef := sys.L2EL.BlockRefByNumber(divergenceHead.Number)
+		divergenceBlockRef := opRethELNode.BlockRefByNumber(divergenceHead.Number)
 
 		l.Info("Expect to reorg the chain on block", "number", divergenceBlockRef.Number, "head", divergenceHead, "parent", divergenceBlockRef.ParentID().Hash)
 		divergenceBlockNumber = divergenceBlockRef.Number
@@ -100,10 +127,12 @@ func TestReorgUnsafeHead(gt *testing.T) {
 				cases = append(cases, caseEntry{
 					Block: divergenceHead.Number,
 					addr:  alice.Address(),
+					slots: []common.Hash{},
 				})
 				cases = append(cases, caseEntry{
 					Block: divergenceHead.Number,
 					addr:  bob.Address(),
+					slots: []common.Hash{},
 				})
 			}
 
@@ -119,7 +148,7 @@ func TestReorgUnsafeHead(gt *testing.T) {
 	{
 		l.Info("Sequencing with op-test-sequencer (no L1 origin override)")
 		err := ia.New(ctx, seqtypes.BuildOpts{
-			Parent:   sys.L2EL.BlockRefByLabel(eth.Unsafe).Hash,
+			Parent:   opRethELNode.BlockRefByLabel(eth.Unsafe).Hash,
 			L1Origin: nil,
 		})
 		require.NoError(t, err, "Expected to be able to create a new block job for sequencing on op-test-sequencer, but got error")
@@ -141,7 +170,7 @@ func TestReorgUnsafeHead(gt *testing.T) {
 	// todo: replace with proof status sync based wait
 	time.Sleep(30 * time.Second)
 
-	reorgedRef_A, err := sys.L2EL.Escape().EthClient().BlockRefByNumber(ctx, divergenceBlockNumber)
+	reorgedRef_A, err := opRethELNode.Escape().EthClient().BlockRefByNumber(ctx, divergenceBlockNumber)
 	require.NoError(t, err, "Expected to be able to call BlockRefByNumber API, but got error")
 
 	l.Info("Reorged chain on divergence block number (prior the reorg)", "number", divergenceBlockNumber, "head", originalRef.Hash, "parent", originalRef.ParentID().Hash)
@@ -151,6 +180,6 @@ func TestReorgUnsafeHead(gt *testing.T) {
 
 	// verify that the accounts involved in the conflicting blocks
 	for _, c := range cases {
-		utils.FetchAndVerifyProofs(t, &sys.SingleChainMultiNode, c.addr, []common.Hash{}, c.Block)
+		utils.FetchAndVerifyProofs(t, &sys.SingleChainMultiNode, c.addr, c.slots, c.Block)
 	}
 }
