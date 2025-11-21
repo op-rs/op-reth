@@ -6,3 +6,5 @@ pub use pruner::OpProofStoragePruner;
 
 mod task;
 pub use task::OpProofStoragePrunerTask;
+
+mod metrics;

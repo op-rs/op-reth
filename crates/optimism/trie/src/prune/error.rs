@@ -16,6 +16,10 @@ pub type OpProofStoragePrunerResult = Result<PrunerOutput, PrunerError>;
 pub struct PrunerOutput {
     /// Total elapsed wall time for this run (fetch + apply).
     pub duration: Duration,
+    /// Time elapsed during the stat diff fetch phase(non-blocking).
+    pub fetch_duration: Duration,
+    /// Time elapsed during the prune phase.
+    pub prune_duration: Duration,
     /// Earliest block at the start of the run.
     pub start_block: u64,
     /// New earliest block at the end of the run.
