@@ -492,7 +492,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "rate(reth_optimism_rpc_eth_api_ext_get_proof_failures{instance=\"$instance\"}[1m])",
+          "expr": "rate(reth_optimism_rpc_eth_api_ext_get_proof_failures{instance=~\"$instance\"}[$__rate_interval])",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "legendFormat": "{{client_name}}",
@@ -594,7 +594,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "rate(reth_optimism_rpc_eth_api_ext_get_proof_successful_responses[1m])",
+          "expr": "rate(reth_optimism_rpc_eth_api_ext_get_proof_successful_responses{instance=~\"$instance\"}[$__rate_interval])",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "legendFormat": "{{client_name}}",
@@ -657,41 +657,12 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
           "unit": "s"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "{__name__=\"reth_optimism_rpc_eth_api_ext_get_proof_latency\", client_name=\"op-reth\", client_type=\"execution\", instance=\"172.16.0.27:9001\", job=\"op-el-2151908-validator-op-reth-kurtosis\", namespace=\"op-el-2151908-validator-op-reth\", quantile=\"0.99\", service=\"op-el-2151908-validator-op-reth\", stack_optimism_io_network=\"kurtosis\"}"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 7,
@@ -723,7 +694,7 @@
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
-          "expr": "reth_optimism_rpc_eth_api_ext_get_proof_latency{quantile=~\"0.99\"}",
+          "expr": "reth_optimism_rpc_eth_api_ext_get_proof_latency{quantile=\"0.99\", instance=~\"$instance\"}",
           "format": "time_series",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
