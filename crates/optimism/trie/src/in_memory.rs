@@ -315,6 +315,8 @@ impl TrieStorageCursor for InMemoryTrieCursor {
     fn set_hashed_address(&mut self, hashed_address: B256) {
         self.hashed_address = Some(hashed_address);
         self.is_populated = false;
+        self.entries.clear();
+        self.reset();
     }
 }
 
@@ -435,6 +437,8 @@ impl HashedStorageCursor for InMemoryStorageCursor {
     fn set_hashed_address(&mut self, hashed_address: B256) {
         self.hashed_address = hashed_address;
         self.is_populated = false;
+        self.entries.clear();
+        self.reset();
     }
 }
 
