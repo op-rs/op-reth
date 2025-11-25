@@ -88,7 +88,6 @@ eyre.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 derive_more = { workspace = true, features = ["constructor"] }
-serde.workspace = true
 
 # metrics
 reth-metrics.workspace = true
