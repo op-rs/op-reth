@@ -122,7 +122,6 @@ where
             let ChainInfo { best_number, best_hash } = self.ctx.provider().chain_info()?;
             BackfillJob::new(self.storage.clone(), &db_tx).run(best_number, best_hash).await?;
         }
-       
 
         let prune_task = OpProofStoragePrunerTask::new(
             self.storage.clone(),
