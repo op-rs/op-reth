@@ -293,7 +293,7 @@ impl MdbxProofsStorage {
         let hashed_account_keys = self.append_or_delete_dup_sorted(
             tx,
             block_number,
-            sorted_post_state.accounts().accounts_sorted(),
+            sorted_post_state.accounts().iter().copied(),
             soft_delete,
         )?;
 
@@ -339,8 +339,9 @@ impl MdbxProofsStorage {
                 tx,
                 block_number,
                 storage
-                    .storage_slots_sorted()
-                    .map(|(key, val)| (hashed_address, key, Some(StorageValue(val)))),
+                    .storage_slots_ref()
+                    .iter()
+                    .map(|(key, val)| (hashed_address, *key, Some(StorageValue(*val)))),
                 soft_delete,
             )?;
             hashed_storage_keys.extend(keys);
