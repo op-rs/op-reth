@@ -22,7 +22,6 @@ use reth_primitives_traits::{BlockTy, RecoveredBlock};
 use reth_provider::{
     BlockNumReader, BlockReader, DBProvider, DatabaseProviderFactory, TransactionVariant,
 };
-use reth_tasks::{TaskSpawner, TokioTaskExecutor};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};

@@ -9579,7 +9579,6 @@ dependencies = [
  "reth-optimism-trie",
  "reth-primitives-traits",
  "reth-provider",
- "reth-tasks",
  "tempfile",
  "tokio",
  "tokio-util",
