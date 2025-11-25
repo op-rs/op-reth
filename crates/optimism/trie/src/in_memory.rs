@@ -196,7 +196,7 @@ impl InMemoryTrieCursor {
         }
     }
 
-    fn populate_entries(&mut self) -> Result<(), DatabaseError> {
+    fn ensure_entries_populated(&mut self) -> Result<(), DatabaseError> {
         if self.is_populated {
             return Ok(());
         }
@@ -261,7 +261,7 @@ impl TrieCursor for InMemoryTrieCursor {
         &mut self,
         path: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.populate_entries()?;
+        self.ensure_entries_populated()?;
 
         if let Some(pos) = self.entries.iter().position(|(p, _)| *p == path) {
             self.position = pos as isize;
@@ -275,7 +275,7 @@ impl TrieCursor for InMemoryTrieCursor {
         &mut self,
         path: Nibbles,
     ) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.populate_entries()?;
+        self.ensure_entries_populated()?;
 
         if let Some(pos) = self.entries.iter().position(|(p, _)| *p >= path) {
             self.position = pos as isize;
@@ -286,7 +286,7 @@ impl TrieCursor for InMemoryTrieCursor {
     }
 
     fn next(&mut self) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
-        self.populate_entries()?;
+        self.ensure_entries_populated()?;
 
         self.position += 1;
         if self.position >= 0 && (self.position as usize) < self.entries.len() {
@@ -297,7 +297,7 @@ impl TrieCursor for InMemoryTrieCursor {
     }
 
     fn current(&mut self) -> Result<Option<Nibbles>, DatabaseError> {
-        self.populate_entries()?;
+        self.ensure_entries_populated()?;
 
         if self.position >= 0 && (self.position as usize) < self.entries.len() {
             Ok(Some(self.entries[self.position as usize].0))
@@ -307,7 +307,7 @@ impl TrieCursor for InMemoryTrieCursor {
     }
 
     fn reset(&mut self) {
-        // no reset needed
+        self.position = -1;
     }
 }
 
@@ -353,7 +353,7 @@ impl InMemoryStorageCursor {
         }
     }
 
-    fn populate_entries(&mut self) -> Result<(), DatabaseError> {
+    fn ensure_entries_populated(&mut self) -> Result<(), DatabaseError> {
         if self.is_populated {
             return Ok(());
         }
@@ -401,7 +401,7 @@ impl HashedCursor for InMemoryStorageCursor {
     type Value = U256;
 
     fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
-        self.populate_entries()?;
+        self.ensure_entries_populated()?;
 
         if let Some(pos) = self.entries.iter().position(|(k, _)| *k >= key) {
             self.position = pos as isize;
@@ -412,7 +412,7 @@ impl HashedCursor for InMemoryStorageCursor {
     }
 
     fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
-        self.populate_entries()?;
+        self.ensure_entries_populated()?;
 
         self.position += 1;
         if self.position >= 0 && (self.position as usize) < self.entries.len() {
@@ -423,7 +423,7 @@ impl HashedCursor for InMemoryStorageCursor {
     }
 
     fn reset(&mut self) {
-        // no reset needed
+        self.position = -1;
     }
 }
 
