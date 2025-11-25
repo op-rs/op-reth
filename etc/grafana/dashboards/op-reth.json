@@ -1009,14 +1009,6 @@
   ],
   "refresh": "5s",
   "schemaVersion": 42,
-  "tags": [
-    "optimism",
-    "rpc",
-    "sequencer",
-    "miner",
-    "transactions",
-    "txpool"
-  ],
   "templating": {
     "list": [
       {
