@@ -1,8 +1,7 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-    api::OperationDurations, provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage,
-    OpProofsStorageError, OpProofsStore,
+    api::OperationDurations, BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::map::{DefaultHashBuilder, HashMap};
@@ -70,12 +69,13 @@ where
 
         // TODO: should we check block hash here?
 
-        let state_provider = OpProofsStateProviderRef::new(
-            self.provider.state_by_block_hash(block.parent_hash())?,
-            self.storage,
-            parent_block_number,
-        );
+        // let state_provider = OpProofsStateProviderRef::new(
+        //     self.provider.state_by_block_hash(block.parent_hash())?,
+        //     self.storage,
+        //     parent_block_number,
+        // );
 
+        let state_provider = self.provider.state_by_block_hash(block.parent_hash())?;
         let db = StateProviderDatabase::new(&state_provider);
         let block_executor = self.evm_config.batch_executor(db);
 
@@ -110,7 +110,8 @@ where
 
         operation_durations.total_duration_seconds = start.elapsed();
         operation_durations.write_duration_seconds = operation_durations.total_duration_seconds -
-            operation_durations.state_root_duration_seconds - operation_durations.execution_duration_seconds;
+            operation_durations.state_root_duration_seconds -
+            operation_durations.execution_duration_seconds;
 
         #[cfg(feature = "metrics")]
         {
