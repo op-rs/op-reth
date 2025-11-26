@@ -153,8 +153,10 @@ impl EngineNodeLauncher {
             ctx.era_import_source(),
         )?;
 
+        info!(target: "reth::cli", "Pipeline initialized");
         // The new engine writes directly to static files. This ensures that they're up to the tip.
         pipeline.move_to_static_files()?;
+        info!(target: "reth::cli", "Static files moved to pipeline tip");
 
         let pipeline_events = pipeline.events();
 
