@@ -1,7 +1,8 @@
 //! Live trie collector for external proofs storage.
 
 use crate::{
-    api::OperationDurations, BlockStateDiff, OpProofsStorage, OpProofsStorageError, OpProofsStore,
+    api::OperationDurations, provider::OpProofsStateProviderRef, BlockStateDiff, OpProofsStorage,
+    OpProofsStorageError, OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::map::{DefaultHashBuilder, HashMap};
@@ -67,15 +68,12 @@ where
         let block_ref =
             BlockWithParent::new(block.parent_hash(), NumHash::new(block.number(), block.hash()));
 
-        // TODO: should we check block hash here?
+        let state_provider = OpProofsStateProviderRef::new(
+            self.provider.state_by_block_hash(block.parent_hash())?,
+            self.storage,
+            parent_block_number,
+        );
 
-        // let state_provider = OpProofsStateProviderRef::new(
-        //     self.provider.state_by_block_hash(block.parent_hash())?,
-        //     self.storage,
-        //     parent_block_number,
-        // );
-
-        let state_provider = self.provider.state_by_block_hash(block.parent_hash())?;
         let db = StateProviderDatabase::new(&state_provider);
         let block_executor = self.evm_config.batch_executor(db);
 
