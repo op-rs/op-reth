@@ -687,17 +687,82 @@ impl OpProofsStore for MdbxProofsStorage {
         }
 
         self.env.update(|tx| {
-            // First, delete the old entries for the block range excluding block 0
+            let branches_diff = diff.trie_updates;
+            let leaves_diff = diff.post_state;
+
+            // Apply account branch updates at block 0
+            let account_items = branches_diff.account_nodes
+                .into_iter()
+                .map(|(path, branch)| (path, Some(branch)));
+            // Removed_nodes → tombstones
+            let account_remove_items = branches_diff.removed_nodes
+                .into_iter()
+                .map(|path| (path, Option::<BranchNodeCompact>::None));
+
+            let mut account_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            for item in account_items {
+                let kv = item.into_kv(0);
+                account_cursor.insert(kv.0, &kv.1)?;
+            }
+            for item in account_remove_items {
+                let key = item.into_key();
+                let val = account_cursor.seek_by_key_subkey(key, 0)?;
+                if val.is_some() && val.unwrap().block_number == 0 {
+                    account_cursor.delete_current()?;
+                }
+            }
+
+            // Apply storage trie updates at block 0
+            let mut storage_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+            for (hashed_address, storage_updates) in branches_diff.storage_tries {
+                // nodes: inserts/updates
+                let node_items = storage_updates.storage_nodes.into_iter().map(
+                    |(path, node)| (hashed_address, path, Some(node))
+                );
+                // Removed_nodes: tombstones
+                let node_remove_items = storage_updates.removed_nodes.into_iter().map(
+                    |path| (hashed_address, path, Option::<BranchNodeCompact>::None)
+                );
+                for item in node_items {
+                    let kv = item.into_kv(0);
+                    storage_cursor.insert(kv.0, &kv.1)?;
+                }
+                for item in node_remove_items {
+                    let key = item.into_key();
+                    let val = storage_cursor.seek_by_key_subkey(key, 0)?;
+                    if val.is_some() && val.unwrap().block_number == 0 {
+                        storage_cursor.delete_current()?;
+                    }
+                }
+            }
+
+            let mut account_hashed_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            for item in leaves_diff.accounts {
+                let kv = item.into_kv(0);
+                account_hashed_cursor.insert(kv.0, &kv.1)?;
+            }
+
+            // Apply storage leaves at block 0
+            let storage_items = leaves_diff.storages.into_iter().flat_map(
+                |(hashed_address, storage)| {
+                    storage.storage.into_iter().map(move |(slot, value)| {
+                        (hashed_address, slot, Some(StorageValue(value)))
+                    })
+                }
+            );
+            let mut storage_hashed_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+            for item in storage_items {
+                let kv = item.into_kv(0);
+                storage_hashed_cursor.insert(kv.0, &kv.1)?;
+            }
+
+            // Delete history for blocks < new_earliest (except 0)
             self.delete_history_ranged(
                 tx,
-                max(old_earliest_block_number, 1)..new_earliest_block_number,
+                std::cmp::max(old_earliest_block_number, 1)..new_earliest_block_number,
             )?;
 
-            // Then, store the new entries for block 0.
-            // The removed entries in diff from block 0 will also be removed(hard-delete) by this
-            self.store_trie_updates_for_block(tx, 0, diff, false)?;
-
-            // Set the earliest block number to the new value
+            // Update earliest block metadata
             Self::inner_set_earliest_block_number(
                 tx,
                 new_earliest_block_number,
