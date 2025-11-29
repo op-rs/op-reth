@@ -6344,6 +6344,8 @@ dependencies = [
  "reth-optimism-primitives",
  "reth-optimism-rpc",
  "reth-optimism-trie",
+ "reth-tasks",
+ "tokio",
  "tracing",
 ]
 
