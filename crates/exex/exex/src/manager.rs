@@ -13,8 +13,7 @@ use reth_metrics::{metrics::Counter, Metrics};
 use reth_node_api::NodePrimitives;
 use reth_primitives_traits::SealedHeader;
 use reth_provider::HeaderProvider;
-use reth_tracing::{tracing::{debug, warn}, tracing_subscriber::field::debug};
-use secp256k1::serde::de;
+use reth_tracing::tracing::{debug, warn};
 use std::{
     collections::VecDeque,
     fmt::Debug,
@@ -500,7 +499,7 @@ where
             let mut exex = this.exex_handles.swap_remove(idx);
 
             debug!(
-                target: "exex::manager", 
+                target: "exex::manager",
                 exex_id = %exex.id,
                 next_notification_id = %exex.next_notification_id,
                 min_id = %this.min_id,
@@ -515,7 +514,7 @@ where
             if let Some(notification) = this.buffer.get(notification_index) &&
                 let Poll::Ready(Err(err)) = exex.send(cx, notification)
             {
-                debug!(target: "exex::manager", %exex.id, "Failed to send notification");
+                debug!(target: "exex::manager", exex_id = %exex.id, "Failed to send notification");
                 // The channel was closed, which is irrecoverable for the manager
                 return Poll::Ready(Err(err.into()))
             }
