@@ -1596,9 +1596,9 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "OP Proofs History - Testing",
+  "title": "OP Proofs History",
   "uid": "af5do16b25ptsaa",
-  "version": 7,
+  "version": 8,
   "weekStart": "",
   "id": null
 }
