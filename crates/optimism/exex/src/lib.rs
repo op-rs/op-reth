@@ -157,6 +157,9 @@ where
                         {
                             Some(block) => {
                                 collector.execute_and_store_block_updates(&block).await?;
+                                self.ctx
+                                    .events
+                                    .send(ExExEvent::FinishedHeight(block.num_hash()))?;
                             }
                             None => {
                                 error!(
@@ -217,6 +220,7 @@ where
                     // reverse to get the new blocks in the correct order
                     new_blocks.reverse();
                     collector.unwind_and_store_block_updates(new_blocks).await?;
+                    self.ctx.events.send(ExExEvent::FinishedHeight(new.tip().num_hash()))?;
                 }
                 ExExNotification::ChainReverted { old } => {
                     info!(
@@ -251,14 +255,9 @@ where
                     }
 
                     collector.unwind_history(first_block.block_with_parent()).await?;
+                    self.ctx.events.send(ExExEvent::FinishedHeight(old.fork_block()))?;
                 }
             };
-
-            if let Some(committed_chain) = notification.committed_chain() {
-                self.ctx
-                    .events
-                    .send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
-            }
         }
 
         Ok(())
