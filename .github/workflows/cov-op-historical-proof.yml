@@ -25,6 +25,7 @@ jobs:
         run: |
           sudo apt-get update 
           sudo apt-get install -y llvm
+          cargo install cargo-llvm-cov
 
       - name: Coverage
         run: |
