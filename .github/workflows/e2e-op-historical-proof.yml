@@ -88,12 +88,25 @@ jobs:
           sudo apt-get install -y llvm llvm-profdata llvm-cov
 
       - name: Merge coverage files
+        working-directory: crates/optimism/tests
         run: |
           llvm-profdata merge -sparse ./coverage/*.profraw -o ./coverage/coverage.profdata
 
       - name: Generate coverage report
+        working-directory: crates/optimism/tests
         run: |
           llvm-cov export ./coverage/op-reth -instr-profile=./coverage/coverage.profdata -format=lcov --path-equivalence=/app/,/Users/arundhyani/Stuff/Project/chainsafe/op-reth/ -ignore-filename-regex="/rustc/|/usr/local/cargo/registry/|/target/release/build/" > ./coverage/coverage.lcov
+
+      - name: Upload coverage to codecov.io
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/coverage.lcov
+          flags: e2e
+          env_vars: OS,RUST
+          name: reth-kurtosis-tests
+          verbose: true
 
   op-reth-as-sequencer:
     name: op-reth as sequencer e2e tests
