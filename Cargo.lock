@@ -6040,7 +6040,7 @@ dependencies = [
  "cfg-if",
  "proc-macro2",
  "quote",
- "syn 2.0.110",
+ "syn 2.0.113",
 ]
 
 [[package]]
@@ -9761,6 +9761,7 @@ dependencies = [
  "reth-optimism-evm",
  "reth-optimism-node",
  "reth-optimism-primitives",
+ "reth-optimism-trie",
  "reth-primitives-traits",
  "reth-provider",
  "reth-prune",
@@ -9845,7 +9846,6 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
- "reth-chainspec",
  "reth-db",
  "reth-exex",
  "reth-node-api",
@@ -12390,7 +12390,7 @@ checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.111",
+ "syn 2.0.113",
 ]
 
 [[package]]
