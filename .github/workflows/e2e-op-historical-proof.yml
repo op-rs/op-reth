@@ -85,7 +85,7 @@ jobs:
       - name: Install llvm
         run: |
           sudo apt-get update 
-          sudo apt-get install -y llvm llvm-profdata llvm-cov
+          sudo apt-get install -y llvm
 
       - name: Merge coverage files
         working-directory: crates/optimism/tests
