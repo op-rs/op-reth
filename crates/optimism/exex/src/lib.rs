@@ -133,11 +133,19 @@ where
 
     /// Ensure proofs storage is initialized
     async fn ensure_initialized(&self) -> eyre::Result<()> {
-        if self.storage.get_earliest_block_number().await?.is_none() {
-            return Err(eyre::eyre!(
-                "Proofs storage not initialized. Please run 'op-reth initialize-op-proofs --proofs-history.storage-path <PATH>' first."
-            ));
-        }
+        // Check if proofs storage is initialized
+        let earliest_block_number = match self.storage.get_earliest_block_number().await? {
+            Some((n, _)) => n,
+            None => {
+                return Err(eyre::eyre!(
+                    "Proofs storage not initialized. Please run 'op-reth initialize-op-proofs --proofs-history.storage-path <PATH>' first."
+                ));
+            }
+        };
+
+        // Need to update the earliest block metric on startup as this is not called frequently and
+        // can show outdated info. When metrics are disabled, this is a no-op.
+        self.storage.metrics().block_metrics().earliest_number.set(earliest_block_number as f64);
         Ok(())
     }
 
