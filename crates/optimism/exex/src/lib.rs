@@ -141,35 +141,46 @@ where
                 }
 
                 while latest_stored_block < target {
-                    let next_block_number = latest_stored_block.saturating_add(1);
-                    match task_provider
-                        .recovered_block(next_block_number.into(), TransactionVariant::NoHash)
-                    {
-                        Err(e) => {
-                            error!(next_block_number, "Error fetching block in sync loop: {:?}", e);
+
+                    // Process up to 10 blocks without yielding
+                    for _ in 0..50 {
+                        if latest_stored_block >= target {
                             break;
                         }
-                        Ok(Some(block)) => {
-                            if let Err(err) =
-                                task_collector.execute_and_store_block_updates(&block).await
-                            {
+
+                        let next_block_number = latest_stored_block.saturating_add(1);
+                        match task_provider
+                            .recovered_block(next_block_number.into(), TransactionVariant::NoHash)
+                        {
+                            Err(e) => {
+                                error!(next_block_number, "Error fetching block in sync loop: {:?}", e);
+                                break;
+                            }
+                            Ok(Some(block)) => {
+                                if let Err(err) =
+                                    task_collector.execute_and_store_block_updates(&block).await
+                                {
+                                    error!(
+                                        next_block_number,
+                                        "Error executing and storing block updates in sync loop: {:?}",
+                                        err
+                                    );
+                                    break;
+                                }
+                            }
+                            Ok(None) => {
                                 error!(
                                     next_block_number,
-                                    "Error executing and storing block updates in sync loop: {:?}",
-                                    err
+                                    "Missing block in sync loop, stopping incremental application",
                                 );
                                 break;
                             }
+
                         }
-                        Ok(None) => {
-                            error!(
-                                next_block_number,
-                                "Missing block in sync loop, stopping incremental application",
-                            );
-                            break;
-                        }
+                        latest_stored_block = next_block_number;
                     }
-                    latest_stored_block = next_block_number;
+
+                    // Yield after processing a batch of blocks
                     tokio::task::yield_now().await;
                 }
             }
@@ -286,7 +297,6 @@ where
                     // reverse to get the new blocks in the correct order
                     new_blocks.reverse();
                     collector.unwind_and_store_block_updates(new_blocks).await?;
-                    self.ctx.events.send(ExExEvent::FinishedHeight(new.tip().num_hash()))?;
                 }
                 ExExNotification::ChainReverted { old } => {
                     info!(
@@ -308,7 +318,6 @@ where
                     }
 
                     collector.unwind_history(first_block.block_with_parent()).await?;
-                    self.ctx.events.send(ExExEvent::FinishedHeight(old.fork_block()))?;
                 }
             };
 
