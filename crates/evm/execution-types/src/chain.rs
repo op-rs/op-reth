@@ -67,12 +67,7 @@ impl<N: NodePrimitives> Chain<N> {
             blocks.into_iter().map(|b| (b.header().number(), b)).collect::<BTreeMap<_, _>>();
         debug_assert!(!blocks.is_empty(), "Chain should have at least one block");
 
-        Self {
-            blocks,
-            execution_outcome,
-            trie_updates,
-            hashed_state,
-        }
+        Self { blocks, execution_outcome, trie_updates, hashed_state }
     }
 
     /// Create new Chain from a single block and its state.
