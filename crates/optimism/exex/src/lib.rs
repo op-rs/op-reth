@@ -25,7 +25,7 @@ use tracing::{debug, error, info};
 const SYNC_BATCH_SIZE: usize = 10;
 
 /// How close to tip before we process blocks in real-time vs batch
-const REAL_TIME_THRESHOLD: u64 = 12;
+const REAL_TIME_THRESHOLD: u64 = 1000;
 
 /// Delay before applying real-time block (allows for mini-reorgs)
 const REAL_TIME_DELAY_SECS: u64 = 3;
@@ -311,7 +311,6 @@ where
                 latest_stored,
                 "Processing in real-time"
             );
-            tokio::time::sleep(tokio::time::Duration::from_secs(REAL_TIME_DELAY_SECS)).await;
             collector.execute_and_store_block_updates(tip).await?;
         } else {
             // Delegate to sync task
