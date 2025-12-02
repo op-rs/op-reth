@@ -11,13 +11,27 @@
 use alloy_consensus::BlockHeader;
 use derive_more::Constructor;
 use futures_util::TryStreamExt;
+use reth_execution_types::Chain;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_optimism_trie::{live::LiveTrieCollector, OpProofsStorage, OpProofsStore};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
-use reth_provider::{BlockReader, TransactionVariant};
+use reth_provider::{BlockNumReader, BlockReader, TransactionVariant};
+use std::sync::Arc;
 use tracing::{debug, error, info};
+
+/// How many blocks to process in a single batch before yielding
+const SYNC_BATCH_SIZE: usize = 10;
+
+/// How close to tip before we process blocks in real-time vs batch
+const REAL_TIME_THRESHOLD: u64 = 12;
+
+/// Delay before applying real-time block (allows for mini-reorgs)
+const REAL_TIME_DELAY_SECS: u64 = 3;
+
+/// How long to sleep when sync task is caught up
+const SYNC_IDLE_SLEEP_SECS: u64 = 5;
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
 ///
@@ -98,169 +112,277 @@ where
 {
     /// Main execution loop for the ExEx
     pub async fn run(mut self) -> eyre::Result<()> {
-        // Check if proofs storage is initialized
+        self.ensure_initialized().await?;
+
+        let sync_target_tx = self.spawn_sync_task();
+
+        let storage = self.storage.clone();
+        let collector = LiveTrieCollector::new(
+            self.ctx.evm_config().clone(),
+            self.ctx.provider().clone(),
+            &storage,
+        );
+
+        debug!(target: "optimism::exex", "Starting ExEx notification processing loop");
+        while let Some(notification) = self.ctx.notifications.try_next().await? {
+            self.handle_notification(notification, &collector, &sync_target_tx).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Ensure proofs storage is initialized
+    async fn ensure_initialized(&self) -> eyre::Result<()> {
         if self.storage.get_earliest_block_number().await?.is_none() {
             return Err(eyre::eyre!(
                 "Proofs storage not initialized. Please run 'op-reth initialize-op-proofs --proofs-history.storage-path <PATH>' first."
             ));
         }
+        Ok(())
+    }
 
-        let collector = LiveTrieCollector::new(
-            self.ctx.evm_config().clone(),
-            self.ctx.provider().clone(),
-            &self.storage,
+    /// Spawn the background sync task and return the target sender
+    fn spawn_sync_task(&self) -> tokio::sync::watch::Sender<u64> {
+        let (sync_target_tx, sync_target_rx) = tokio::sync::watch::channel(0u64);
+
+        let task_storage = self.storage.clone();
+        let task_provider = self.ctx.provider().clone();
+        let task_evm_config = self.ctx.evm_config().clone();
+
+        self.ctx.task_executor().spawn_critical(
+            "optimism::exex::proofs_storage_sync_loop",
+            async move {
+                let storage = task_storage.clone();
+                let task_collector =
+                    LiveTrieCollector::new(task_evm_config, task_provider.clone(), &storage);
+                Self::sync_loop(sync_target_rx, task_storage, task_provider, &task_collector).await;
+            },
         );
 
-        while let Some(notification) = self.ctx.notifications.try_next().await? {
-            match &notification {
-                ExExNotification::ChainCommitted { new } => {
-                    debug!(
-                        target: "optimism::exex",
-                        block_number = new.tip().number(),
-                        block_hash = ?new.tip().hash(),
-                        "ChainCommitted notification received",
-                    );
+        sync_target_tx
+    }
 
-                    // Get latest stored number (ignore stored hash for now)
-                    let latest_stored_block_number =
-                        match self.storage.get_latest_block_number().await? {
-                            Some((n, _)) => n,
-                            None => {
-                                return Err(eyre::eyre!("No blocks stored in proofs storage"));
-                            }
-                        };
+    /// Background sync loop that processes blocks up to the target
+    async fn sync_loop(
+        mut sync_target_rx: tokio::sync::watch::Receiver<u64>,
+        storage: OpProofsStorage<Storage>,
+        provider: Node::Provider,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+    ) {
+        debug!(target: "optimism::exex", "Starting proofs storage sync loop");
 
-                    // If tip is not newer than what we have, nothing to do.
-                    if new.tip().number() <= latest_stored_block_number {
-                        debug!(
-                            target: "optimism::exex",
-                            block_number = new.tip().number(),
-                            latest_stored = latest_stored_block_number,
-                            "Tip number is less than or equal to latest stored, skipping"
-                        );
-                        continue;
-                    }
+        loop {
+            let target = *sync_target_rx.borrow_and_update();
 
-                    // Start from the next block after the latest stored one.
-                    let start = latest_stored_block_number.saturating_add(1);
-                    debug!(
-                        target: "optimism::exex",
-                        start,
-                        end = new.tip().number(),
-                        "Applying updates for blocks in committed chain"
-                    );
-                    for block_number in start..=new.tip().number() {
-                        match self
-                            .ctx
-                            .provider()
-                            .recovered_block(block_number.into(), TransactionVariant::NoHash)?
-                        {
-                            Some(block) => {
-                                collector.execute_and_store_block_updates(&block).await?;
-                            }
-                            None => {
-                                error!(
-                                    block_number,
-                                    "Missing block in committed chain, stopping incremental application",
-                                );
-                                return Err(eyre::eyre!(
-                                    "Missing block {} in committed chain",
-                                    block_number
-                                ));
-                            }
-                        }
-                    }
+            let latest = match storage.get_latest_block_number().await {
+                Ok(Some((n, _))) => n,
+                // todo: handle uninitialized storage
+                Ok(None) => {
+                    error!(target: "optimism::exex", "No blocks stored in proofs storage during sync loop");
+                    continue;
                 }
-                ExExNotification::ChainReorged { old, new } => {
-                    info!(
-                        old_block_number = old.tip().number(),
-                        old_block_hash = ?old.tip().hash(),
-                        new_block_number = new.tip().number(),
-                        new_block_hash = ?new.tip().hash(),
-                        "ChainReorged notification received",
-                    );
-
-                    // find the common ancestor
-                    let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> =
-                        Vec::with_capacity(new.len());
-                    for block_number in new.blocks().keys().rev() {
-                        let old_block = old.blocks().get(block_number);
-                        let new_block = new.blocks().get(block_number);
-                        match (new_block, old_block) {
-                            (Some(new_block), Some(old_block)) => {
-                                if new_block.hash() == old_block.hash() {
-                                    break;
-                                }
-
-                                new_blocks.push(new_block);
-                                if new_block.parent_hash() == old_block.parent_hash() {
-                                    break;
-                                }
-                            }
-                            (Some(new_block), None) => {
-                                // Block only exists in new chain, collect it
-                                new_blocks.push(new_block);
-                            }
-                            _ => {
-                                error!(
-                                    block_number,
-                                    "Missing block in new chain during reorg detection",
-                                );
-                                return Err(eyre::eyre!(
-                                    "Missing block {} in new chain during reorg detection",
-                                    block_number
-                                ));
-                            }
-                        }
-                    }
-
-                    // reverse to get the new blocks in the correct order
-                    new_blocks.reverse();
-                    collector.unwind_and_store_block_updates(new_blocks).await?;
-                }
-                ExExNotification::ChainReverted { old } => {
-                    info!(
-                        target: "optimism::exex",
-                        old_block_number = old.tip().number(),
-                        old_block_hash = ?old.tip().hash(),
-                        "ChainReverted notification received",
-                    );
-
-                    // Get latest stored number
-                    let latest_stored_block_number =
-                        match self.storage.get_latest_block_number().await? {
-                            Some((n, _)) => n,
-                            None => {
-                                info!(
-                                    target: "optimism::exex",
-                                    "No blocks stored yet, skipping ChainReverted handling"
-                                );
-                                continue;
-                            }
-                        };
-
-                    let first_block = old.first();
-                    if first_block.number() > latest_stored_block_number {
-                        info!(
-                            target: "optimism::exex",
-                            first_block_number = first_block.number(),
-                            latest_stored = latest_stored_block_number,
-                            "Fork block number is greater than latest stored, skipping",
-                        );
-                        continue;
-                    }
-
-                    collector.unwind_history(first_block.block_with_parent()).await?;
+                // todo: handle errors more gracefully
+                Err(e) => {
+                    error!(target: "optimism::exex", error = ?e, "Failed to get latest block");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    continue;
                 }
             };
 
-            if let Some(committed_chain) = notification.committed_chain() {
-                self.ctx
-                    .events
-                    .send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
+            if latest >= target {
+                tokio::time::sleep(tokio::time::Duration::from_secs(SYNC_IDLE_SLEEP_SECS)).await;
+                continue;
+            }
+
+            // Process one batch
+            if let Err(e) =
+                Self::process_batch(latest, target, &provider, collector, SYNC_BATCH_SIZE).await
+            {
+                error!(target: "optimism::exex", error = ?e, "Batch processing failed");
+            }
+
+            // Yield to allow other tasks to run
+            debug!(target: "optimism::exex", latest_stored = latest, target, "Batch processed, yielding");
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Process a batch of blocks from start to target (up to `batch_size`)
+    async fn process_batch(
+        start: u64,
+        target: u64,
+        provider: &Node::Provider,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+        batch_size: usize,
+    ) -> eyre::Result<()> {
+        let end = (start + batch_size as u64).min(target);
+
+        for block_num in (start + 1)..=end {
+            let block = provider
+                .recovered_block(block_num.into(), TransactionVariant::NoHash)?
+                .ok_or_else(|| eyre::eyre!("Missing block {}", block_num))?;
+
+            collector.execute_and_store_block_updates(&block).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Handle a single notification
+    async fn handle_notification(
+        &self,
+        notification: ExExNotification<Primitives>,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+        sync_target_tx: &tokio::sync::watch::Sender<u64>,
+    ) -> eyre::Result<()> {
+        let latest_stored = match self.storage.get_latest_block_number().await? {
+            Some((n, _)) => n,
+            None => {
+                return Err(eyre::eyre!("No blocks stored in proofs storage"));
+            }
+        };
+
+        match &notification {
+            ExExNotification::ChainCommitted { new } => {
+                self.handle_chain_committed(new.clone(), latest_stored, collector, sync_target_tx)
+                    .await?
+            }
+            ExExNotification::ChainReorged { old, new } => {
+                self.handle_chain_reorged(old.clone(), new.clone(), latest_stored, collector)
+                    .await?
+            }
+            ExExNotification::ChainReverted { old } => {
+                self.handle_chain_reverted(old.clone(), latest_stored, collector).await?
             }
         }
 
+        if let Some(committed_chain) = notification.committed_chain() {
+            self.ctx.events.send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_chain_committed(
+        &self,
+        new: Arc<Chain<Primitives>>,
+        latest_stored: u64,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+        sync_target_tx: &tokio::sync::watch::Sender<u64>,
+    ) -> eyre::Result<()> {
+        let tip = new.tip();
+        debug!(
+            target: "optimism::exex",
+            block_number = tip.number(),
+            block_hash = ?tip.hash(),
+            "ChainCommitted"
+        );
+
+        // Already processed
+        if tip.number() <= latest_stored {
+            debug!(
+                target: "optimism::exex",
+                block_number = tip.number(),
+                latest_stored,
+                "Already processed, skipping"
+            );
+            self.ctx.events.send(ExExEvent::FinishedHeight(tip.num_hash()))?;
+            return Ok(());
+        }
+
+        let best_block = self.ctx.provider().best_block_number()?;
+        let is_sequential = tip.number() == latest_stored + 1;
+        let is_near_tip = best_block.saturating_sub(tip.number()) < REAL_TIME_THRESHOLD;
+
+        if is_sequential && is_near_tip {
+            // Process in real-time
+            debug!(
+                target: "optimism::exex",
+                block_number = tip.number(),
+                best_block,
+                latest_stored,
+                "Processing in real-time"
+            );
+            tokio::time::sleep(tokio::time::Duration::from_secs(REAL_TIME_DELAY_SECS)).await;
+            collector.execute_and_store_block_updates(tip).await?;
+        } else {
+            // Delegate to sync task
+            debug!(
+                target: "optimism::exex",
+                block_number = tip.number(),
+                best_block,
+                latest_stored,
+                "Delegating to sync task"
+            );
+            sync_target_tx.send(tip.number())?;
+        }
+        Ok(())
+    }
+
+    async fn handle_chain_reorged(
+        &self,
+        old: Arc<Chain<Primitives>>,
+        new: Arc<Chain<Primitives>>,
+        latest_stored: u64,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+    ) -> eyre::Result<()> {
+        info!(
+            target: "optimism::exex",
+            old_block = old.tip().number(),
+            new_block = new.tip().number(),
+            "ChainReorged"
+        );
+
+        if old.first().number() > latest_stored {
+            info!(target: "optimism::exex", "Reorg beyond stored blocks, skipping");
+            return Ok(());
+        }
+
+        // Find divergent blocks inline to maintain references
+        let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> =
+            Vec::with_capacity(new.len());
+
+        for block_num in new.blocks().keys().rev() {
+            let new_block = new
+                .blocks()
+                .get(block_num)
+                .ok_or_else(|| eyre::eyre!("Missing block {} in new chain", block_num))?;
+
+            match old.blocks().get(block_num) {
+                Some(old_block) => {
+                    if new_block.hash() == old_block.hash() {
+                        break;
+                    }
+
+                    new_blocks.push(new_block);
+                    if new_block.parent_hash() == old_block.parent_hash() {
+                        break;
+                    }
+                }
+                None => {
+                    // Block only in new chain
+                    new_blocks.push(new_block);
+                }
+            }
+        }
+        collector.unwind_and_store_block_updates(new_blocks).await?;
+        Ok(())
+    }
+
+    async fn handle_chain_reverted(
+        &self,
+        old: Arc<Chain<Primitives>>,
+        latest_stored: u64,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+    ) -> eyre::Result<()> {
+        info!(target: "optimism::exex", block = old.tip().number(), "ChainReverted");
+
+        if old.first().number() > latest_stored {
+            info!(target: "optimism::exex", "Revert beyond stored blocks, skipping");
+            return Ok(());
+        }
+
+        collector.unwind_history(old.first().block_with_parent()).await?;
         Ok(())
     }
 }

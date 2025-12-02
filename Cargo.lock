@@ -9571,6 +9571,7 @@ dependencies = [
  "futures",
  "futures-util",
  "reth-db",
+ "reth-execution-types",
  "reth-exex",
  "reth-node-api",
  "reth-node-builder",
