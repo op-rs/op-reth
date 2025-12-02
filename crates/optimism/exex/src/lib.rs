@@ -117,6 +117,7 @@ where
         let collector = LiveTrieCollector::new(evm_config_clone, provider_clone, &storage_clone);
 
         self.ctx.task_executor().spawn(async move {
+            debug!(target: "optimism::exex", "Starting proofs storage sync loop");
             let task_collector =
                 LiveTrieCollector::new(task_evm_config, task_provider.clone(), &task_storage);
 
@@ -173,6 +174,7 @@ where
             }
         });
 
+        debug!(target: "optimism::exex", "Starting ExEx notification processing loop");
         while let Some(notification) = self.ctx.notifications.try_next().await? {
             // Get latest stored number (ignore stored hash for now)
             let latest_stored_block_number = match self.storage.get_latest_block_number().await? {
