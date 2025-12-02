@@ -142,8 +142,8 @@ where
                     continue;
                 }
 
-                // Process up to 50 blocks without yielding
-                for _ in 0..50 {
+                // Process up to 10 blocks without yielding
+                for _ in 0..10 {
                     if latest_stored_block >= target {
                         break;
                     }
