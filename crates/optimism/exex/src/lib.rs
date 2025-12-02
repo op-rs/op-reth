@@ -109,7 +109,7 @@ where
         };
 
         // Need to update the earliest block metric on startup as this is not called frequently and
-        // can show outdated info.
+        // can show outdated info. When metrics are disabled, this is a no-op.
         self.storage.metrics().block_metrics().earliest_number.set(earliest_block_number as f64);
 
         let collector = LiveTrieCollector::new(
