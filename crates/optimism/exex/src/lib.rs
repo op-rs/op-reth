@@ -170,6 +170,7 @@ where
                         }
                     }
                     latest_stored_block = next_block_number;
+                    tokio::task::yield_now().await;
                 }
             }
         });
