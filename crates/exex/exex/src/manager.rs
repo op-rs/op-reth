@@ -439,7 +439,6 @@ where
     ///    update the internal buffer capacity.
     /// 6. Update the channel with the lowest [`FinishedExExHeight`] among all ExExes.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        debug!(target: "exex::manager", "Polling ExExManager");
         let this = self.get_mut();
 
         // Handle incoming ExEx events
@@ -453,7 +452,6 @@ where
             }
         }
 
-        debug!(target: "exex::manager", "Draining finalized header stream");
         // Drain the finalized header stream and finalize the WAL with the last header
         let mut last_finalized_header = None;
         while let Poll::Ready(finalized_header) = this.finalized_header_stream.poll_next_unpin(cx) {
@@ -463,7 +461,6 @@ where
             this.finalize_wal(header)?;
         }
 
-        debug!(target: "exex::manager", "Draining ExExManagerHandle notifications");
         // Drain handle notifications
         while this.buffer.len() < this.max_capacity {
             if let Poll::Ready(Some((source, notification))) = this.handle_rx.poll_recv(cx) {
@@ -498,13 +495,6 @@ where
         for idx in (0..this.exex_handles.len()).rev() {
             let mut exex = this.exex_handles.swap_remove(idx);
 
-            debug!(
-                target: "exex::manager",
-                exex_id = %exex.id,
-                next_notification_id = %exex.next_notification_id,
-                min_id = %this.min_id,
-                "Polling ExEx for sending notifications",
-            );
             // It is a logic error for this to ever underflow since the manager manages the
             // notification IDs
             let notification_index = exex
@@ -514,7 +504,6 @@ where
             if let Some(notification) = this.buffer.get(notification_index) &&
                 let Poll::Ready(Err(err)) = exex.send(cx, notification)
             {
-                debug!(target: "exex::manager", exex_id = %exex.id, "Failed to send notification");
                 // The channel was closed, which is irrecoverable for the manager
                 return Poll::Ready(Err(err.into()))
             }
@@ -530,7 +519,6 @@ where
         // Update capacity
         this.update_capacity();
 
-        debug!(target: "exex::manager", "Updating finished height watch channel");
         // Update watch channel block number
         let finished_height = this.exex_handles.iter_mut().try_fold(u64::MAX, |curr, exex| {
             exex.finished_height.map_or(Err(()), |height| Ok(height.number.min(curr)))
@@ -539,7 +527,6 @@ where
             let _ = this.finished_height.send(FinishedExExHeight::Height(finished_height));
         }
 
-        debug!(target: "exex::manager", "ExExManager poll complete, returning Pending");
         Poll::Pending
     }
 }
