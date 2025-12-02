@@ -116,7 +116,9 @@ where
 
         let collector = LiveTrieCollector::new(evm_config_clone, provider_clone, &storage_clone);
 
-        self.ctx.task_executor().spawn(async move {
+        self.ctx.task_executor().spawn_critical(
+            "optimism::exex::proofs_storage_sync_loop",
+            async move {
             debug!(target: "optimism::exex", "Starting proofs storage sync loop");
             let task_collector =
                 LiveTrieCollector::new(task_evm_config, task_provider.clone(), &task_storage);
