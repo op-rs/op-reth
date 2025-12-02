@@ -142,25 +142,23 @@ where
                     continue;
                 }
 
-                while latest_stored_block < target {
+                // Process up to 50 blocks without yielding
+                for _ in 0..50 {
+                    if latest_stored_block >= target {
+                        break;
+                    }
 
-                    // Process up to 10 blocks without yielding
-                    for _ in 0..50 {
-                        if latest_stored_block >= target {
+                    let next_block_number = latest_stored_block.saturating_add(1);
+                    match task_provider
+                        .recovered_block(next_block_number.into(), TransactionVariant::NoHash)
+                    {
+                        Err(e) => {
+                            error!(next_block_number, "Error fetching block in sync loop: {:?}", e);
                             break;
                         }
-
-                        let next_block_number = latest_stored_block.saturating_add(1);
-                        match task_provider
-                            .recovered_block(next_block_number.into(), TransactionVariant::NoHash)
-                        {
-                            Err(e) => {
-                                error!(next_block_number, "Error fetching block in sync loop: {:?}", e);
-                                break;
-                            }
-                            Ok(Some(block)) => {
-                                if let Err(err) =
-                                    task_collector.execute_and_store_block_updates(&block).await
+                        Ok(Some(block)) => {
+                            if let Err(err) =
+                                task_collector.execute_and_store_block_updates(&block).await
                                 {
                                     error!(
                                         next_block_number,
@@ -170,13 +168,13 @@ where
                                     break;
                                 }
                             }
-                            Ok(None) => {
-                                error!(
-                                    next_block_number,
-                                    "Missing block in sync loop, stopping incremental application",
-                                );
-                                break;
-                            }
+                        Ok(None) => {
+                            error!(
+                                next_block_number,
+                                "Missing block in sync loop, stopping incremental application",
+                            );
+                            break;
+                        }
 
                         }
                         latest_stored_block = next_block_number;
@@ -184,7 +182,6 @@ where
 
                     // Yield after processing a batch of blocks
                     tokio::task::yield_now().await;
-                }
             }
         });
 
