@@ -16,6 +16,7 @@ use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
 use eyre::WrapErr;
 use itertools::Itertools;
+#[cfg(feature = "metrics")]
 use metrics::{gauge, Label};
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
