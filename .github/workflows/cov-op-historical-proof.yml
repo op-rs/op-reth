@@ -42,3 +42,5 @@ jobs:
           name: reth-op-historical-proof-unit-tests
           verbose: true
           force: true
+          override_branch: true
+          override_commit: ${{ github.sha }}
