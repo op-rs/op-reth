@@ -231,8 +231,6 @@ where
                         );
                         sync_block_number_tx.send(new.tip().number())?;
                     }
-
-                    self.ctx.events.send(ExExEvent::FinishedHeight(new.tip().num_hash()))?;
                 }
                 ExExNotification::ChainReorged { old, new } => {
                     info!(
@@ -316,6 +314,12 @@ where
                     self.ctx.events.send(ExExEvent::FinishedHeight(old.fork_block()))?;
                 }
             };
+
+            if let Some(committed_chain) = notification.committed_chain() {
+                self.ctx
+                    .events
+                    .send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
+            }
         }
 
         Ok(())
