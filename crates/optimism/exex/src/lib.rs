@@ -27,9 +27,6 @@ const SYNC_BATCH_SIZE: usize = 10;
 /// How close to tip before we process blocks in real-time vs batch
 const REAL_TIME_THRESHOLD: u64 = 1000;
 
-/// Delay before applying real-time block (allows for mini-reorgs)
-const REAL_TIME_DELAY_SECS: u64 = 3;
-
 /// How long to sleep when sync task is caught up
 const SYNC_IDLE_SLEEP_SECS: u64 = 5;
 
