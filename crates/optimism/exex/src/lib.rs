@@ -116,68 +116,62 @@ where
 
         let collector = LiveTrieCollector::new(evm_config_clone, provider_clone, &storage_clone);
 
-        self.ctx.task_executor().spawn_critical_with_graceful_shutdown_signal(
-            "op-proofs-exex-live-trie-collector",
-            |_shutdown| async move {
-                let task_collector = LiveTrieCollector::new(
-                    task_evm_config,
-                    task_provider.clone(),
-                    &task_storage,
-                );
+        self.ctx.task_executor().spawn(async move {
+            let task_collector =
+                LiveTrieCollector::new(task_evm_config, task_provider.clone(), &task_storage);
 
-                loop {
-                    let target = *sync_block_number_rx.borrow();
-                    let mut latest_stored_block = match task_storage.get_latest_block_number().await {
-                        Err(e) => {
-                            error!("Error fetching latest stored block number: {:?}", e);
-                            continue;
-                        }
-                        Ok(Some((n, _))) => n,
-                        Ok(None) => {
-                            error!("No blocks stored in proofs storage during sync loop",);
-                            continue;
-                        }
-                    };
-
-                    if latest_stored_block >= target {
-                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            loop {
+                let target = *sync_block_number_rx.borrow();
+                let mut latest_stored_block = match task_storage.get_latest_block_number().await {
+                    Err(e) => {
+                        error!("Error fetching latest stored block number: {:?}", e);
                         continue;
                     }
+                    Ok(Some((n, _))) => n,
+                    Ok(None) => {
+                        error!("No blocks stored in proofs storage during sync loop",);
+                        continue;
+                    }
+                };
 
-                    while latest_stored_block < target {
-                        let next_block_number = latest_stored_block.saturating_add(1);
-                        match task_provider
-                            .recovered_block(next_block_number.into(), TransactionVariant::NoHash)
-                        {
-                            Err(e) => {
+                if latest_stored_block >= target {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    continue;
+                }
+
+                while latest_stored_block < target {
+                    let next_block_number = latest_stored_block.saturating_add(1);
+                    match task_provider
+                        .recovered_block(next_block_number.into(), TransactionVariant::NoHash)
+                    {
+                        Err(e) => {
+                            error!(next_block_number, "Error fetching block in sync loop: {:?}", e);
+                            break;
+                        }
+                        Ok(Some(block)) => {
+                            if let Err(err) =
+                                task_collector.execute_and_store_block_updates(&block).await
+                            {
                                 error!(
                                     next_block_number,
-                                    "Error fetching block in sync loop: {:?}", e
-                                );
-                                break;
-                            }
-                            Ok(Some(block)) => {
-                                if let Err(err) = task_collector.execute_and_store_block_updates(&block).await {
-                                    error!(
-                                        next_block_number,
-                                        "Error executing and storing block updates in sync loop: {:?}", err
-                                    );
-                                    break;
-                                }
-                            }
-                            Ok(None) => {
-                                error!(
-                                    next_block_number,
-                                    "Missing block in sync loop, stopping incremental application",
+                                    "Error executing and storing block updates in sync loop: {:?}",
+                                    err
                                 );
                                 break;
                             }
                         }
-                        latest_stored_block = next_block_number;
+                        Ok(None) => {
+                            error!(
+                                next_block_number,
+                                "Missing block in sync loop, stopping incremental application",
+                            );
+                            break;
+                        }
                     }
+                    latest_stored_block = next_block_number;
                 }
-            },
-        );
+            }
+        });
 
         while let Some(notification) = self.ctx.notifications.try_next().await? {
             // Get latest stored number (ignore stored hash for now)
