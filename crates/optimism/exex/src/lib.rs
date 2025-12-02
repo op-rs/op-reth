@@ -16,7 +16,7 @@ use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_optimism_trie::{live::LiveTrieCollector, OpProofsStorage, OpProofsStore};
 use reth_primitives_traits::{BlockTy, RecoveredBlock};
-use reth_provider::{BlockReader, TransactionVariant};
+use reth_provider::{BlockNumReader, BlockReader, TransactionVariant};
 use tracing::{debug, error, info};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
@@ -105,13 +105,89 @@ where
             ));
         }
 
-        let collector = LiveTrieCollector::new(
-            self.ctx.evm_config().clone(),
-            self.ctx.provider().clone(),
-            &self.storage,
+        let (sync_block_number_tx, sync_block_number_rx) = tokio::sync::watch::channel(0);
+        let storage_clone = self.storage.clone();
+        let provider_clone = self.ctx.provider().clone();
+        let evm_config_clone = self.ctx.evm_config().clone();
+
+        let task_storage = storage_clone.clone();
+        let task_provider = provider_clone.clone();
+        let task_evm_config = evm_config_clone.clone();
+
+        let collector = LiveTrieCollector::new(evm_config_clone, provider_clone, &storage_clone);
+
+        self.ctx.task_executor().spawn_critical_with_graceful_shutdown_signal(
+            "op-proofs-exex-live-trie-collector",
+            |_shutdown| async move {
+                let task_collector = LiveTrieCollector::new(
+                    task_evm_config,
+                    task_provider.clone(),
+                    &task_storage,
+                );
+
+                loop {
+                    let target = *sync_block_number_rx.borrow();
+                    let mut latest_stored_block = match task_storage.get_latest_block_number().await {
+                        Err(e) => {
+                            error!("Error fetching latest stored block number: {:?}", e);
+                            continue;
+                        }
+                        Ok(Some((n, _))) => n,
+                        Ok(None) => {
+                            error!("No blocks stored in proofs storage during sync loop",);
+                            continue;
+                        }
+                    };
+
+                    if latest_stored_block >= target {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                        continue;
+                    }
+
+                    while latest_stored_block < target {
+                        let next_block_number = latest_stored_block.saturating_add(1);
+                        match task_provider
+                            .recovered_block(next_block_number.into(), TransactionVariant::NoHash)
+                        {
+                            Err(e) => {
+                                error!(
+                                    next_block_number,
+                                    "Error fetching block in sync loop: {:?}", e
+                                );
+                                break;
+                            }
+                            Ok(Some(block)) => {
+                                if let Err(err) = task_collector.execute_and_store_block_updates(&block).await {
+                                    error!(
+                                        next_block_number,
+                                        "Error executing and storing block updates in sync loop: {:?}", err
+                                    );
+                                    break;
+                                }
+                            }
+                            Ok(None) => {
+                                error!(
+                                    next_block_number,
+                                    "Missing block in sync loop, stopping incremental application",
+                                );
+                                break;
+                            }
+                        }
+                        latest_stored_block = next_block_number;
+                    }
+                }
+            },
         );
 
         while let Some(notification) = self.ctx.notifications.try_next().await? {
+            // Get latest stored number (ignore stored hash for now)
+            let latest_stored_block_number = match self.storage.get_latest_block_number().await? {
+                Some((n, _)) => n,
+                None => {
+                    return Err(eyre::eyre!("No blocks stored in proofs storage"));
+                }
+            };
+
             match &notification {
                 ExExNotification::ChainCommitted { new } => {
                     debug!(
@@ -120,15 +196,6 @@ where
                         block_hash = ?new.tip().hash(),
                         "ChainCommitted notification received",
                     );
-
-                    // Get latest stored number (ignore stored hash for now)
-                    let latest_stored_block_number =
-                        match self.storage.get_latest_block_number().await? {
-                            Some((n, _)) => n,
-                            None => {
-                                return Err(eyre::eyre!("No blocks stored in proofs storage"));
-                            }
-                        };
 
                     // If tip is not newer than what we have, nothing to do.
                     if new.tip().number() <= latest_stored_block_number {
@@ -141,38 +208,31 @@ where
                         continue;
                     }
 
-                    // Start from the next block after the latest stored one.
-                    let start = latest_stored_block_number.saturating_add(1);
-                    debug!(
-                        target: "optimism::exex",
-                        start,
-                        end = new.tip().number(),
-                        "Applying updates for blocks in committed chain"
-                    );
-                    for block_number in start..=new.tip().number() {
-                        match self
-                            .ctx
-                            .provider()
-                            .recovered_block(block_number.into(), TransactionVariant::NoHash)?
-                        {
-                            Some(block) => {
-                                collector.execute_and_store_block_updates(&block).await?;
-                                self.ctx
-                                    .events
-                                    .send(ExExEvent::FinishedHeight(block.num_hash()))?;
-                            }
-                            None => {
-                                error!(
-                                    block_number,
-                                    "Missing block in committed chain, stopping incremental application",
-                                );
-                                return Err(eyre::eyre!(
-                                    "Missing block {} in committed chain",
-                                    block_number
-                                ));
-                            }
-                        }
+                    let best_block_number = self.ctx.provider().best_block_number()?;
+                    if new.tip().number() == latest_stored_block_number.saturating_add(1) &&
+                        best_block_number.saturating_sub(new.tip().number()) < 1000
+                    {
+                        debug!(
+                            target: "optimism::exex",
+                            block_number = new.tip().number(),
+                            best_block_number,
+                            latest_stored_block_number,
+                            "Applying single block update in near real-time"
+                        );
+                        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                        collector.execute_and_store_block_updates(new.tip()).await?;
+                    } else {
+                        debug!(
+                            target: "optimism::exex",
+                            block_number = new.tip().number(),
+                            best_block_number,
+                            latest_stored_block_number,
+                            "Applying batch block updates to catch up"
+                        );
+                        sync_block_number_tx.send(new.tip().number())?;
                     }
+
+                    self.ctx.events.send(ExExEvent::FinishedHeight(new.tip().num_hash()))?;
                 }
                 ExExNotification::ChainReorged { old, new } => {
                     info!(
@@ -182,6 +242,17 @@ where
                         new_block_hash = ?new.tip().hash(),
                         "ChainReorged notification received",
                     );
+
+                    let first_block = old.first();
+                    if first_block.number() > latest_stored_block_number {
+                        info!(
+                            target: "optimism::exex",
+                            first_block_number = first_block.number(),
+                            latest_stored = latest_stored_block_number,
+                            "Reorg block number is greater than latest stored, skipping",
+                        );
+                        continue;
+                    }
 
                     // find the common ancestor
                     let mut new_blocks: Vec<&RecoveredBlock<BlockTy<Primitives>>> =
@@ -229,19 +300,6 @@ where
                         old_block_hash = ?old.tip().hash(),
                         "ChainReverted notification received",
                     );
-
-                    // Get latest stored number
-                    let latest_stored_block_number =
-                        match self.storage.get_latest_block_number().await? {
-                            Some((n, _)) => n,
-                            None => {
-                                info!(
-                                    target: "optimism::exex",
-                                    "No blocks stored yet, skipping ChainReverted handling"
-                                );
-                                continue;
-                            }
-                        };
 
                     let first_block = old.first();
                     if first_block.number() > latest_stored_block_number {
