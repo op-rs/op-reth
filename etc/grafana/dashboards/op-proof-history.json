@@ -21,7 +21,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "11.5.0"
+      "version": "12.3.0"
     },
     {
       "type": "datasource",
@@ -87,7 +87,7 @@
         "content": "# External Proofs Storage Metrics\n\nThis dashboard monitors the performance of the External Proofs ExEx storage layer.\n\n## Key Concepts:\n\n- Block Processing: End-to-end time to process each block (execution + state root + writes)\n- Per-Item Metrics: Bulk write operations (store_*) report per-item latency, making metrics comparable regardless of batch size\n- Contexts: Operations are tagged by when they occur (execution, state_root, write, metadata)\n- Cursors: Iterator-like access patterns for reading trie and hashed state\n\n## What to Watch:\n\n- High write latencies during backfill indicate storage bottlenecks\n- Storage overhead % shows how much time is spent in DB vs EVM execution\n- Cursor operation latencies impact state root calculation performance",
         "mode": "markdown"
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "title": "Dashboard Overview",
       "type": "text"
     },
@@ -108,7 +108,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           }
@@ -139,9 +139,13 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "disableTextWrap": false,
           "editorMode": "builder",
           "expr": "reth_blockchain_tree_canonical_chain_height",
@@ -150,11 +154,7 @@
           "legendFormat": "Canonical Chain Height",
           "range": true,
           "refId": "A",
-          "useBackend": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "useBackend": false
         },
         {
           "datasource": {
@@ -194,7 +194,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           }
@@ -225,7 +225,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -293,7 +293,7 @@
         "content": "## 📈 Interpreting Block Metrics\n\nTotal Duration = Combined time for all phases\n\nExecution = EVM execution (non-storage)\n\nState Root = Trie calculation (uses cursors)\n\nWrite = Persisting trie updates to storage\n\nIf Write >> Execution, storage is the bottleneck!",
         "mode": "markdown"
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "type": "text"
     },
     {
@@ -313,7 +313,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -349,7 +349,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -387,7 +387,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "#EAB839",
@@ -425,7 +425,7 @@
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -479,6 +479,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -494,7 +495,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -543,7 +544,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -646,6 +647,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -661,7 +663,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -697,7 +699,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -817,6 +819,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -832,7 +835,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -868,7 +871,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1011,6 +1014,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1026,7 +1030,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1062,7 +1066,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.0",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1199,8 +1203,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1269,8 +1272,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1385,8 +1387,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1509,8 +1510,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1608,8 +1608,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -1663,8 +1662,9 @@
       "type": "timeseries"
     }
   ],
+  "preload": false,
   "refresh": "",
-  "schemaVersion": 40,
+  "schemaVersion": 42,
   "tags": [],
   "templating": {
     "list": []
@@ -1677,6 +1677,6 @@
   "timezone": "browser",
   "title": "OP Proofs History",
   "uid": "af5do16b25ptsaa",
-  "version": 3,
+  "version": 2,
   "weekStart": ""
 }
