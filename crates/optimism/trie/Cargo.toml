@@ -24,7 +24,7 @@ reth-tasks.workspace = true
 
 # `metrics` feature
 metrics = { workspace = true, optional = true }
-reth-metrics = { workspace = true, features = ["common"] , optional = true }
+reth-metrics = { workspace = true, features = ["common"], optional = true }
 
 # ethereum
 alloy-primitives.workspace = true
