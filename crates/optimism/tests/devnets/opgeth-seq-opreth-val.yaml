@@ -34,6 +34,8 @@ optimism_package:
             # Note: we use the local image for now. This allows us to run the tests in CI pipelines without publishing new docker images every time.
             image: op-reth:local
             extra_params: [--proofs-history, --proofs-history.storage-path=/data/proofs-history]
+            extra_env_vars: 
+              RUST_LOG: "info,optimism::exex=debug"
           cl:
             type: op-node
             log_level: "debug"

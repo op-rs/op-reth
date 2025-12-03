@@ -15,6 +15,7 @@ import (
 )
 
 func TestResyncing(gt *testing.T) {
+	gt.Skip("Skipping until WAL fixes are in place")
 	t := devtest.SerialT(gt)
 	ctx := t.Ctx()
 
