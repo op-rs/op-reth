@@ -73,6 +73,8 @@ jobs:
 
       - name: Run reorg e2e tests
         working-directory: crates/optimism/tests
+        env:
+          GOCACHE: /tmp/go-cache
         run: |
           make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opgeth-seq-opreth-val
 
@@ -162,14 +164,25 @@ jobs:
         run: |
           make all DEVNET=opreth-seq-opgeth-val
 
+      - name: cleanup disk space
+        run: |
+          docker system prune -af
+          rm -rf ~/.foundry
+
       - name: Run core e2e tests
         working-directory: crates/optimism/tests
+        env:
+          GOCACHE: /tmp/go-cache
         run: |
+          mkdir -p /tmp/go-cache
           make test-e2e-kurtosis GO_PKG_NAME=proofs/core DEVNET=opreth-seq-opgeth-val
 
       - name: Run reorg e2e tests
         working-directory: crates/optimism/tests
+        env:
+          GOCACHE: /tmp/go-cache
         run: |
+          mkdir -p /tmp/go-cache
           make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opreth-seq-opgeth-val
 
   e2e-op-historical-proof-success:
