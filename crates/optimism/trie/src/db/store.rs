@@ -791,8 +791,9 @@ impl OpProofsStore for MdbxProofsStorage {
     }
 }
 
-/// This implementation is copied from the [`DatabaseMetrics`] implementation for [`DatabaseEnv`].
-/// As the implementation hard-coded the table name, we need to reimplement it.
+/// This implementation is copied from the
+/// [`DatabaseMetrics`](reth_db::database_metrics::DatabaseMetrics) implementation for
+/// [`DatabaseEnv`]. As the implementation hard-coded the table name, we need to reimplement it.
 #[cfg(feature = "metrics")]
 impl reth_db::database_metrics::DatabaseMetrics for MdbxProofsStorage {
     fn report_metrics(&self) {
