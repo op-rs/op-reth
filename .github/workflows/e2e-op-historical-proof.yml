@@ -60,7 +60,6 @@ jobs:
 
       - name: cleanup disk space
         run: |
-          docker system prune -af
           rm -rf ~/.foundry
 
       - name: Run core e2e tests
@@ -166,7 +165,6 @@ jobs:
 
       - name: cleanup disk space
         run: |
-          docker system prune -af
           rm -rf ~/.foundry
 
       - name: Run core e2e tests
