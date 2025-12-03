@@ -14,13 +14,11 @@ use crate::{
 };
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
-use eyre::WrapErr;
 use itertools::Itertools;
 #[cfg(feature = "metrics")]
 use metrics::{gauge, Label};
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
-    database_metrics::DatabaseMetrics,
     mdbx::{init_db_for, DatabaseArguments},
     table::{DupSort, Table},
     transaction::{DbTx, DbTxMut},
@@ -32,7 +30,6 @@ use reth_trie::{
     BranchNodeCompact, HashedStorage, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
-use tracing::error;
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
@@ -796,7 +793,8 @@ impl OpProofsStore for MdbxProofsStorage {
 
 /// This implementation is copied from the [`DatabaseMetrics`] implementation for [`DatabaseEnv`].
 /// As the implementation hard-coded the table name, we need to reimplement it.
-impl DatabaseMetrics for MdbxProofsStorage {
+#[cfg(feature = "metrics")]
+impl reth_db::database_metrics::DatabaseMetrics for MdbxProofsStorage {
     fn report_metrics(&self) {
         for (name, value, labels) in self.gauge_metrics() {
             gauge!(name, labels).set(value);
@@ -804,6 +802,9 @@ impl DatabaseMetrics for MdbxProofsStorage {
     }
 
     fn gauge_metrics(&self) -> Vec<(&'static str, f64, Vec<Label>)> {
+        use eyre::WrapErr;
+        use tracing::error;
+
         let mut metrics = Vec::new();
 
         let _ = self
