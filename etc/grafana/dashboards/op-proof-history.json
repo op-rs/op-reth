@@ -2,7 +2,7 @@
   "__inputs": [
     {
       "name": "DS_PROMETHEUS",
-      "label": "prometheus",
+      "label": "Prometheus",
       "description": "",
       "type": "datasource",
       "pluginId": "prometheus",
@@ -21,7 +21,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "12.3.0"
+      "version": "11.5.0"
     },
     {
       "type": "datasource",
@@ -67,6 +67,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
+  "id": null,
   "links": [],
   "panels": [
     {
@@ -86,9 +87,109 @@
         "content": "# External Proofs Storage Metrics\n\nThis dashboard monitors the performance of the External Proofs ExEx storage layer.\n\n## Key Concepts:\n\n- Block Processing: End-to-end time to process each block (execution + state root + writes)\n- Per-Item Metrics: Bulk write operations (store_*) report per-item latency, making metrics comparable regardless of batch size\n- Contexts: Operations are tagged by when they occur (execution, state_root, write, metadata)\n- Cursors: Iterator-like access patterns for reading trie and hashed state\n\n## What to Watch:\n\n- High write latencies during backfill indicate storage bottlenecks\n- Storage overhead % shows how much time is spent in DB vs EVM execution\n- Cursor operation latencies impact state root calculation performance",
         "mode": "markdown"
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "title": "Dashboard Overview",
       "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Shows the current height of the canonical chain vs the latest block processed by the ExEx.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "$A-$B > 20": {
+                  "color": "yellow",
+                  "index": 0
+                },
+                "$A-$B > 50": {
+                  "color": "red",
+                  "index": 1
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 19,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "reth_blockchain_tree_canonical_chain_height",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Canonical Chain Height",
+          "range": true,
+          "refId": "A",
+          "useBackend": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "reth_optimism_trie_block_latest_number",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "ExEx Latest Block Number",
+          "range": true,
+          "refId": "B",
+          "useBackend": false
+        }
+      ],
+      "title": "ExEx Sync Status",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -107,7 +208,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               }
             ]
           }
@@ -115,10 +216,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
+        "h": 5,
         "w": 6,
         "x": 12,
-        "y": 0
+        "y": 5
       },
       "id": 9,
       "options": {
@@ -138,7 +239,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -206,7 +307,7 @@
         "content": "## 📈 Interpreting Block Metrics\n\nTotal Duration = Combined time for all phases\n\nExecution = EVM execution (non-storage)\n\nState Root = Trie calculation (uses cursors)\n\nWrite = Persisting trie updates to storage\n\nIf Write >> Execution, storage is the bottleneck!",
         "mode": "markdown"
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "type": "text"
     },
     {
@@ -226,7 +327,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               },
               {
                 "color": "red",
@@ -262,7 +363,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -300,7 +401,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               },
               {
                 "color": "#EAB839",
@@ -338,7 +439,7 @@
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -392,7 +493,6 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -408,7 +508,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               },
               {
                 "color": "red",
@@ -457,7 +557,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -560,7 +660,6 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -576,7 +675,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               },
               {
                 "color": "red",
@@ -612,7 +711,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -732,7 +831,6 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -748,7 +846,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               },
               {
                 "color": "red",
@@ -784,7 +882,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -927,7 +1025,6 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -943,7 +1040,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               },
               {
                 "color": "red",
@@ -979,7 +1076,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -1117,7 +1214,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               }
             ]
           },
@@ -1149,7 +1246,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -1187,7 +1284,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               }
             ]
           },
@@ -1219,7 +1316,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -1288,7 +1385,6 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1304,7 +1400,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               }
             ]
           },
@@ -1357,7 +1453,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -1413,7 +1509,6 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1429,7 +1524,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               }
             ]
           },
@@ -1457,7 +1552,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -1513,7 +1608,6 @@
               "type": "linear"
             },
             "showPoints": "auto",
-            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1529,7 +1623,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": 0
+                "value": null
               }
             ]
           },
@@ -1557,7 +1651,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.3.0",
+      "pluginVersion": "11.5.0",
       "targets": [
         {
           "datasource": {
@@ -1583,9 +1677,8 @@
       "type": "timeseries"
     }
   ],
-  "preload": false,
   "refresh": "",
-  "schemaVersion": 42,
+  "schemaVersion": 40,
   "tags": [],
   "templating": {
     "list": []
@@ -1598,7 +1691,6 @@
   "timezone": "browser",
   "title": "OP Proofs History",
   "uid": "af5do16b25ptsaa",
-  "version": 8,
-  "weekStart": "",
-  "id": null
+  "version": 2,
+  "weekStart": ""
 }
