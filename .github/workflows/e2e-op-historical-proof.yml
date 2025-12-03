@@ -21,13 +21,8 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+      - name: Create Go cache directory
+        run: mkdir -p /tmp/go-cache
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -64,16 +59,11 @@ jobs:
 
       - name: Run core e2e tests
         working-directory: crates/optimism/tests
-        env:
-          GOCACHE: /tmp/go-cache
         run: |
-          mkdir -p /tmp/go-cache
           make test-e2e-kurtosis GO_PKG_NAME=proofs/core DEVNET=opgeth-seq-opreth-val
 
       - name: Run reorg e2e tests
         working-directory: crates/optimism/tests
-        env:
-          GOCACHE: /tmp/go-cache
         run: |
           make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opgeth-seq-opreth-val
 
@@ -131,14 +121,6 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
@@ -169,18 +151,12 @@ jobs:
 
       - name: Run core e2e tests
         working-directory: crates/optimism/tests
-        env:
-          GOCACHE: /tmp/go-cache
         run: |
-          mkdir -p /tmp/go-cache
           make test-e2e-kurtosis GO_PKG_NAME=proofs/core DEVNET=opreth-seq-opgeth-val
 
       - name: Run reorg e2e tests
         working-directory: crates/optimism/tests
-        env:
-          GOCACHE: /tmp/go-cache
         run: |
-          mkdir -p /tmp/go-cache
           make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opreth-seq-opgeth-val
 
   e2e-op-historical-proof-success:
