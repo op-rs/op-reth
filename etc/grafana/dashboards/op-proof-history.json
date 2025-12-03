@@ -102,21 +102,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [
-            {
-              "options": {
-                "$A-$B > 20": {
-                  "color": "yellow",
-                  "index": 0
-                },
-                "$A-$B > 50": {
-                  "color": "red",
-                  "index": 1
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1691,6 +1677,6 @@
   "timezone": "browser",
   "title": "OP Proofs History",
   "uid": "af5do16b25ptsaa",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }
