@@ -46,6 +46,7 @@ tempfile.workspace = true
 [features]
 test-utils = [
     "reth-db/test-utils",
+    "reth-trie/test-utils",
     "reth-node-builder/test-utils",
     "reth-optimism-node/test-utils",
     "reth-provider/test-utils",
