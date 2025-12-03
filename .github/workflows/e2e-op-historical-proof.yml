@@ -21,8 +21,13 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Create Go cache directory
-        run: mkdir -p /tmp/go-cache
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -52,10 +57,6 @@ jobs:
         working-directory: crates/optimism/tests
         run: |
           make run DEVNET=opgeth-seq-opreth-val
-
-      - name: cleanup disk space
-        run: |
-          rm -rf ~/.foundry
 
       - name: Run core e2e tests
         working-directory: crates/optimism/tests
@@ -144,10 +145,6 @@ jobs:
         working-directory: crates/optimism/tests
         run: |
           make all DEVNET=opreth-seq-opgeth-val
-
-      - name: cleanup disk space
-        run: |
-          rm -rf ~/.foundry
 
       - name: Run core e2e tests
         working-directory: crates/optimism/tests
