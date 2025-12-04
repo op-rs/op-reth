@@ -101,7 +101,8 @@ impl<N: ProviderNodeTypes> ProviderFactory<N> {
             Default::default(),
             Arc::new(RwLock::new(legacy_settings)),
         )
-        .storage_settings()?
+        .storage_settings()
+        .ok()
         .unwrap_or(legacy_settings);
 
         Ok(Self {
