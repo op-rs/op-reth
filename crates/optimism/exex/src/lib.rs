@@ -22,7 +22,6 @@ use reth_optimism_trie::{
 use reth_provider::{BlockReader, TransactionVariant};
 use reth_trie::{updates::TrieUpdates, HashedPostState};
 use std::{sync::Arc, time::Duration};
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
@@ -120,9 +119,10 @@ where
             self.ctx.provider().clone(),
             self.proofs_history_window,
             self.proofs_history_prune_interval,
-            CancellationToken::new(),
         );
-        self.ctx.task_executor().spawn(Box::pin(prune_task.run()));
+        self.ctx
+            .task_executor()
+            .spawn_with_graceful_shutdown_signal(|signal| Box::pin(prune_task.run(signal)));
 
         let collector = LiveTrieCollector::new(
             self.ctx.evm_config().clone(),

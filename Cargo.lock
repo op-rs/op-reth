@@ -9585,7 +9585,6 @@ dependencies = [
  "reth-trie",
  "tempfile",
  "tokio",
- "tokio-util",
  "tracing",
 ]
 
@@ -9874,6 +9873,7 @@ dependencies = [
  "reth-provider",
  "reth-revm",
  "reth-storage-errors",
+ "reth-tasks",
  "reth-testing-utils",
  "reth-trie",
  "secp256k1 0.30.0",
@@ -9884,7 +9884,6 @@ dependencies = [
  "test-case",
  "thiserror 2.0.17",
  "tokio",
- "tokio-util",
  "tracing",
 ]
 
