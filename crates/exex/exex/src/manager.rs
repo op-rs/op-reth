@@ -1144,7 +1144,7 @@ mod tests {
         // Setup a notification
         let notification = ExExNotification::ChainCommitted {
             new: Arc::new(Chain::new(
-                vec![Default::default()],
+                vec![block1.clone(), block2.clone()],
                 Default::default(),
                 Default::default(),
                 Default::default(),
