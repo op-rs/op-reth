@@ -1,7 +1,7 @@
 # Variables
 DOCKER_IMAGE_NAME := op-reth
 DOCKER_TAG := local
-DOCKERFILE_PATH := ../../../DockerfileOp
+DOCKERFILE_PATH := ../../../DockerfileOpProof
 KURTOSIS_PACKAGE := github.com/ethpandaops/optimism-package@998796c0f3bb478d63d729e65f0b76e24112e00d
 DEVNET ?= opgeth-seq-opreth-val
 GO_PKG_NAME ?= proofs/core
@@ -16,6 +16,16 @@ all: build run
 build:
 	@echo "Building $(DOCKER_IMAGE_NAME):$(DOCKER_TAG) Docker image..."
 	cd ../../../ && docker build -f $(notdir $(DOCKERFILE_PATH)) -t $(DOCKER_IMAGE_NAME):$(DOCKER_TAG) .
+
+# Build coverage-enabled op-reth Docker image
+build-with-cov:
+	@echo "Building coverage-enabled $(DOCKER_IMAGE_NAME):cov Docker image..."
+	cd ../../../ && docker build \
+	  --build-arg RUSTFLAGS="-Cinstrument-coverage" \
+	  --build-arg CARGO_INCREMENTAL=0 \
+	  --build-arg LLVM_PROFILE_FILE="/coverage/%m-%p.profraw" \
+	  -f $(notdir $(DOCKERFILE_PATH)) \
+	  -t $(DOCKER_IMAGE_NAME):$(DOCKER_TAG) .
 
 # Run Kurtosis with the optimism devnet
 run:
