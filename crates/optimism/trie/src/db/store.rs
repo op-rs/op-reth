@@ -158,7 +158,11 @@ impl MdbxProofsStorage {
 
         for (k, vv) in to_append {
             // For block 0, we need to update the existing entries.
-            cur.upsert(k, &vv)?;
+            let val = cur.seek_by_key_subkey(k.clone(), 0)?;
+            if val.is_some() && val.unwrap().block_number == 0 {
+                cur.delete_current()?;
+            }
+            cur.insert(k, &vv)?;
         }
 
         // Deletion must be called after the update otherwise deleted entries will be overwritten by
@@ -693,16 +697,98 @@ impl OpProofsStore for MdbxProofsStorage {
         }
 
         self.env.update(|tx| {
+            let branches_diff = diff.trie_updates;
+            let leaves_diff = diff.post_state;
+
+            // Apply account branch updates at block 0
+            let account_items = branches_diff.account_nodes
+                .into_iter()
+                .map(|(path, branch)| (path, Some(branch)));
+            // Removed_nodes → tombstones
+            let account_remove_items = branches_diff.removed_nodes
+                .into_iter()
+                .map(|path| (path, Option::<BranchNodeCompact>::None));
+            
+            self.append_or_delete_dup_sorted(tx, 0, account_items, false)?;
+            self.append_or_delete_dup_sorted(tx, 0, account_remove_items, false)?;
+
+            // let mut account_cursor = tx.new_cursor::<AccountTrieHistory>()?;
+            // for item in account_items {
+            //     let kv = item.into_kv(0);
+            //     account_cursor.insert(kv.0, &kv.1)?;
+            // }
+            // for item in account_remove_items {
+            //     let key = item.into_key();
+            //     let val = account_cursor.seek_by_key_subkey(key, 0)?;
+            //     if val.is_some() && val.unwrap().block_number == 0 {
+            //         account_cursor.delete_current()?;
+            //     }
+            // }
+
+            // Apply storage trie updates at block 0
+            let mut storage_cursor = tx.new_cursor::<StorageTrieHistory>()?;
+            for (hashed_address, storage_updates) in branches_diff.storage_tries {
+                // nodes: inserts/updates
+                let node_items = storage_updates.storage_nodes.into_iter().map(
+                    |(path, node)| (hashed_address, path, Some(node))
+                );
+                // Removed_nodes: tombstones
+                let node_remove_items = storage_updates.removed_nodes.into_iter().map(
+                    |path| (hashed_address, path, Option::<BranchNodeCompact>::None)
+                );
+                // self.append_or_delete_dup_sorted(tx, 0, node_items, false)?;
+                // self.append_or_delete_dup_sorted(tx, 0, node_remove_items, false)?;
+                
+                for item in node_items {
+                    let kv = item.into_kv(0);
+                    let val = storage_cursor.seek_by_key_subkey(kv.0.clone(), 0)?;
+                    if val.is_some() && val.unwrap().block_number == 0 {
+                        storage_cursor.delete_current()?;
+                    }
+                    storage_cursor.insert(kv.0, &kv.1)?;
+                }
+                
+                // for item in node_remove_items {
+                //     let key = item.into_key();
+                //     let val = storage_cursor.seek_by_key_subkey(key, 0)?;
+                //     if val.is_some() && val.unwrap().block_number == 0 {
+                //         storage_cursor.delete_current()?;
+                //     }
+                // }
+                self.append_or_delete_dup_sorted(tx, 0, node_remove_items, false)?;
+
+            }
+
+            // let mut account_hashed_cursor = tx.new_cursor::<HashedAccountHistory>()?;
+            // for item in leaves_diff.accounts {
+            //     let kv = item.into_kv(0);
+            //     account_hashed_cursor.insert(kv.0, &kv.1)?;
+            // }
+            let leave_accounts_items = leaves_diff.accounts.into_iter().map(|(key, value)| (key, value));
+            self.append_or_delete_dup_sorted(tx, 0, leave_accounts_items, false)?;
+
+            // Apply storage leaves at block 0
+            let storage_items = leaves_diff.storages.into_iter().flat_map(
+                |(hashed_address, storage)| {
+                    storage.storage.into_iter().map(move |(slot, value)| {
+                        (hashed_address, slot, Some(StorageValue(value)))
+                    })
+                }
+            );
+            
+            self.append_or_delete_dup_sorted(tx, 0, storage_items, false)?;
+            // let mut storage_hashed_cursor = tx.new_cursor::<HashedStorageHistory>()?;
+            // for item in storage_items {
+            //     let kv = item.into_kv(0);
+            //     storage_hashed_cursor.insert(kv.0, &kv.1)?;
+            // }
+
             // First, delete the old entries for the block range excluding block 0
             self.delete_history_ranged(
                 tx,
                 max(old_earliest_block_number, 1)..new_earliest_block_number,
             )?;
-
-            // Then, store the new entries for block 0.
-            // The removed entries in diff from block 0 will also be removed(hard-delete) by this
-            self.store_trie_updates_for_block(tx, 0, diff, false)?;
-
+            
             // Set the earliest block number to the new value
             Self::inner_set_earliest_block_number(
                 tx,
