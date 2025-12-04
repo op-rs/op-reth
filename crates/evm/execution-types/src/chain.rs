@@ -175,7 +175,7 @@ impl<N: NodePrimitives> Chain<N> {
     /// 2. The execution outcome representing the final state.
     /// 3. The trie updates map.
     /// 4. The hashed state map.
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     pub fn into_inner(
         self,
     ) -> (
