@@ -488,7 +488,7 @@ pub(super) mod serde_bincode_compat {
     {
         blocks: RecoveredBlocks<'a, N::Block>,
         execution_outcome: serde_bincode_compat::ExecutionOutcome<'a, N::Receipt>,
-        #[serde(default, skip_serializing, rename = "trie_updates_legacy")]
+        #[serde(default, rename = "trie_updates_legacy")]
         _trie_updates_legacy: Option<TrieUpdates<'a>>,
         #[serde(default)]
         trie_updates: BTreeMap<BlockNumber, Arc<super::TrieUpdates>>,
