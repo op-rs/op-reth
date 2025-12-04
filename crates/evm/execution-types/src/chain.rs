@@ -455,6 +455,10 @@ pub(super) mod serde_bincode_compat {
         serde_bincode_compat::{RecoveredBlock, SerdeBincodeCompat},
         Block, NodePrimitives,
     };
+    use reth_trie_common::serde_bincode_compat::{
+        hashed_state::HashedPostStateSorted,
+        updates::{TrieUpdates, TrieUpdatesSorted},
+    };
     use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
     use serde_with::{DeserializeAs, SerializeAs};
 
@@ -484,18 +488,11 @@ pub(super) mod serde_bincode_compat {
         blocks: RecoveredBlocks<'a, N::Block>,
         execution_outcome: serde_bincode_compat::ExecutionOutcome<'a, N::Receipt>,
         #[serde(default, rename = "trie_updates_legacy")]
-        _trie_updates_legacy:
-            Option<reth_trie_common::serde_bincode_compat::updates::TrieUpdates<'a>>,
+        _trie_updates_legacy: Option<TrieUpdates<'a>>,
         #[serde(default)]
-        trie_updates: BTreeMap<
-            BlockNumber,
-            reth_trie_common::serde_bincode_compat::updates::TrieUpdatesSorted<'a>,
-        >,
+        trie_updates: BTreeMap<BlockNumber, TrieUpdatesSorted<'a>>,
         #[serde(default)]
-        hashed_state: BTreeMap<
-            BlockNumber,
-            reth_trie_common::serde_bincode_compat::hashed_state::HashedPostStateSorted<'a>,
-        >,
+        hashed_state: BTreeMap<BlockNumber, HashedPostStateSorted<'a>>,
     }
 
     #[derive(Debug)]
