@@ -103,6 +103,7 @@ impl<N: ProviderNodeTypes> ProviderFactory<N> {
         )
         .storage_settings()
         .ok()
+        .flatten()
         .unwrap_or(legacy_settings);
 
         Ok(Self {
