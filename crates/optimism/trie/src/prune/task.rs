@@ -1,7 +1,10 @@
 use crate::{prune::OpProofStoragePruner, OpProofsStore};
 use reth_provider::BlockHashReader;
 use reth_tasks::shutdown::GracefulShutdown;
-use tokio::{time, time::Duration};
+use tokio::{
+    time,
+    time::{Duration, MissedTickBehavior},
+};
 use tracing::info;
 
 /// Periodic pruner task: constructs the pruner and runs it every interval.
@@ -29,7 +32,7 @@ where
     }
 
     /// Run forever (until `cancel`), executing one prune pass per `task_run_interval`.
-    pub async fn run(self, mut shutdown: GracefulShutdown) {
+    pub async fn run(self, mut signal: GracefulShutdown) {
         info!(
             target: "trie::pruner_task",
             min_block_interval = self.min_block_interval,
@@ -37,18 +40,18 @@ where
             "Starting pruner task"
         );
 
+        // Drive pruning with a periodic ticker
+        let mut interval = time::interval(self.task_run_interval);
+        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
         loop {
             tokio::select! {
-                _ = &mut shutdown => {
+                _ = &mut signal => {
                     info!(target: "trie::pruner_task", "Pruner task cancelled; exiting");
                     break;
                 }
-                _ = self.pruner.run() => {
-                    // After a tick completes (success or error), sleep until the next interval or cancel
-                    tokio::select! {
-                        _ = &mut shutdown => break,
-                        _ = time::sleep(self.task_run_interval) => {}
-                    }
+                _ = interval.tick() => {
+                    self.pruner.run().await
                 }
             }
         }
