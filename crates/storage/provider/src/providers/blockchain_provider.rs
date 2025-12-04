@@ -794,6 +794,7 @@ mod tests {
     };
     use revm_database::{BundleState, OriginalValuesKnown};
     use std::{
+        collections::BTreeMap,
         ops::{Bound, Range, RangeBounds},
         sync::Arc,
     };
