@@ -32,7 +32,7 @@
       "type": "panel",
       "id": "piechart",
       "name": "Pie chart",
-      "version": ""
+      "version": "12.3.0"
     },
     {
       "type": "datasource",
