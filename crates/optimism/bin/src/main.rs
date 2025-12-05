@@ -72,6 +72,16 @@ struct Args {
     /// Interval between proof-storage prune runs. Accepts human-friendly durations
     /// like "100s", "5m", "1h". Defaults to 1h.
     ///
+    /// - Shorter intervals prune smaller batches more often, so each prune
+    ///   run tends to be faster and the blocking pause for writes is shorter,
+    ///   at the cost of more frequent pauses.
+    /// - Longer intervals prune larger batches less often, which reduces how
+    ///   often pruning runs, but each run can take longer and block writes
+    ///   for longer.
+    ///
+    /// A shorter interval is preferred so that prune
+    /// runs stay small and don’t stall writes for too long.
+    ///
     /// CLI: `--proofs-history.prune-interval 10m`
     #[arg(
         long = "proofs-history.prune-interval",
