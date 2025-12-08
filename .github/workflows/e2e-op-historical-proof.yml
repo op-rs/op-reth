@@ -69,6 +69,12 @@ jobs:
         run: |
           make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opgeth-seq-opreth-val
 
+      - name: Run prune e2e tests
+        working-directory: crates/optimism/prune
+        run: |
+          make test-e2e-kurtosis GO_PKG_NAME=proofs/prune DEVNET=opgeth-seq-opreth-val
+      
+
       # disable coverage for now
       # - name: Flush coverage data
       #   working-directory: crates/optimism/tests
@@ -87,7 +93,7 @@ jobs:
 
       # - name: Install llvm
       #   run: |
-      #     sudo apt-get update 
+      #     sudo apt-get update
       #     sudo apt-get install -y llvm
 
       # - name: Merge coverage files
@@ -166,6 +172,11 @@ jobs:
         working-directory: crates/optimism/tests
         run: |
           make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opreth-seq-opgeth-val
+
+      - name: Run prune e2e tests
+        working-directory: crates/optimism/tests
+        run: |
+          make test-e2e-kurtosis GO_PKG_NAME=proofs/prune DEVNET=opreth-seq-opgeth-val    
 
   e2e-op-historical-proof-success:
     name: e2e-op-historical-proof-success
