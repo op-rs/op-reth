@@ -817,7 +817,6 @@ mod tests {
     };
     use revm_database::{BundleState, OriginalValuesKnown};
     use std::{
-        collections::BTreeMap,
         ops::{Bound, Range, RangeBounds},
         sync::Arc,
     };
@@ -1355,8 +1354,8 @@ mod tests {
         let chain = Chain::new(
             vec![block_2],
             ExecutionOutcome::default(),
-            BTreeMap::new(),
-            BTreeMap::new(),
+            Default::default(),
+            Default::default(),
         );
         let commit = CanonStateNotification::Commit { new: Arc::new(chain.clone()) };
         in_memory_state.notify_canon_state(commit.clone());
@@ -1370,8 +1369,8 @@ mod tests {
         let new_chain = Chain::new(
             vec![block_3, block_4],
             ExecutionOutcome::default(),
-            BTreeMap::new(),
-            BTreeMap::new(),
+            Default::default(),
+            Default::default(),
         );
         let re_org =
             CanonStateNotification::Reorg { old: Arc::new(chain), new: Arc::new(new_chain) };
