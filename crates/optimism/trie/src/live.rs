@@ -106,8 +106,8 @@ where
             .store_trie_updates(
                 block_ref,
                 BlockStateDiff {
-                    trie_updates: trie_updates.into_sorted(),
-                    post_state: hashed_state.into_sorted(),
+                    sorted_trie_updates: trie_updates.into_sorted(),
+                    sorted_post_state: hashed_state.into_sorted(),
                 },
             )
             .await?;
@@ -146,7 +146,10 @@ where
 
         let storage_result = self
             .storage
-            .store_trie_updates(block, BlockStateDiff { trie_updates, post_state })
+            .store_trie_updates(
+                block,
+                BlockStateDiff { sorted_trie_updates: trie_updates, sorted_post_state: post_state },
+            )
             .await?;
 
         let write_duration = start.elapsed();
@@ -199,8 +202,8 @@ where
             block_trie_updates.insert(
                 *block,
                 BlockStateDiff {
-                    trie_updates: (**trie_updates).clone(),
-                    post_state: (**hashed_state).clone(),
+                    sorted_trie_updates: (**trie_updates).clone(),
+                    sorted_post_state: (**hashed_state).clone(),
                 },
             );
         }

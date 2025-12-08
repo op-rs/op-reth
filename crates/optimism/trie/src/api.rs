@@ -17,16 +17,16 @@ use std::{fmt::Debug, time::Duration};
 #[derive(Debug, Clone, Default)]
 pub struct BlockStateDiff {
     /// Trie updates for branch nodes
-    pub trie_updates: TrieUpdatesSorted,
+    pub sorted_trie_updates: TrieUpdatesSorted,
     /// Post state for leaf nodes (accounts and storage)
-    pub post_state: HashedPostStateSorted,
+    pub sorted_post_state: HashedPostStateSorted,
 }
 
 impl BlockStateDiff {
     /// Extend the [` BlockStateDiff`] from other latest [`BlockStateDiff`]
     pub fn extend_ref(&mut self, other: &Self) {
-        self.trie_updates.extend_ref(other.trie_updates);
-        self.post_state.extend_ref(other.post_state);
+        self.sorted_trie_updates.extend_ref(&other.sorted_trie_updates);
+        self.sorted_post_state.extend_ref(&other.sorted_post_state);
     }
 }
 

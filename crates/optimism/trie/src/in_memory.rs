@@ -14,7 +14,7 @@ use reth_trie::{
     BranchNodeCompact, HashedPostStateSorted, Nibbles,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::RwLock;
 
 /// In-memory implementation of [`OpProofsStore`] for testing purposes
 #[derive(Debug, Clone)]
@@ -56,13 +56,15 @@ impl InMemoryStorageInner {
         let mut result = WriteCounts::default();
 
         // Store account branch nodes
-        for (path, branch) in block_state_diff.trie_updates.account_nodes_ref() {
+        for (path, branch) in block_state_diff.sorted_trie_updates.account_nodes_ref() {
             self.account_branches.insert((block_number, *path), branch.clone());
             result.account_trie_updates_written_total += 1;
         }
 
         // Store storage branch nodes and removals
-        for (address, storage_trie_updates) in block_state_diff.trie_updates.storage_tries_ref() {
+        for (address, storage_trie_updates) in
+            block_state_diff.sorted_trie_updates.storage_tries_ref()
+        {
             // Store storage branch nodes
             for (path, branch) in storage_trie_updates.storage_nodes_ref() {
                 self.storage_branches.insert((block_number, *address, *path), branch.clone());
@@ -70,12 +72,12 @@ impl InMemoryStorageInner {
             }
         }
 
-        for (address, account) in &block_state_diff.post_state.accounts {
+        for (address, account) in &block_state_diff.sorted_post_state.accounts {
             self.hashed_accounts.insert((block_number, *address), *account);
             result.hashed_accounts_written_total += 1;
         }
 
-        for (hashed_address, storage) in &block_state_diff.post_state.storages {
+        for (hashed_address, storage) in &block_state_diff.sorted_post_state.storages {
             // Handle wiped storage: iterate all existing values and mark them as deleted
             // This is an expensive operation and should never happen for blocks going forward.
             if storage.wiped {
@@ -111,8 +113,8 @@ impl InMemoryStorageInner {
             }
         }
 
-        self.trie_updates.insert(block_number, block_state_diff.trie_updates.clone());
-        self.post_states.insert(block_number, block_state_diff.post_state.clone());
+        self.trie_updates.insert(block_number, block_state_diff.sorted_trie_updates.clone());
+        self.post_states.insert(block_number, block_state_diff.sorted_post_state.clone());
 
         result
     }
@@ -601,7 +603,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         let trie_updates = inner.trie_updates.get(&block_number).cloned().unwrap_or_default();
         let post_state = inner.post_states.get(&block_number).cloned().unwrap_or_default();
 
-        Ok(BlockStateDiff { trie_updates, post_state })
+        Ok(BlockStateDiff { sorted_trie_updates: trie_updates, sorted_post_state: post_state })
     }
 
     async fn prune_earliest_state(
@@ -611,8 +613,8 @@ impl OpProofsStore for InMemoryProofsStorage {
     ) -> OpProofsStorageResult<()> {
         let mut inner = self.inner.write().await;
 
-        let branches_diff = diff.trie_updates;
-        let leaves_diff = diff.post_state;
+        let branches_diff = diff.sorted_trie_updates;
+        let leaves_diff = diff.sorted_post_state;
 
         // Apply branch updates to the earliest state (block 0)
         for (path, branch) in &branches_diff.account_nodes {
@@ -760,16 +762,18 @@ mod tests {
 
         let trie_updates = TrieUpdatesSorted::default();
         let post_state = HashedPostStateSorted::default();
-        let block_state_diff =
-            BlockStateDiff { trie_updates: trie_updates.clone(), post_state: post_state.clone() };
+        let block_state_diff = BlockStateDiff {
+            sorted_trie_updates: trie_updates.clone(),
+            sorted_post_state: post_state.clone(),
+        };
 
         const BLOCK: BlockWithParent =
             BlockWithParent::new(B256::ZERO, NumHash::new(5, B256::ZERO));
         storage.store_trie_updates(BLOCK, block_state_diff).await?;
 
         let retrieved_diff = storage.fetch_trie_updates(BLOCK.block.number).await?;
-        assert_eq!(retrieved_diff.trie_updates, trie_updates);
-        assert_eq!(retrieved_diff.post_state, post_state);
+        assert_eq!(retrieved_diff.sorted_trie_updates, trie_updates);
+        assert_eq!(retrieved_diff.sorted_post_state, post_state);
 
         Ok(())
     }
