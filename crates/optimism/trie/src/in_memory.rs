@@ -10,11 +10,11 @@ use reth_primitives_traits::Account;
 use reth_trie::{
     hashed_cursor::{HashedCursor, HashedStorageCursor},
     trie_cursor::{TrieCursor, TrieStorageCursor},
-    updates::TrieUpdates,
-    BranchNodeCompact, HashedPostState, Nibbles,
+    updates::TrieUpdatesSorted,
+    BranchNodeCompact, HashedPostStateSorted, Nibbles,
 };
 use std::{collections::BTreeMap, sync::Arc};
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 
 /// In-memory implementation of [`OpProofsStore`] for testing purposes
 #[derive(Debug, Clone)]
@@ -38,10 +38,10 @@ struct InMemoryStorageInner {
     hashed_storages: BTreeMap<(u64, B256, B256), U256>,
 
     /// Trie updates by block number
-    trie_updates: BTreeMap<u64, TrieUpdates>,
+    trie_updates: BTreeMap<u64, TrieUpdatesSorted>,
 
     /// Post state by block number
-    post_states: BTreeMap<u64, HashedPostState>,
+    post_states: BTreeMap<u64, HashedPostStateSorted>,
 
     /// Earliest block number and hash
     earliest_block: Option<(u64, B256)>,
@@ -57,23 +57,7 @@ impl InMemoryStorageInner {
 
         // Store account branch nodes
         for (path, branch) in block_state_diff.trie_updates.account_nodes_ref() {
-            self.account_branches.insert((block_number, *path), Some(branch.clone()));
-            result.account_trie_updates_written_total += 1;
-        }
-
-        // Store removed account nodes
-        let account_removals = block_state_diff
-            .trie_updates
-            .removed_nodes_ref()
-            .iter()
-            .filter_map(|n| {
-                (!block_state_diff.trie_updates.account_nodes_ref().contains_key(n))
-                    .then_some((n, None))
-            })
-            .collect::<Vec<_>>();
-
-        for (path, branch) in account_removals {
-            self.account_branches.insert((block_number, *path), branch);
+            self.account_branches.insert((block_number, *path), branch.clone());
             result.account_trie_updates_written_total += 1;
         }
 
@@ -81,21 +65,7 @@ impl InMemoryStorageInner {
         for (address, storage_trie_updates) in block_state_diff.trie_updates.storage_tries_ref() {
             // Store storage branch nodes
             for (path, branch) in storage_trie_updates.storage_nodes_ref() {
-                self.storage_branches.insert((block_number, *address, *path), Some(branch.clone()));
-                result.storage_trie_updates_written_total += 1;
-            }
-
-            // Store removed storage nodes
-            let storage_removals = storage_trie_updates
-                .removed_nodes_ref()
-                .iter()
-                .filter_map(|n| {
-                    (!storage_trie_updates.storage_nodes_ref().contains_key(n)).then_some((n, None))
-                })
-                .collect::<Vec<_>>();
-
-            for (path, branch) in storage_removals {
-                self.storage_branches.insert((block_number, *address, *path), branch);
+                self.storage_branches.insert((block_number, *address, *path), branch.clone());
                 result.storage_trie_updates_written_total += 1;
             }
         }
@@ -134,7 +104,7 @@ impl InMemoryStorageInner {
                     }
                 }
             } else {
-                for (slot, value) in &storage.storage {
+                for (slot, value) in storage.storage_slots_ref() {
                     self.hashed_storages.insert((block_number, *hashed_address, *slot), *value);
                     result.hashed_storages_written_total += 1;
                 }
@@ -646,22 +616,23 @@ impl OpProofsStore for InMemoryProofsStorage {
 
         // Apply branch updates to the earliest state (block 0)
         for (path, branch) in &branches_diff.account_nodes {
-            inner.account_branches.insert((0, *path), Some(branch.clone()));
-        }
-
-        // Remove pruned account branches
-        for path in &branches_diff.removed_nodes {
-            inner.account_branches.remove(&(0, *path));
+            match branch {
+                Some(br) => _ = inner.account_branches.insert((0, *path), Some(br.clone())),
+                None => _ = inner.account_branches.remove(&(0, *path)),
+            }
         }
 
         // Apply storage trie updates
         for (hashed_address, storage_updates) in &branches_diff.storage_tries {
             for (path, branch) in &storage_updates.storage_nodes {
-                inner.storage_branches.insert((0, *hashed_address, *path), Some(branch.clone()));
-            }
-
-            for path in &storage_updates.removed_nodes {
-                inner.storage_branches.remove(&(0, *hashed_address, *path));
+                match branch {
+                    Some(br) => {
+                        _ = inner
+                            .storage_branches
+                            .insert((0, *hashed_address, *path), Some(br.clone()))
+                    }
+                    None => _ = inner.storage_branches.remove(&(0, *hashed_address, *path)),
+                }
             }
         }
 
@@ -672,7 +643,7 @@ impl OpProofsStore for InMemoryProofsStorage {
 
         // Apply storage updates
         for (hashed_address, storage) in &leaves_diff.storages {
-            for (slot, value) in &storage.storage {
+            for (slot, value) in storage.storage_slots_ref() {
                 inner.hashed_storages.insert((0, *hashed_address, *slot), *value);
             }
         }
@@ -787,8 +758,8 @@ mod tests {
     async fn test_trie_updates_storage() -> Result<(), OpProofsStorageError> {
         let storage = InMemoryProofsStorage::new();
 
-        let trie_updates = TrieUpdates::default();
-        let post_state = HashedPostState::default();
+        let trie_updates = TrieUpdatesSorted::default();
+        let post_state = HashedPostStateSorted::default();
         let block_state_diff =
             BlockStateDiff { trie_updates: trie_updates.clone(), post_state: post_state.clone() };
 

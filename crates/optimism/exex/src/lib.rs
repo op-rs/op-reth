@@ -253,8 +253,8 @@ where
                 collector
                     .store_block_updates(
                         block.block_with_parent(),
-                        trie_updates.clone(),
-                        hashed_state.clone(),
+                        (*trie_updates).clone(),
+                        (*hashed_state).clone(),
                     )
                     .await?;
 
@@ -329,11 +329,7 @@ where
                 eyre::eyre!("Missing Hashed state for block {} in new chain", block_number)
             })?;
 
-            block_updates.push((
-                block.block_with_parent(),
-                trie_updates.clone(),
-                hashed_state.clone(),
-            ));
+            block_updates.push((block.block_with_parent(), trie_updates, hashed_state));
         }
 
         collector.unwind_and_store_block_updates(block_updates).await?;

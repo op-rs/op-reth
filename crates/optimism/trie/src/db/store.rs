@@ -272,7 +272,7 @@ impl MdbxProofsStorage {
         block_state_diff: BlockStateDiff,
         soft_delete: bool,
     ) -> OpProofsStorageResult<ChangeSet> {
-        let sorted_trie_updates = block_state_diff.trie_updates.into_sorted();
+        let BlockStateDiff { sorted_trie_updates, .. } = block_state_diff;
 
         //  Sorted list of updated and removed account nodes
         let sorted_account_nodes = sorted_trie_updates.account_nodes;
@@ -284,7 +284,7 @@ impl MdbxProofsStorage {
             .sorted_by_key(|(hashed_address, _)| *hashed_address)
             .collect::<Vec<_>>();
 
-        let sorted_post_state = block_state_diff.post_state.into_sorted();
+        BlockStateDiff { sorted_post_state, .. } = block_state_diff;
 
         let sorted_storage = sorted_post_state
             .account_storages()

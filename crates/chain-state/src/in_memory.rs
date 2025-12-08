@@ -927,8 +927,8 @@ impl<N: NodePrimitives<SignedTx: SignedTransaction>> NewCanonicalChain<N> {
                     chain.append_block(
                         exec.recovered_block().clone(),
                         exec.execution_outcome().clone(),
-                        Arc::new((*exec.trie_updates()).clone().into()),
-                        Arc::new((*exec.hashed_state()).clone().into()),
+                        exec.trie_updates(),
+                        exec.hashed_state(),
                     );
                     chain
                 }));
@@ -939,8 +939,8 @@ impl<N: NodePrimitives<SignedTx: SignedTransaction>> NewCanonicalChain<N> {
                     chain.append_block(
                         exec.recovered_block().clone(),
                         exec.execution_outcome().clone(),
-                        Arc::new((*exec.trie_updates()).clone().into()),
-                        Arc::new((*exec.hashed_state()).clone().into()),
+                        exec.trie_updates(),
+                        exec.hashed_state(),
                     );
                     chain
                 }));
@@ -948,8 +948,8 @@ impl<N: NodePrimitives<SignedTx: SignedTransaction>> NewCanonicalChain<N> {
                     chain.append_block(
                         exec.recovered_block().clone(),
                         exec.execution_outcome().clone(),
-                        Arc::new((*exec.trie_updates()).clone().into()),
-                        Arc::new((*exec.hashed_state()).clone().into()),
+                        exec.trie_updates(),
+                        exec.hashed_state(),
                     );
                     chain
                 }));
