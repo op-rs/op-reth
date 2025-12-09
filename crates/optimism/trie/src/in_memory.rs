@@ -760,12 +760,9 @@ mod tests {
     async fn test_trie_updates_storage() -> Result<(), OpProofsStorageError> {
         let storage = InMemoryProofsStorage::new();
 
-        let trie_updates = TrieUpdatesSorted::default();
-        let post_state = HashedPostStateSorted::default();
-        let block_state_diff = BlockStateDiff {
-            sorted_trie_updates: trie_updates.into_sorted(),
-            sorted_post_state: post_state.into_sorted(),
-        };
+        let sorted_trie_updates = TrieUpdatesSorted::default();
+        let sorted_post_state = HashedPostStateSorted::default();
+        let block_state_diff = BlockStateDiff { sorted_trie_updates, sorted_post_state };
 
         const BLOCK: BlockWithParent =
             BlockWithParent::new(B256::ZERO, NumHash::new(5, B256::ZERO));

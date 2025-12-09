@@ -2155,8 +2155,12 @@ mod tests {
         let node2 = BranchNodeCompact::new(0b10, 0, 0, vec![], Some(B256::random()));
 
         let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
-        let mut diff1 = BlockStateDiff::default();
-        diff1.sorted_trie_updates.account_nodes.insert(path1, node1.clone());
+        let mut diff1_trie_updates = TrieUpdates::default();
+        diff1_trie_updates.account_nodes.insert(path1, node1.clone());
+        let diff1 = BlockStateDiff {
+            sorted_trie_updates: diff1_trie_updates.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block_1, diff1).await.unwrap();
 
         let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
@@ -2261,22 +2265,34 @@ mod tests {
         let new_acc = Account { nonce: 10, balance: U256::from(500), ..Default::default() };
 
         let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
-        let mut diff1 = BlockStateDiff::default();
-        diff1.sorted_post_state.accounts.insert(addr1, Some(acc1));
+        let mut diff1_post_state = HashedPostState::default();
+        diff1_post_state.accounts.insert(addr1, Some(acc1));
+        let diff1 = BlockStateDiff {
+            sorted_post_state: diff1_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block_1, diff1).await.unwrap();
 
         let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
-        let mut diff2 = BlockStateDiff::default();
-        diff2.sorted_post_state.accounts.insert(addr1, Some(acc2));
+        let mut diff2_post_state = HashedPostState::default();
+        diff2_post_state.accounts.insert(addr1, Some(acc2));
+        let diff2 = BlockStateDiff {
+            sorted_post_state: diff2_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block_2, diff2).await.unwrap();
 
         // Prune to block 3, with new initial state including:
         // - addr1 with its final value (acc2) from block 2
         // - addr2 as a new account
         let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
-        let mut prune_diff = BlockStateDiff::default();
-        prune_diff.sorted_post_state.accounts.insert(addr1, Some(acc2));
-        prune_diff.sorted_post_state.accounts.insert(addr2, Some(new_acc));
+        let mut prune_diff_post_state = HashedPostState::default();
+        prune_diff_post_state.accounts.insert(addr1, Some(acc2));
+        prune_diff_post_state.accounts.insert(addr2, Some(new_acc));
+        let prune_diff = BlockStateDiff {
+            sorted_post_state: prune_diff_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.prune_earliest_state(block_3, prune_diff).await.unwrap();
 
         // Verify old versions of addr1 were pruned
@@ -3070,7 +3086,7 @@ mod tests {
             let mut d_trie_updates = TrieUpdates::default();
             d_trie_updates.account_nodes.insert(path, node);
             BlockStateDiff {
-                sorted_trie_updates: d_trie_updates,
+                sorted_trie_updates: d_trie_updates.into_sorted(),
                 sorted_post_state: HashedPostStateSorted::default(),
             }
         };
@@ -3166,8 +3182,12 @@ mod tests {
 
         // Block 3: Additional updates
         let b3 = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random()));
-        let mut diff3 = BlockStateDiff::default();
-        diff3.sorted_post_state.accounts.insert(addr1, Some(acc2)); // update addr1
+        let mut diff3_post_state = HashedPostState::default();
+        diff3_post_state.accounts.insert(addr1, Some(acc2)); // update addr1
+        let diff3 = BlockStateDiff {
+            sorted_trie_updates: TrieUpdatesSorted::default(),
+            sorted_post_state: diff3_post_state.into_sorted(),
+        };
         store.store_trie_updates(b3, diff3).await.expect("store b3");
 
         // Unwind to block 1

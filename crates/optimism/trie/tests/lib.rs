@@ -109,12 +109,9 @@ async fn test_trie_updates_operations<S: OpProofsStore>(
     storage: S,
 ) -> Result<(), OpProofsStorageError> {
     let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
-    let trie_updates = TrieUpdates::default();
-    let post_state = HashedPostState::default();
-    let block_state_diff = BlockStateDiff {
-        sorted_trie_updates: trie_updates.into_sorted(),
-        sorted_post_state: post_state.into_sorted(),
-    };
+    let sorted_trie_updates = TrieUpdatesSorted::default();
+    let sorted_post_state = HashedPostStateSorted::default();
+    let block_state_diff = BlockStateDiff { sorted_trie_updates, sorted_post_state };
 
     // Store trie updates
     storage.store_trie_updates(block_ref, block_state_diff).await?;
