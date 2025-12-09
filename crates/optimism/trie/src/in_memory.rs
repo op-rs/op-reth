@@ -114,7 +114,7 @@ impl InMemoryStorageInner {
         }
 
         self.trie_updates.insert(block_number, block_state_diff.sorted_trie_updates.clone());
-        self.post_states.insert(block_number, block_state_diff.sorted_post_state.clone());
+        self.post_states.insert(block_number, block_state_diff.sorted_post_state);
 
         result
     }

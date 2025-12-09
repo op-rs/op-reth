@@ -29,7 +29,7 @@ use reth_trie::{
     hashed_cursor::HashedCursor,
     trie_cursor::TrieCursor,
     updates::{StorageTrieUpdates, TrieUpdates},
-    BranchNodeCompact, HashedPostState, HashedStorage, Nibbles,
+    BranchNodeCompact, HashedPostState, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
 
@@ -662,10 +662,7 @@ impl OpProofsStore for MdbxProofsStorage {
                         }
                     };
 
-                let hs = post_state
-                    .storages
-                    .entry(key.hashed_address)
-                    .or_insert_with(HashedStorage::default);
+                let hs = post_state.storages.entry(key.hashed_address).or_default();
 
                 // handle wiped storage scenario
                 // Issue: https://github.com/op-rs/op-reth/issues/323
