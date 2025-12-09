@@ -763,8 +763,8 @@ mod tests {
         let trie_updates = TrieUpdatesSorted::default();
         let post_state = HashedPostStateSorted::default();
         let block_state_diff = BlockStateDiff {
-            sorted_trie_updates: trie_updates.clone(),
-            sorted_post_state: post_state.clone(),
+            sorted_trie_updates: trie_updates.into_sorted(),
+            sorted_post_state: post_state.into_sorted(),
         };
 
         const BLOCK: BlockWithParent =
