@@ -56,7 +56,7 @@ where
         let earliest_block = earliest_block_opt.unwrap().0;
 
         let interval = latest_block.saturating_sub(earliest_block);
-        if interval < self.min_block_interval {
+        if interval <= self.min_block_interval {
             trace!(target: "trie::pruner", "Nothing to prune");
             return Ok(PrunerOutput::default())
         }
