@@ -77,20 +77,43 @@ where
 
         let mut final_diff = BlockStateDiff::default();
         for i in earliest_block..new_earliest_block {
-            let diff = self.provider.fetch_trie_updates(i).await?;
+            let diff = self.provider.fetch_trie_updates(i).await.inspect_err(|err| {
+                error!(
+                    target: "trie::pruner",
+                    block = i,
+                    ?err,
+                    "Failed to fetch trie updates for block during pruning"
+                )
+            })?;
             final_diff.extend(diff);
         }
         let stat_diff_fetch_duration = t.elapsed();
 
         let new_earliest_block_hash = self
             .block_hash_reader
-            .block_hash(new_earliest_block)?
+            .block_hash(new_earliest_block)
+            .inspect_err(|err| {
+                error!(
+                    target: "trie::pruner",
+                    block = new_earliest_block,
+                    ?err,
+                    "Failed to fetch block hash for new earliest block during pruning"
+                )
+            })?
             .ok_or(PrunerError::BlockNotFound(new_earliest_block))?;
 
         let parent_block_num = new_earliest_block - 1;
         let parent_block_hash = self
             .block_hash_reader
-            .block_hash(parent_block_num)?
+            .block_hash(parent_block_num)
+            .inspect_err(|err| {
+                error!(
+                    target: "trie::pruner",
+                    block = parent_block_num,
+                    ?err,
+                    "Failed to fetch block hash for parent block during pruning"
+                )
+            })?
             .ok_or(PrunerError::BlockNotFound(parent_block_num))?;
 
         let block_with_parent = BlockWithParent {

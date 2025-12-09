@@ -705,14 +705,13 @@ impl OpProofsStore for MdbxProofsStorage {
                 target: "trie::store",
                 "Updating initial state for block 0"
             );
-            self.store_trie_updates_for_block(tx, 0, diff, false)
-                .inspect_err(|err| {
-                    error!(
-                        target: "trie::store",
-                        ?err,
-                        "Failed to update initial state during pruning"
-                    )
-                })?;
+            self.store_trie_updates_for_block(tx, 0, diff, false).inspect_err(|err| {
+                error!(
+                    target: "trie::store",
+                    ?err,
+                    "Failed to update initial state during pruning"
+                )
+            })?;
 
             // Delete the old entries for the block range excluding block 0
             info!(
