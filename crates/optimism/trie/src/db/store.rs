@@ -26,8 +26,10 @@ use reth_db::{
 };
 use reth_primitives_traits::Account;
 use reth_trie::{
-    hashed_cursor::HashedCursor, trie_cursor::TrieCursor, updates::StorageTrieUpdates,
-    BranchNodeCompact, HashedStorage, Nibbles,
+    hashed_cursor::HashedCursor,
+    trie_cursor::TrieCursor,
+    updates::{StorageTrieUpdates, TrieUpdates},
+    BranchNodeCompact, HashedPostState, HashedStorage, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
 
@@ -272,7 +274,7 @@ impl MdbxProofsStorage {
         block_state_diff: BlockStateDiff,
         soft_delete: bool,
     ) -> OpProofsStorageResult<ChangeSet> {
-        let BlockStateDiff { sorted_trie_updates, .. } = block_state_diff;
+        let BlockStateDiff { sorted_trie_updates, sorted_post_state } = block_state_diff;
 
         //  Sorted list of updated and removed account nodes
         let sorted_account_nodes = sorted_trie_updates.account_nodes;
@@ -283,8 +285,6 @@ impl MdbxProofsStorage {
             .into_iter()
             .sorted_by_key(|(hashed_address, _)| *hashed_address)
             .collect::<Vec<_>>();
-
-        BlockStateDiff { sorted_post_state, .. } = block_state_diff;
 
         let sorted_storage = sorted_post_state
             .account_storages()
@@ -586,7 +586,7 @@ impl OpProofsStore for MdbxProofsStorage {
             let mut hashed_account_cursor = tx.new_cursor::<HashedAccountHistory>()?;
             let mut hashed_storage_cursor = tx.new_cursor::<HashedStorageHistory>()?;
 
-            let mut block_state_diff = BlockStateDiff::default();
+            let mut trie_updates = TrieUpdates::default();
             for key in change_set.account_trie_keys {
                 let entry =
                     match account_trie_cursor.seek_by_key_subkey(key.clone(), block_number)? {
@@ -600,9 +600,9 @@ impl OpProofsStore for MdbxProofsStorage {
                     };
 
                 if let Some(value) = entry {
-                    block_state_diff.sorted_trie_updates.account_nodes.insert(key.0, value);
+                    trie_updates.account_nodes.insert(key.0, value);
                 } else {
-                    block_state_diff.sorted_trie_updates.account_nodes.insert(key.0, B256::ZERO);
+                    trie_updates.removed_nodes.insert(key.0);
                 }
             }
 
@@ -619,8 +619,7 @@ impl OpProofsStore for MdbxProofsStorage {
                         }
                     };
 
-                let stu = block_state_diff
-                    .sorted_trie_updates
+                let stu = trie_updates
                     .storage_tries
                     .entry(key.hashed_address)
                     .or_insert_with(StorageTrieUpdates::default);
@@ -634,6 +633,8 @@ impl OpProofsStore for MdbxProofsStorage {
                 }
             }
 
+            let mut post_state =
+                HashedPostState::with_capacity(change_set.hashed_account_keys.len());
             for key in change_set.hashed_account_keys {
                 let entry = match hashed_account_cursor.seek_by_key_subkey(key, block_number)? {
                     Some(v) if v.block_number == block_number => v.value.0,
@@ -645,7 +646,7 @@ impl OpProofsStore for MdbxProofsStorage {
                     }
                 };
 
-                block_state_diff.sorted_post_state.accounts.insert(key, entry);
+                post_state.accounts.insert(key, entry);
             }
 
             for key in change_set.hashed_storage_keys {
@@ -661,8 +662,7 @@ impl OpProofsStore for MdbxProofsStorage {
                         }
                     };
 
-                let hs = block_state_diff
-                    .sorted_post_state
+                let hs = post_state
                     .storages
                     .entry(key.hashed_address)
                     .or_insert_with(HashedStorage::default);
@@ -676,7 +676,10 @@ impl OpProofsStore for MdbxProofsStorage {
                 }
             }
 
-            Ok(block_state_diff)
+            Ok(BlockStateDiff {
+                sorted_trie_updates: trie_updates.into_sorted(),
+                sorted_post_state: post_state.into_sorted(),
+            })
         })?
     }
 
