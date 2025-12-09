@@ -1,8 +1,7 @@
+#[cfg(feature = "metrics")]
+use crate::prune::metrics::Metrics;
 use crate::{
-    prune::{
-        error::{OpProofStoragePrunerResult, PrunerError, PrunerOutput},
-        metrics::Metrics,
-    },
+    prune::error::{OpProofStoragePrunerResult, PrunerError, PrunerOutput},
     BlockStateDiff, OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, BlockNumHash};
