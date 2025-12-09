@@ -1,49 +1,53 @@
 package prune
 
 import (
+	"github.com/op-rs/op-geth/proofs/utils"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
 	"github.com/ethereum-optimism/optimism/op-devstack/presets"
 	"github.com/ethereum-optimism/optimism/op-service/apis"
-	"github.com/stretchr/testify/require"
 )
 
 func TestPruneProofStorage(gt *testing.T) {
 	t := devtest.SerialT(gt)
 	sys := presets.NewSingleChainMultiNode(t)
 
-	var proofWindow = uint64(200)         // Defined in the devnet yaml
-	var prunerPruneInterval = time.Minute // Defined in the devnet yaml
+	var proofWindow = uint64(200)            // Defined in the devnet yaml
+	var pruneDetectTimeout = time.Minute * 5 // An expected time within the prune should be detected.
+	opRethELNode, _ := utils.IdentifyELNodes(sys.L2EL, sys.L2ELB)
 
-	synceStatus := getProofSyncStatus(t, sys.L2ELB.Escape().EthClient())
-	distance := synceStatus.Latest - synceStatus.Earliest
+	syncStatus := getProofSyncStatus(t, opRethELNode.Escape().EthClient())
+	t.Log("Initial sync status:", syncStatus)
+	distance := syncStatus.Latest - syncStatus.Earliest
+
 	if distance < proofWindow {
 		// Wait till we reach proof window
-		t.Logf("Waiting for block %d", synceStatus.Earliest+proofWindow)
-		sys.L2ELB.WaitForBlockNumber(synceStatus.Earliest + proofWindow)
+		t.Logf("Waiting for block %d", syncStatus.Earliest+proofWindow)
+		sys.L2ELB.WaitForBlockNumber(syncStatus.Earliest + proofWindow)
 	}
 	// Now we need to wait for pruner to execute pruning can be done anytime in 1 minutes(pruner prune interval = 1min)
 	startTime := time.Now()
+	var newSyncStatus proofSyncStatus
 	for {
 		// Get sync status each Second
-		if time.Since(startTime) > prunerPruneInterval {
+		if time.Since(startTime) > pruneDetectTimeout {
 			t.Error("Pruner did not prune proof storage within the interval")
 		}
-		newSynceStatus := getProofSyncStatus(t, sys.L2ELB.Escape().EthClient())
-		if synceStatus.Earliest == newSynceStatus.Earliest {
-			t.Log("Sync status: %v", synceStatus)
-			time.Sleep(time.Second)
-			continue
+		newSyncStatus = getProofSyncStatus(t, sys.L2ELB.Escape().EthClient())
+		if syncStatus.Earliest != newSyncStatus.Earliest {
+			break
 		}
-		// Check how many has been pruned -  we should have current proof window intake
-		currentProofWindow := newSynceStatus.Latest - newSynceStatus.Earliest
-		t.Log("Sync status:", synceStatus)
-		require.GreaterOrEqual(t, currentProofWindow, proofWindow, "Pruner has changed the proof window")
-		t.Logf("Successfully pruned proof storage. synce status: %v", synceStatus)
+		t.Log("Waiting on earliest state to be changed: ", syncStatus.Earliest)
+		time.Sleep(time.Second * 5)
 	}
-
+	// Check how many has been pruned -  we should have current proof window intake
+	currentProofWindow := newSyncStatus.Latest - newSyncStatus.Earliest
+	t.Log("Sync status:", syncStatus)
+	require.GreaterOrEqual(t, currentProofWindow, proofWindow, "Pruner has changed the proof window")
+	t.Logf("Successfully pruned proof storage. synce status: %v", syncStatus)
 }
 
 type proofSyncStatus struct {
