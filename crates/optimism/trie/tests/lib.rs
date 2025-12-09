@@ -2,6 +2,7 @@
 
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
+use reth_evm::block;
 use reth_optimism_trie::{
     db::MdbxProofsStorage, BlockStateDiff, InMemoryProofsStorage, OpProofsStorageError,
     OpProofsStore,
@@ -9,7 +10,7 @@ use reth_optimism_trie::{
 use reth_primitives_traits::Account;
 use reth_trie::{
     hashed_cursor::HashedCursor, trie_cursor::TrieCursor, updates::TrieUpdates, BranchNodeCompact,
-    HashedPostState, HashedStorage, Nibbles, TrieMask,
+    HashedPostState, HashedPostStateSorted, HashedStorage, Nibbles, TrieMask,
 };
 use serial_test::serial;
 use std::sync::Arc;
@@ -109,8 +110,8 @@ async fn test_trie_updates_operations<S: OpProofsStore>(
     let trie_updates = TrieUpdates::default();
     let post_state = HashedPostState::default();
     let block_state_diff = BlockStateDiff {
-        sorted_trie_updates: trie_updates.clone(),
-        sorted_post_state: post_state.clone(),
+        sorted_trie_updates: trie_updates.into_sorted(),
+        sorted_post_state: post_state.into_sorted(),
     };
 
     // Store trie updates
@@ -561,8 +562,12 @@ async fn test_deleted_branch_nodes<S: OpProofsStore>(
     let mut cursor75 = storage.account_trie_cursor(75)?;
     assert!(cursor75.seek_exact(path)?.is_some());
 
-    let mut block_state_diff = BlockStateDiff::default();
-    block_state_diff.sorted_trie_updates.removed_nodes.insert(path);
+    let mut block_state_diff_trie_updates = TrieUpdates::default();
+    block_state_diff_trie_updates.removed_nodes.insert(path);
+    let block_state_diff = BlockStateDiff {
+        sorted_trie_updates: block_state_diff_trie_updates,
+        sorted_post_state: HashedPostStateSorted::default(),
+    };
     storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // Cursor after deletion should not see the node
@@ -1049,13 +1054,17 @@ async fn test_storage_zero_value_deletion<S: OpProofsStore>(
     assert_eq!(result75.1, U256::from(100));
 
     // "Delete" by storing zero value at block 100
-    let mut block_state_diff = BlockStateDiff::default();
+    let mut block_state_diff_post_state = HashedPostState::default();
     let mut hashed_storage = HashedStorage::default();
     hashed_storage.storage.insert(storage_key, U256::ZERO);
-    block_state_diff.sorted_post_state.storages.insert(hashed_address, hashed_storage);
+    block_state_diff_post_state.storages.insert(hashed_address, hashed_storage);
 
     let block_ref: BlockWithParent =
         BlockWithParent::new(B256::ZERO, NumHash::new(100, B256::repeat_byte(0x96)));
+    let block_state_diff = BlockStateDiff {
+        sorted_trie_updates: TrieUpdatesSorted::default(),
+        sorted_post_state: block_state_diff_post_state.into_sorted(),
+    };
     storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // Cursor after deletion should NOT see the entry (zero values are skipped)
