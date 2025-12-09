@@ -276,40 +276,24 @@ impl MdbxProofsStorage {
     ) -> OpProofsStorageResult<ChangeSet> {
         let BlockStateDiff { sorted_trie_updates, sorted_post_state } = block_state_diff;
 
-        //  Sorted list of updated and removed account nodes
-        let sorted_account_nodes = sorted_trie_updates.account_nodes;
-
-        //  Sorted list of updated and removed storage nodes
-        let sorted_storage_nodes = sorted_trie_updates
-            .storage_tries
-            .into_iter()
-            .sorted_by_key(|(hashed_address, _)| *hashed_address)
-            .collect::<Vec<_>>();
-
-        let sorted_storage = sorted_post_state
-            .account_storages()
-            .iter()
-            .map(|(k, v)| (*k, v.clone()))
-            .collect::<Vec<_>>();
-
-        let storage_trie_len = sorted_storage_nodes.len();
-        let hashed_storage_len = sorted_storage.len();
+        let storage_trie_len = sorted_trie_updates.storage_tries.len();
+        let hashed_storage_len = sorted_post_state.storages.len();
 
         let account_trie_keys = self.append_or_delete_dup_sorted(
             tx,
             block_number,
-            sorted_account_nodes.into_iter(),
+            sorted_trie_updates.account_nodes.into_iter(),
             soft_delete,
         )?;
         let hashed_account_keys = self.append_or_delete_dup_sorted(
             tx,
             block_number,
-            sorted_post_state.accounts().iter().copied(),
+            sorted_post_state.accounts.iter().copied(),
             soft_delete,
         )?;
 
         let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
-        for (hashed_address, nodes) in sorted_storage_nodes {
+        for (hashed_address, nodes) in sorted_trie_updates.storage_tries {
             // Handle wiped - mark all storage trie as deleted at the current block number
             if nodes.is_deleted && soft_delete {
                 // Yet to have any update for the current block number - So just using up to
@@ -334,7 +318,7 @@ impl MdbxProofsStorage {
         }
 
         let mut hashed_storage_keys = Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
-        for (hashed_address, storage) in sorted_storage {
+        for (hashed_address, storage) in sorted_post_state.storages {
             // Handle wiped - mark all storage slots as deleted at the current block number
             if soft_delete && storage.is_wiped() {
                 // Yet to have any update for the current block number - So just using up to
