@@ -53,11 +53,7 @@ where
         }
 
         let latest_block = latest_block_opt.unwrap().0;
-        let mut earliest_block = earliest_block_opt.unwrap().0;
-        if earliest_block == 0 {
-            // block 0 is reserved
-            earliest_block = 1
-        }
+        let earliest_block = earliest_block_opt.unwrap().0;
 
         let interval = latest_block.saturating_sub(earliest_block);
         if interval < self.min_block_interval {
@@ -71,12 +67,14 @@ where
         info!(
             target: "trie::pruner",
             from_block = earliest_block,
-            to_block = new_earliest_block - 1,
+            to_block = new_earliest_block,
            "Starting pruning proof storage",
         );
 
         let mut final_diff = BlockStateDiff::default();
-        for i in earliest_block..new_earliest_block {
+        // Fetch all diffs from (earliest_block + 1) to new_earliest_block (inclusive)
+        // initial proof data contains the state at `earliest_block`, so we start from earliest_block + 1
+        for i in (earliest_block + 1)..=new_earliest_block {
             let diff = self.provider.fetch_trie_updates(i).await.inspect_err(|err| {
                 error!(
                     target: "trie::pruner",

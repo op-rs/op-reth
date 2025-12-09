@@ -31,7 +31,7 @@ use reth_trie::{
     BranchNodeCompact, HashedStorage, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
-use tracing::{error, info};
+use tracing::error;
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
@@ -683,7 +683,7 @@ impl OpProofsStore for MdbxProofsStorage {
     }
 
     /// Update the initial state with the provided diff.
-    /// Prune all historical trie data prior to `new_earliest_block_number` using
+    /// Prune all historical trie data till to `new_earliest_block_number` (inclusive) using
     /// the [`BlockChangeSet`] index.
     async fn prune_earliest_state(
         &self,
@@ -701,10 +701,6 @@ impl OpProofsStore for MdbxProofsStorage {
 
         self.env.update(|tx| {
             // Update the initial state (block zero)
-            info!(
-                target: "trie::store",
-                "Updating initial state for block 0"
-            );
             self.store_trie_updates_for_block(tx, 0, diff, false).inspect_err(|err| {
                 error!(
                     target: "trie::store",
@@ -714,15 +710,9 @@ impl OpProofsStore for MdbxProofsStorage {
             })?;
 
             // Delete the old entries for the block range excluding block 0
-            info!(
-                target: "trie::store",
-                old_earliest_block_number,
-                new_earliest_block_number,
-                "Pruning historical state from block",
-            );
             self.delete_history_ranged(
                 tx,
-                max(old_earliest_block_number, 1)..new_earliest_block_number,
+                max(old_earliest_block_number, 1)..=new_earliest_block_number,
             )
             .inspect_err(|err| {
                 error!(
@@ -733,11 +723,6 @@ impl OpProofsStore for MdbxProofsStorage {
             })?;
 
             // Set the earliest block number to the new value
-            info!(
-                target: "trie::store",
-                new_earliest_block_number,
-                "Setting new earliest block number"
-            );
             Self::inner_set_earliest_block_number(
                 tx,
                 new_earliest_block_number,
