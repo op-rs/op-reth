@@ -564,7 +564,7 @@ async fn test_deleted_branch_nodes<S: OpProofsStore>(
     let mut block_state_diff_trie_updates = TrieUpdates::default();
     block_state_diff_trie_updates.removed_nodes.insert(path);
     let block_state_diff = BlockStateDiff {
-        sorted_trie_updates: block_state_diff_trie_updates,
+        sorted_trie_updates: block_state_diff_trie_updates.into_sorted(),
         sorted_post_state: HashedPostStateSorted::default(),
     };
     storage.store_trie_updates(block_ref, block_state_diff).await?;
