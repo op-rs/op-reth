@@ -1,14 +1,14 @@
 package prune
 
 import (
-	"github.com/op-rs/op-geth/proofs/utils"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
 	"github.com/ethereum-optimism/optimism/op-devstack/presets"
 	"github.com/ethereum-optimism/optimism/op-service/apis"
+	"github.com/op-rs/op-geth/proofs/utils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPruneProofStorage(gt *testing.T) {
@@ -36,7 +36,7 @@ func TestPruneProofStorage(gt *testing.T) {
 		if time.Since(startTime) > pruneDetectTimeout {
 			t.Error("Pruner did not prune proof storage within the interval")
 		}
-		newSyncStatus = getProofSyncStatus(t, sys.L2ELB.Escape().EthClient())
+		newSyncStatus = getProofSyncStatus(t, opRethELNode.Escape().EthClient())
 		if syncStatus.Earliest != newSyncStatus.Earliest {
 			break
 		}
