@@ -1740,7 +1740,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Second",
+            "axisLabel": "Duration",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1783,7 +1783,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "dtdurations"
         },
         "overrides": []
       },
@@ -1814,15 +1815,15 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "code",
           "expr": "rate(reth_optimism_trie_pruner_prune_duration_seconds_sum[$__rate_interval])/rate(reth_optimism_trie_pruner_prune_duration_seconds_count[$__rate_interval])",
           "legendFormat": "Prune Duration",
           "range": true,
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "refId": "A"
         },
         {
           "datasource": {
@@ -1943,15 +1944,15 @@
       "pluginVersion": "12.3.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "editorMode": "builder",
           "expr": "reth_optimism_trie_pruner_pruned_blocks",
           "legendFormat": "Pruned Blocks",
           "range": true,
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "refId": "A"
         }
       ],
       "title": "Prune State Over Time",
