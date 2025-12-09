@@ -2160,8 +2160,12 @@ mod tests {
         store.store_trie_updates(block_1, diff1).await.unwrap();
 
         let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
-        let mut diff2 = BlockStateDiff::default();
-        diff2.sorted_trie_updates.account_nodes.insert(path2, node2.clone());
+        let mut diff2_trie_updates = TrieUpdates::default();
+        diff2_trie_updates.account_nodes.insert(path2, node2.clone());
+        let diff2 = BlockStateDiff {
+            sorted_trie_updates: diff2_trie_updates.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block_2, diff2).await.unwrap();
 
         // In block 3, path1 is deleted (stored as None in the database)
@@ -2202,9 +2206,13 @@ mod tests {
         // - path1 should be in removed_nodes (it was deleted in block 3)
         // - path2 should be included with its value (it still exists from block 2)
         let block_5 = BlockWithParent::new(B256::random(), NumHash::new(5, B256::random()));
-        let mut prune_diff = BlockStateDiff::default();
-        prune_diff.sorted_trie_updates.removed_nodes.insert(path1);
-        prune_diff.sorted_trie_updates.account_nodes.insert(path2, node2.clone());
+        let mut prune_diff_trie_updates = TrieUpdates::default();
+        prune_diff_trie_updates.removed_nodes.insert(path1);
+        prune_diff_trie_updates.account_nodes.insert(path2, node2.clone());
+        let prune_diff = BlockStateDiff {
+            sorted_trie_updates: prune_diff_trie_updates.into_sorted(),
+            ..Default::default()
+        };
         store.prune_earliest_state(block_5, prune_diff).await.unwrap();
 
         // Verify that all entries for path1 before block 5 were removed
@@ -2820,7 +2828,10 @@ mod tests {
         let make_diff = |nonce: u64| {
             let mut d_post_state = HashedPostState::default();
             d_post_state.accounts.insert(addr, Some(Account { nonce, ..Default::default() }));
-            d
+            BlockStateDiff {
+                sorted_trie_updates: TrieUpdatesSorted::default(),
+                sorted_post_state: d_post_state.into_sorted(),
+            }
         };
 
         // --- Build initial canonical chain: 1 -> 2 -> 3 ---
@@ -3056,7 +3067,7 @@ mod tests {
         let node2 = BranchNodeCompact::new(0b10, 0, 0, vec![], Some(B256::random()));
 
         let make_diff = |path: Nibbles, node: BranchNodeCompact| {
-            let mut d_trie_updates = TrieUpdatesSorted::default();
+            let mut d_trie_updates = TrieUpdates::default();
             d_trie_updates.account_nodes.insert(path, node);
             BlockStateDiff {
                 sorted_trie_updates: d_trie_updates,
@@ -3122,8 +3133,8 @@ mod tests {
 
         // Block 1: Insert multiple types of data
         let b1 = BlockWithParent::new(b0.hash, NumHash::new(1, B256::random()));
-        let mut diff_1_trie_updates = TrieUpdates::default();
-        let mut diff_1_post_state = HashedPostState::default();
+        let mut diff1_trie_updates = TrieUpdates::default();
+        let mut diff1_post_state = HashedPostState::default();
         diff1_post_state.accounts.insert(addr1, Some(acc1));
         diff1_trie_updates.account_nodes.insert(path1, node1.clone());
         let mut storage1 = HashedStorage::default();
@@ -3131,10 +3142,10 @@ mod tests {
         diff1_post_state.storages.insert(addr1, storage1);
         let mut storage_updates1 = StorageTrieUpdates::default();
         storage_updates1.storage_nodes.insert(storage_path1, storage_node1.clone());
-        diff_1_trie_updates.storage_tries.insert(addr1, storage_updates1);
+        diff1_trie_updates.storage_tries.insert(addr1, storage_updates1);
         let diff1 = BlockStateDiff {
-            sorted_trie_updates: diff_1_trie_updates.into_sorted(),
-            sorted_post_state: diff_1_post_state.into_sorted(),
+            sorted_trie_updates: diff1_trie_updates.into_sorted(),
+            sorted_post_state: diff1_post_state.into_sorted(),
         };
         store.store_trie_updates(b1, diff1).await.expect("store b1");
 
