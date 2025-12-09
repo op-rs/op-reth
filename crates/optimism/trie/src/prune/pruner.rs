@@ -73,7 +73,8 @@ where
 
         let mut final_diff = BlockStateDiff::default();
         // Fetch all diffs from (earliest_block + 1) to new_earliest_block (inclusive)
-        // initial proof data contains the state at `earliest_block`, so we start from earliest_block + 1
+        // initial proof data contains the state at `earliest_block`, so we start from
+        // earliest_block + 1
         for i in (earliest_block + 1)..=new_earliest_block {
             let diff = self.provider.fetch_trie_updates(i).await.inspect_err(|err| {
                 error!(
@@ -118,12 +119,6 @@ where
             parent: parent_block_hash,
             block: BlockNumHash { number: new_earliest_block, hash: new_earliest_block_hash },
         };
-
-        info!(
-            target: "trie::pruner",
-            block = ?block_with_parent,
-            "Finalised data for pruning"
-        );
 
         self.provider.prune_earliest_state(block_with_parent, final_diff).await?;
 
