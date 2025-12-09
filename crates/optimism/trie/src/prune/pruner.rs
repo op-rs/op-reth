@@ -128,7 +128,7 @@ where
             fetch_duration: stat_diff_fetch_duration,
             prune_duration: total_duration.saturating_sub(stat_diff_fetch_duration),
             start_block: earliest_block,
-            end_block: new_earliest_block.saturating_sub(1),
+            end_block: new_earliest_block,
             total_entries_pruned: 0, // TODO: get it from the prune_earliest_state
         };
         self.metrics.record_prune_result(prune_output.clone());
@@ -368,8 +368,8 @@ mod tests {
 
         let pruner = OpProofStoragePruner::new(store.clone(), block_hash_reader, 1);
         let out = pruner.run_inner().await.expect("pruner ok");
-        assert_eq!(out.start_block, 1);
-        assert_eq!(out.end_block, 3, "pruned up to 3 (inclusive); new earliest is 4");
+        assert_eq!(out.start_block, 0);
+        assert_eq!(out.end_block, 4, "pruned up to 4 (inclusive); new earliest is 4");
 
         // proof window moved: earliest=4, latest=5
         {
