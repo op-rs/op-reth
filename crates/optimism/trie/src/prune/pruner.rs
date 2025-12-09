@@ -98,6 +98,12 @@ where
             block: BlockNumHash { number: new_earliest_block, hash: new_earliest_block_hash },
         };
 
+        info!(
+            target: "trie::pruner",
+            block = ?block_with_parent,
+            "Finalised data for pruning"
+        );
+
         self.provider.prune_earliest_state(block_with_parent, final_diff).await?;
 
         let total_duration = t.elapsed();

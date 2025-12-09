@@ -31,7 +31,7 @@ use reth_trie::{
     BranchNodeCompact, HashedStorage, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
-use tracing::error;
+use tracing::{error, info};
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
@@ -701,20 +701,56 @@ impl OpProofsStore for MdbxProofsStorage {
 
         self.env.update(|tx| {
             // Update the initial state (block zero)
-            self.store_trie_updates_for_block(tx, 0, diff, false)?;
+            info!(
+                target: "trie::store",
+                "Updating initial state for block 0"
+            );
+            self.store_trie_updates_for_block(tx, 0, diff, false)
+                .inspect_err(|err| {
+                    error!(
+                        target: "trie::store",
+                        ?err,
+                        "Failed to update initial state during pruning"
+                    )
+                })?;
 
             // Delete the old entries for the block range excluding block 0
+            info!(
+                target: "trie::store",
+                old_earliest_block_number,
+                new_earliest_block_number,
+                "Pruning historical state from block",
+            );
             self.delete_history_ranged(
                 tx,
                 max(old_earliest_block_number, 1)..new_earliest_block_number,
-            )?;
+            )
+            .inspect_err(|err| {
+                error!(
+                    target: "trie::store",
+                    ?err,
+                    "Failed to prune historical state"
+                )
+            })?;
 
             // Set the earliest block number to the new value
+            info!(
+                target: "trie::store",
+                new_earliest_block_number,
+                "Setting new earliest block number"
+            );
             Self::inner_set_earliest_block_number(
                 tx,
                 new_earliest_block_number,
                 new_earliest_block_ref.block.hash,
             )
+            .inspect_err(|err| {
+                error!(
+                    target: "trie::store",
+                    ?err,
+                    "Failed to set new earliest block number"
+                )
+            })
         })?
     }
 
