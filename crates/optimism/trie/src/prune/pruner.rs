@@ -21,13 +21,20 @@ pub struct OpProofStoragePruner<P, H> {
     min_block_interval: u64,
     // TODO: add timeout - Maximum time for one pruner run. If `None`, no timeout.
     #[doc(hidden)]
+    #[cfg(feature = "metrics")]
     metrics: Metrics,
 }
 
 impl<P, H> OpProofStoragePruner<P, H> {
     /// Create a new pruner.
     pub fn new(provider: P, block_hash_reader: H, min_block_interval: u64) -> Self {
-        Self { provider, block_hash_reader, min_block_interval, metrics: Metrics::default() }
+        Self {
+            provider,
+            block_hash_reader,
+            min_block_interval,
+            #[cfg(feature = "metrics")]
+            metrics: Metrics::default(),
+        }
     }
 }
 
@@ -109,6 +116,7 @@ where
             end_block: new_earliest_block.saturating_sub(1),
             total_entries_pruned: 0, // TODO: get it from the prune_earliest_state
         };
+        #[cfg(feature = "metrics")]
         self.metrics.record_prune_result(prune_output.clone());
 
         Ok(prune_output)
