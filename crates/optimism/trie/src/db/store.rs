@@ -685,6 +685,11 @@ impl OpProofsStore for MdbxProofsStorage {
     /// Update the initial state with the provided diff.
     /// Prune all historical trie data till `new_earliest_block_number` (inclusive) using
     /// the [`BlockChangeSet`] index.
+    ///
+    /// Arguments:
+    /// - `new_earliest_block_ref`: The new earliest block reference (with parent hash).
+    /// - `diff`: The state diff to apply to the initial state (block 0). This diff represents all
+    ///   the changes from the old earliest block to the new earliest block (inclusive).
     async fn prune_earliest_state(
         &self,
         new_earliest_block_ref: BlockWithParent,
