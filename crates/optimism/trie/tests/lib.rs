@@ -9,8 +9,10 @@ use reth_optimism_trie::{
 };
 use reth_primitives_traits::Account;
 use reth_trie::{
-    hashed_cursor::HashedCursor, trie_cursor::TrieCursor, updates::TrieUpdates, BranchNodeCompact,
-    HashedPostState, HashedPostStateSorted, HashedStorage, Nibbles, TrieMask,
+    hashed_cursor::HashedCursor,
+    trie_cursor::TrieCursor,
+    updates::{TrieUpdates, TrieUpdatesSorted},
+    BranchNodeCompact, HashedPostState, HashedPostStateSorted, HashedStorage, Nibbles, TrieMask,
 };
 use serial_test::serial;
 use std::sync::Arc;
@@ -1545,8 +1547,8 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
     initial_post_state_101.accounts.insert(old_account_addr, Some(old_account));
 
     let initial_diff_101 = BlockStateDiff {
-        sorted_trie_updates: initial_trie_updates_101,
-        sorted_post_state: initial_post_state_101,
+        sorted_trie_updates: initial_trie_updates_101.into_sorted(),
+        sorted_post_state: initial_post_state_101.into_sorted(),
     };
     let block_ref_101 =
         BlockWithParent::new(block_ref_100.block.hash, NumHash::new(101, B256::repeat_byte(0x98)));
@@ -1610,7 +1612,10 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
 
     blocks_to_add.insert(
         block_ref_101,
-        BlockStateDiff { sorted_trie_updates: new_trie_updates, sorted_post_state: new_post_state },
+        BlockStateDiff {
+            sorted_trie_updates: new_trie_updates.into_sorted(),
+            sorted_post_state: new_post_state.into_sorted(),
+        },
     );
 
     // New data for block 102
@@ -1626,12 +1631,14 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
 
     blocks_to_add.insert(
         block_ref_102,
-        BlockStateDiff { sorted_trie_updates: trie_updates_102, sorted_post_state: post_state_102 },
+        BlockStateDiff {
+            sorted_trie_updates: trie_updates_102.into_sorted(),
+            sorted_post_state: post_state_102.into_sorted(),
+        },
     );
 
     // Execute replace_updates
     storage.replace_updates(100, blocks_to_add).await?;
-
     // ========== Verify that data up to block 100 still exists ==========
     let mut cursor_50 = storage.account_trie_cursor(75)?;
     assert!(
@@ -1766,8 +1773,8 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
     initial_trie_updates.insert_storage_updates(storage_address, storage_trie);
 
     let initial_diff = BlockStateDiff {
-        sorted_trie_updates: initial_trie_updates,
-        sorted_post_state: HashedPostState::default(),
+        sorted_trie_updates: initial_trie_updates.into_sorted(),
+        sorted_post_state: HashedPostStateSorted::default(),
     };
 
     let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
@@ -1807,8 +1814,8 @@ async fn test_pure_deletions_stored_correctly<S: OpProofsStore>(
     deletion_trie_updates.insert_storage_updates(storage_address, deletion_storage_trie);
 
     let deletion_diff = BlockStateDiff {
-        sorted_trie_updates: deletion_trie_updates,
-        sorted_post_state: HashedPostState::default(),
+        sorted_trie_updates: deletion_trie_updates.into_sorted(),
+        sorted_post_state: HashedPostStateSorted::default(),
     };
 
     let block_ref_100 =
@@ -1897,8 +1904,8 @@ async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
     initial_trie_updates.insert_storage_updates(storage_address, storage_trie);
 
     let initial_diff = BlockStateDiff {
-        sorted_trie_updates: initial_trie_updates,
-        sorted_post_state: HashedPostState::default(),
+        sorted_trie_updates: initial_trie_updates.into_sorted(),
+        sorted_post_state: HashedPostStateSorted::default(),
     };
 
     let block_ref_50 = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
@@ -1938,8 +1945,8 @@ async fn test_updates_take_precedence_over_removals<S: OpProofsStore>(
     conflicting_trie_updates.insert_storage_updates(storage_address, conflicting_storage_trie);
 
     let conflicting_diff = BlockStateDiff {
-        sorted_trie_updates: conflicting_trie_updates,
-        sorted_post_state: HashedPostState::default(),
+        sorted_trie_updates: conflicting_trie_updates.into_sorted(),
+        sorted_post_state: HashedPostStateSorted::default(),
     };
 
     let block_ref_100 =
