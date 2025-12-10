@@ -26,7 +26,7 @@ func TestPruneProofStorage(gt *testing.T) {
 	if distance < proofWindow {
 		// Wait till we reach proof window
 		t.Logf("Waiting for block %d", syncStatus.Earliest+proofWindow)
-		sys.L2ELB.WaitForBlockNumber(syncStatus.Earliest + proofWindow)
+		opRethELNode.WaitForBlockNumber(syncStatus.Earliest + proofWindow)
 	}
 	// Now we need to wait for pruner to execute pruning can be done anytime in 1 minutes(pruner prune interval = 1min)
 	startTime := time.Now()
