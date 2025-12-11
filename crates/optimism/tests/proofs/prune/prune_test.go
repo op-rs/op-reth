@@ -47,7 +47,7 @@ func TestPruneProofStorage(gt *testing.T) {
 	currentProofWindow := newSyncStatus.Latest - newSyncStatus.Earliest
 	t.Log("Sync status:", syncStatus)
 	require.GreaterOrEqual(t, currentProofWindow, proofWindow, "Pruner has changed the proof window")
-	t.Logf("Successfully pruned proof storage. synce status: %v", syncStatus)
+	t.Logf("Successfully pruned proof storage. sync status: %v", syncStatus)
 }
 
 type proofSyncStatus struct {
