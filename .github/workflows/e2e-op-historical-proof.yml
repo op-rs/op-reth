@@ -59,7 +59,7 @@ jobs:
       - name: Run ${{ matrix.go_pkg_name }} e2e tests
         working-directory: crates/optimism/tests
         run: |
-          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }}
+          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }} OP_DEVSTACK_PROOF_SEQUENCER_EL=op-geth OP_DEVSTACK_PROOF_VALIDATOR_EL=op-reth
 
       # disable coverage for now
       # - name: Flush coverage data
@@ -149,7 +149,7 @@ jobs:
       - name: Run core e2e tests
         working-directory: crates/optimism/tests
         run: |
-          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }} 
+          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }} OP_DEVSTACK_PROOF_SEQUENCER_EL=op-reth OP_DEVSTACK_PROOF_VALIDATOR_EL=op-geth
 
   e2e-op-historical-proof-success:
     name: e2e-op-historical-proof-success

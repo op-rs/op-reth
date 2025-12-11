@@ -153,12 +153,13 @@ func NewMixedOpProofPreset(t devtest.T) *MixedOpProofPreset {
 	verifierCL := l2Net.L2CLNode(match.Assume(t,
 		match.And(
 			match.Not(match.WithSequencerActive(t.Ctx())),
-			match.Not[stack.L2CLNodeID, stack.L2CLNode](sequencerCL.ID()),
+			match.Not(sequencerCL.ID()),
 		)))
 	verifierELInner := l2Net.L2ELNode(match.Assume(t,
 		match.And(
 			match.EngineFor(verifierCL),
-			match.Not[stack.L2ELNodeID, stack.L2ELNode](sequencerEL.ID()))))
+			match.Not(sequencerEL.ID()),
+		)))
 	var verifierEL *L2ELNode
 	if strings.Contains(verifierELInner.ID().String(), "op-reth") {
 		verifierEL = &L2ELNode{
@@ -232,6 +233,7 @@ func NewDefaultMixedOpProofSystemIDs(l1ID, l2ID eth.ChainID) DefaultMixedOpProof
 		TestSequencer: "test-sequencer",
 	}
 
+	// default to op-geth for sequencer and op-reth for validator
 	if os.Getenv("OP_DEVSTACK_PROOF_SEQUENCER_EL") == "op-reth" {
 		ids.L2ELSequencer = L2ELNodeID{
 			L2ELNodeID: stack.NewL2ELNodeID("sequencer-op-reth", l2ID),
@@ -244,15 +246,15 @@ func NewDefaultMixedOpProofSystemIDs(l1ID, l2ID eth.ChainID) DefaultMixedOpProof
 		}
 	}
 
-	if os.Getenv("OP_DEVSTACK_PROOF_VALIDATOR_EL") == "op-reth" {
-		ids.L2ELValidator = L2ELNodeID{
-			L2ELNodeID: stack.NewL2ELNodeID("validator-op-reth", l2ID),
-			Client:     L2ELClientReth,
-		}
-	} else {
+	if os.Getenv("OP_DEVSTACK_PROOF_VALIDATOR_EL") == "op-geth" {
 		ids.L2ELValidator = L2ELNodeID{
 			L2ELNodeID: stack.NewL2ELNodeID("validator-op-geth", l2ID),
 			Client:     L2ELClientGeth,
+		}
+	} else {
+		ids.L2ELValidator = L2ELNodeID{
+			L2ELNodeID: stack.NewL2ELNodeID("validator-op-reth", l2ID),
+			Client:     L2ELClientReth,
 		}
 	}
 
@@ -316,6 +318,10 @@ func defaultMixedOpProofSystemOpts(src, dest *DefaultMixedOpProofSystemIDs) stac
 	opt.Add(sysgo.WithFaucets([]stack.L1ELNodeID{src.L1EL}, []stack.L2ELNodeID{src.L2ELSequencer.L2ELNodeID}))
 
 	opt.Add(sysgo.WithTestSequencer(src.TestSequencer, src.L1CL, src.L2CLSequencer, src.L1EL, src.L2ELSequencer.L2ELNodeID))
+
+	opt.Add(stack.Finally(func(orch *sysgo.Orchestrator) {
+		*dest = *src
+	}))
 
 	return opt
 }

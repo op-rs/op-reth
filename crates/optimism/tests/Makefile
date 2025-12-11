@@ -6,6 +6,8 @@ KURTOSIS_PACKAGE := github.com/ethpandaops/optimism-package@998796c0f3bb478d63d7
 DEVNET ?= opgeth-seq-opreth-val
 GO_PKG_NAME ?= proofs/core
 SOURCE_DIR := $(shell pwd)
+OP_DEVSTACK_PROOF_SEQUENCER_EL ?= op-geth
+OP_DEVSTACK_PROOF_VALIDATOR_EL ?= op-reth
 
 .PHONY: all build-docker build-contracts unzip-contract-artifacts update-packages run clean help
 
@@ -79,7 +81,9 @@ test-e2e-sysgo: build-contracts
 	export DISABLE_OP_E2E_LEGACY=true; \
 	export DEVSTACK_ORCHESTRATOR=sysgo; \
 	export OP_RETH_ENABLE_PROOF_HISTORY=true; \
-	export OP_RETH_EXEC_PATH="${SOURCE_DIR}/../../../../target/release/op-reth"; \
+	export OP_RETH_EXEC_PATH="${SOURCE_DIR}/../../../target/release/op-reth"; \
+	export OP_DEVSTACK_PROOF_SEQUENCER_EL=$(OP_DEVSTACK_PROOF_SEQUENCER_EL); \
+	export OP_DEVSTACK_PROOF_VALIDATOR_EL=$(OP_DEVSTACK_PROOF_VALIDATOR_EL); \
 	go test -count=1 -timeout 40m -v ./$(GO_PKG_NAME)
 
 # Stop and clean Kurtosis services
