@@ -8,9 +8,16 @@ on:
 
 jobs:
   op-reth-as-verifier:
-    name: op-reth as verifier e2e tests
+    name: op-reth-as-verifier-${{ matrix.go_pkg_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - go_pkg_name: proofs/core
+          - go_pkg_name: proofs/reorg
+          - go_pkg_name: proofs/prune
 
     steps:
       - name: Checkout
@@ -104,9 +111,16 @@ jobs:
       #     verbose: true
 
   op-reth-as-sequencer:
-    name: op-reth as sequencer e2e tests
+    name: op-reth-as-sequencer-${{ matrix.go_pkg_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - go_pkg_name: proofs/core
+          - go_pkg_name: proofs/reorg
+          - go_pkg_name: proofs/prune
 
     steps:
       - name: Checkout
@@ -146,7 +160,7 @@ jobs:
         run: |
           make build-op
 
-      - name: Run core e2e tests
+      - name: Run ${{ matrix.go_pkg_name }} e2e tests
         working-directory: crates/optimism/tests
         run: |
           make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }} OP_DEVSTACK_PROOF_SEQUENCER_EL=op-reth OP_DEVSTACK_PROOF_VALIDATOR_EL=op-geth
