@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -44,30 +46,20 @@ jobs:
 
       - uses: jdx/mise-action@v3
 
-      - name: Run kurtosis
+      - name: build op-reth
         run: |
-          kurtosis engine start
-      
+          make build-op
+
       # disable coverage for now
       # - name: Build op-reth with coverage
       #   working-directory: crates/optimism/tests
       #   run: |
       #     make build-with-cov
 
-      - name: Run DEVNET
+      - name: Run ${{ matrix.go_pkg_name }} e2e tests
         working-directory: crates/optimism/tests
         run: |
-          make all DEVNET=opgeth-seq-opreth-val
-
-      - name: Run core e2e tests
-        working-directory: crates/optimism/tests
-        run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/core DEVNET=opgeth-seq-opreth-val
-
-      - name: Run reorg e2e tests
-        working-directory: crates/optimism/tests
-        run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opgeth-seq-opreth-val
+          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }}
 
       # disable coverage for now
       # - name: Flush coverage data
@@ -119,6 +111,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -148,24 +142,14 @@ jobs:
 
       - uses: jdx/mise-action@v3
 
-      - name: Run kurtosis
+      - name: build op-reth
         run: |
-          kurtosis engine start
-
-      - name: Run DEVNET
-        working-directory: crates/optimism/tests
-        run: |
-          make all DEVNET=opreth-seq-opgeth-val
+          make build-op
 
       - name: Run core e2e tests
         working-directory: crates/optimism/tests
         run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/core DEVNET=opreth-seq-opgeth-val
-
-      - name: Run reorg e2e tests
-        working-directory: crates/optimism/tests
-        run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opreth-seq-opgeth-val
+          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }} 
 
   e2e-op-historical-proof-success:
     name: e2e-op-historical-proof-success
