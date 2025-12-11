@@ -28,13 +28,14 @@ func TestPruneProofStorage(gt *testing.T) {
 		t.Logf("Waiting for block %d", syncStatus.Earliest+proofWindow)
 		opRethELNode.WaitForBlockNumber(syncStatus.Earliest + proofWindow)
 	}
-	// Now we need to wait for pruner to execute pruning can be done anytime in 1 minutes(pruner prune interval = 1min)
+	// Now we need to wait for pruner to execute pruning, which can be done anytime within 1 minute (pruner prune interval = 1 min)
 	startTime := time.Now()
 	var newSyncStatus proofSyncStatus
 	for {
 		// Get sync status each Second
 		if time.Since(startTime) > pruneDetectTimeout {
 			t.Error("Pruner did not prune proof storage within the interval")
+			return
 		}
 		newSyncStatus = getProofSyncStatus(t, opRethELNode.Escape().EthClient())
 		if syncStatus.Earliest != newSyncStatus.Earliest {

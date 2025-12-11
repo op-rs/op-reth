@@ -169,7 +169,7 @@ jobs:
       - name: Run ${{ matrix.go_pkg_name }} e2e tests
         working-directory: crates/optimism/tests
         run: |
-          make test-e2e-kurtosis GO_PKG_NAME=${{ matrix.go_pkg_name }} DEVNET=opreth-seq-opgeth-val 
+          make test-e2e-kurtosis GO_PKG_NAME=${{ matrix.go_pkg_name }} DEVNET=opreth-seq-opgeth-val
 
   e2e-op-historical-proof-success:
     name: e2e-op-historical-proof-success
