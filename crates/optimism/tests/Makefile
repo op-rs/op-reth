@@ -75,7 +75,7 @@ test-e2e-kurtosis: build-contracts
 	go test -count=1 -timeout 40m -v ./$(GO_PKG_NAME)
 
 # Run E2E tests using Sysgo
-test-e2e-sysgo: build-contracts
+test-e2e-sysgo: unzip-contract-artifacts build-contracts
 	@echo "Running E2E tests with Sysgo"
 	export OP_DEPLOYER_ARTIFACTS="$(SOURCE_DIR)/artifacts/src/forge-artifacts"; \
 	export DISABLE_OP_E2E_LEGACY=true; \
