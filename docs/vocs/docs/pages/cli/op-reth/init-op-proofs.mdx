@@ -1,0 +1,17 @@
+# op-reth initialize-op-proofs
+
+This initializes the OP proofs storage with the current state of the chain
+
+```bash
+$ op-reth initialize-op-proofs --help
+```
+```txt
+Usage: op-reth node [OPTIONS]
+
+Options:
+      --proofs-history.storage-path <PROOFS_HISTORY_STORAGE_PATH>
+          The path to the storage DB for proofs history.
+
+          This should match the path used when starting the node with
+          `--proofs-history.storage-path`.
+```
