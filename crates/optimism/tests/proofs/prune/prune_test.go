@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
+	"github.com/ethereum-optimism/optimism/op-devstack/presets"
 	"github.com/ethereum-optimism/optimism/op-service/apis"
 	"github.com/op-rs/op-geth/proofs/utils"
 	"github.com/stretchr/testify/require"
@@ -12,11 +13,11 @@ import (
 
 func TestPruneProofStorage(gt *testing.T) {
 	t := devtest.SerialT(gt)
-	sys := utils.NewMixedOpProofPreset(t)
+	sys := presets.NewSingleChainMultiNode(t)
 
 	var proofWindow = uint64(200)            // Defined in the devnet yaml
 	var pruneDetectTimeout = time.Minute * 5 // An expected time within the prune should be detected.
-	opRethELNode := sys.RethL2ELNode()
+	opRethELNode, _ := utils.IdentifyELNodes(sys.L2EL, sys.L2ELB)
 
 	syncStatus := getProofSyncStatus(t, opRethELNode.Escape().EthClient())
 	t.Log("Initial sync status:", syncStatus)
