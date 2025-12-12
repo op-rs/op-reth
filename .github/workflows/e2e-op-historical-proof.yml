@@ -41,6 +41,8 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
       - name: Verify tools
         run: |
           echo "forge: $(command -v forge || true)"
@@ -52,10 +54,6 @@ jobs:
           forge build
 
       - uses: jdx/mise-action@v3
-
-      - name: build op-reth
-        run: |
-          make build-op
 
       - name: Run ${{ matrix.go_pkg_name }} e2e tests
         working-directory: crates/optimism/tests
@@ -109,6 +107,8 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Verify tools
         run: |
