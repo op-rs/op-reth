@@ -985,7 +985,7 @@ pub mod serde_bincode_compat {
     ///     trie_updates: TrieUpdates,
     /// }
     /// ```
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct TrieUpdates<'a> {
         account_nodes: Cow<'a, HashMap<Nibbles, BranchNodeCompact>>,
         removed_nodes: Cow<'a, HashSet<Nibbles>>,
@@ -1049,7 +1049,7 @@ pub mod serde_bincode_compat {
     ///     trie_updates: StorageTrieUpdates,
     /// }
     /// ```
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct StorageTrieUpdates<'a> {
         is_deleted: bool,
         storage_nodes: Cow<'a, HashMap<Nibbles, BranchNodeCompact>>,
