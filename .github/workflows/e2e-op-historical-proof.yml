@@ -8,18 +8,27 @@ on:
 
 jobs:
   op-reth-as-verifier:
-    name: op-reth as verifier e2e tests
+    name: op-reth-as-verifier-${{ matrix.go_pkg_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - go_pkg_name: proofs/core
+          - go_pkg_name: proofs/reorg
+          - go_pkg_name: proofs/prune
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.23'
+          go-version: '1.24.0'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -44,30 +53,20 @@ jobs:
 
       - uses: jdx/mise-action@v3
 
-      - name: Run kurtosis
+      - name: build op-reth
         run: |
-          kurtosis engine start
-      
+          make build-op
+
       # disable coverage for now
       # - name: Build op-reth with coverage
       #   working-directory: crates/optimism/tests
       #   run: |
       #     make build-with-cov
 
-      - name: Run DEVNET
+      - name: Run ${{ matrix.go_pkg_name }} e2e tests
         working-directory: crates/optimism/tests
         run: |
-          make all DEVNET=opgeth-seq-opreth-val
-
-      - name: Run core e2e tests
-        working-directory: crates/optimism/tests
-        run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/core DEVNET=opgeth-seq-opreth-val
-
-      - name: Run reorg e2e tests
-        working-directory: crates/optimism/tests
-        run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opgeth-seq-opreth-val
+          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }} OP_DEVSTACK_PROOF_SEQUENCER_EL=op-geth OP_DEVSTACK_PROOF_VALIDATOR_EL=op-reth
 
       # disable coverage for now
       # - name: Flush coverage data
@@ -112,18 +111,27 @@ jobs:
       #     verbose: true
 
   op-reth-as-sequencer:
-    name: op-reth as sequencer e2e tests
+    name: op-reth-as-sequencer-${{ matrix.go_pkg_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - go_pkg_name: proofs/core
+          - go_pkg_name: proofs/reorg
+          - go_pkg_name: proofs/prune
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.23'
+          go-version: '1.24.0'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -148,24 +156,14 @@ jobs:
 
       - uses: jdx/mise-action@v3
 
-      - name: Run kurtosis
+      - name: build op-reth
         run: |
-          kurtosis engine start
+          make build-op
 
-      - name: Run DEVNET
+      - name: Run ${{ matrix.go_pkg_name }} e2e tests
         working-directory: crates/optimism/tests
         run: |
-          make all DEVNET=opreth-seq-opgeth-val
-
-      - name: Run core e2e tests
-        working-directory: crates/optimism/tests
-        run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/core DEVNET=opreth-seq-opgeth-val
-
-      - name: Run reorg e2e tests
-        working-directory: crates/optimism/tests
-        run: |
-          make test-e2e-kurtosis GO_PKG_NAME=proofs/reorg DEVNET=opreth-seq-opgeth-val
+          make test-e2e-sysgo GO_PKG_NAME=${{ matrix.go_pkg_name }} OP_DEVSTACK_PROOF_SEQUENCER_EL=op-reth OP_DEVSTACK_PROOF_VALIDATOR_EL=op-geth
 
   e2e-op-historical-proof-success:
     name: e2e-op-historical-proof-success
