@@ -59,7 +59,7 @@ jobs:
         working-directory: crates/optimism/tests
         run: |
           source <(cargo llvm-cov show-env --export-prefix)
-          make build-op
+          make build
           make test-e2e-sysgo GO_PKG_NAME=proofs/${{ matrix.go_pkg_name }} OP_DEVSTACK_PROOF_SEQUENCER_EL=op-geth OP_DEVSTACK_PROOF_VALIDATOR_EL=op-reth
           cargo llvm-cov report --lcov --output-path verifier_cov.lcov
 
@@ -126,7 +126,7 @@ jobs:
         working-directory: crates/optimism/tests
         run: |
           source <(cargo llvm-cov show-env --export-prefix)
-          make build-op
+          make build
           make test-e2e-sysgo GO_PKG_NAME=proofs/${{ matrix.go_pkg_name }} OP_DEVSTACK_PROOF_SEQUENCER_EL=op-reth OP_DEVSTACK_PROOF_VALIDATOR_EL=op-geth
           cargo llvm-cov report --lcov --output-path sequencer_cov.lcov
 
