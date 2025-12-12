@@ -762,15 +762,18 @@ mod tests {
 
         let sorted_trie_updates = TrieUpdatesSorted::default();
         let sorted_post_state = HashedPostStateSorted::default();
-        let block_state_diff = BlockStateDiff { sorted_trie_updates, sorted_post_state };
+        let block_state_diff = BlockStateDiff {
+            sorted_trie_updates: sorted_trie_updates.clone(),
+            sorted_post_state: sorted_post_state.clone(),
+        };
 
         const BLOCK: BlockWithParent =
             BlockWithParent::new(B256::ZERO, NumHash::new(5, B256::ZERO));
         storage.store_trie_updates(BLOCK, block_state_diff).await?;
 
         let retrieved_diff = storage.fetch_trie_updates(BLOCK.block.number).await?;
-        assert_eq!(retrieved_diff.sorted_trie_updates, trie_updates);
-        assert_eq!(retrieved_diff.sorted_post_state, post_state);
+        assert_eq!(retrieved_diff.sorted_trie_updates, sorted_trie_updates);
+        assert_eq!(retrieved_diff.sorted_post_state, sorted_post_state);
 
         Ok(())
     }

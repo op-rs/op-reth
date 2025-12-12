@@ -2,7 +2,6 @@
 
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
-use reth_evm::block;
 use reth_optimism_trie::{
     db::MdbxProofsStorage, BlockStateDiff, InMemoryProofsStorage, OpProofsStorageError,
     OpProofsStore,
@@ -111,15 +110,18 @@ async fn test_trie_updates_operations<S: OpProofsStore>(
     let block_ref = BlockWithParent::new(B256::ZERO, NumHash::new(50, B256::repeat_byte(0x96)));
     let sorted_trie_updates = TrieUpdatesSorted::default();
     let sorted_post_state = HashedPostStateSorted::default();
-    let block_state_diff = BlockStateDiff { sorted_trie_updates, sorted_post_state };
+    let block_state_diff = BlockStateDiff {
+        sorted_trie_updates: sorted_trie_updates.clone(),
+        sorted_post_state: sorted_post_state.clone(),
+    };
 
     // Store trie updates
     storage.store_trie_updates(block_ref, block_state_diff).await?;
 
     // Retrieve and verify
     let retrieved_diff = storage.fetch_trie_updates(block_ref.block.number).await?;
-    assert_eq!(retrieved_diff.sorted_trie_updates, trie_updates);
-    assert_eq!(retrieved_diff.sorted_post_state, post_state);
+    assert_eq!(retrieved_diff.sorted_trie_updates, sorted_trie_updates);
+    assert_eq!(retrieved_diff.sorted_post_state, sorted_post_state);
 
     Ok(())
 }
@@ -1254,8 +1256,8 @@ async fn test_store_trie_updates_with_wiped_storage<S: OpProofsStore>(
     post_state.storages.insert(hashed_address, wiped_storage);
 
     let block_state_diff = BlockStateDiff {
-        sorted_trie_updates: TrieUpdates::default(),
-        sorted_post_state: post_state,
+        sorted_trie_updates: TrieUpdatesSorted::default(),
+        sorted_post_state: post_state.into_sorted(),
     };
 
     // Store the wiped state
@@ -1372,8 +1374,10 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     hashed_storage.storage.insert(B256::repeat_byte(0x03), U256::ZERO); // Deleted storage
     post_state.storages.insert(storage_addr, hashed_storage);
 
-    let block_state_diff =
-        BlockStateDiff { sorted_trie_updates: trie_updates, sorted_post_state: post_state };
+    let block_state_diff = BlockStateDiff {
+        sorted_trie_updates: trie_updates.into_sorted(),
+        sorted_post_state: post_state.into_sorted(),
+    };
 
     // Store the updates
     storage.store_trie_updates(block_ref, block_state_diff).await?;
@@ -1508,8 +1512,8 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
     initial_post_state_50.accounts.insert(initial_account_addr, Some(initial_account));
 
     let initial_diff_50 = BlockStateDiff {
-        sorted_trie_updates: initial_trie_updates_50,
-        sorted_post_state: initial_post_state_50,
+        sorted_trie_updates: initial_trie_updates_50.into_sorted(),
+        sorted_post_state: initial_post_state_50.into_sorted(),
     };
     storage.store_trie_updates(block_ref_50, initial_diff_50).await?;
 
@@ -1524,8 +1528,8 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
     initial_post_state_100.storages.insert(initial_storage_addr, initial_storage_100);
 
     let initial_diff_100 = BlockStateDiff {
-        sorted_trie_updates: initial_trie_updates_100,
-        sorted_post_state: initial_post_state_100,
+        sorted_trie_updates: initial_trie_updates_100.into_sorted(),
+        sorted_post_state: initial_post_state_100.into_sorted(),
     };
 
     let block_ref_100 =
@@ -1722,7 +1726,11 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
         "Should have 1 account branch node at block 101"
     );
     assert!(
-        fetched_101.sorted_trie_updates.account_nodes_ref().contains_key(&new_branch_path),
+        fetched_101
+            .sorted_trie_updates
+            .account_nodes_ref()
+            .iter()
+            .any(|(addr, _)| *addr == new_branch_path),
         "New branch path should be in trie_updates"
     );
     assert_eq!(
@@ -1731,7 +1739,7 @@ async fn test_replace_updates_applies_all_updates<S: OpProofsStore>(
         "Should have 1 account at block 101"
     );
     assert!(
-        fetched_101.sorted_post_state.accounts.contains_key(&new_account_addr),
+        fetched_101.sorted_post_state.accounts.iter().any(|(addr, _)| *addr == new_account_addr),
         "New account should be in post_state"
     );
 

@@ -870,14 +870,10 @@ impl reth_db::database_metrics::DatabaseMetrics for MdbxProofsStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        db::{
-            models::{AccountTrieHistory, StorageTrieHistory},
-            StorageTrieKey,
-        },
-        prune,
+    use crate::db::{
+        models::{AccountTrieHistory, StorageTrieHistory},
+        StorageTrieKey,
     };
-    use alloy_consensus::Block;
     use alloy_eips::NumHash;
     use alloy_primitives::B256;
     use reth_db::{
@@ -885,7 +881,6 @@ mod tests {
         transaction::{DbTx, DbTxMut},
         DatabaseError,
     };
-    use reth_revm::db::states::state;
     use reth_trie::{
         updates::{StorageTrieUpdates, TrieUpdatesSorted},
         BranchNodeCompact, HashedPostStateSorted, HashedStorage, Nibbles, StoredNibbles,
@@ -1356,7 +1351,7 @@ mod tests {
         block_state_diff_trie_updates.storage_tries.insert(addr2, storage_nodes2);
 
         // Add hashed accounts (one Some, one None)
-        block_state_diff_state.accounts.insert(addr1, Some(acc1));
+        block_state_diff_post_state.accounts.insert(addr1, Some(acc1));
         block_state_diff_post_state.accounts.insert(addr2, None); // Deletion
 
         // Add storage slots for both addresses
@@ -1519,19 +1514,24 @@ mod tests {
         let addr = B256::from([0x21; 32]);
         // block A (parent = ZERO)
         let block_a = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
-        let mut diff_a = BlockStateDiff::default();
-        diff_a.sorted_post_state.accounts.insert(addr, Some(Account::default()));
+        let mut diff_a_post_state = HashedPostState::default();
+        diff_a_post_state.accounts.insert(addr, Some(Account::default()));
 
+        let diff_a = BlockStateDiff {
+            sorted_trie_updates: TrieUpdatesSorted::default(),
+            sorted_post_state: diff_a_post_state.into_sorted(),
+        };
         store.store_trie_updates(block_a, diff_a).await.expect("store A");
 
         // block B (parent = hash of A)
         let block_b = BlockWithParent::new(block_a.block.hash, NumHash::new(2, B256::random()));
-        let mut diff_b = BlockStateDiff::default();
-        diff_b
-            .sorted_post_state
-            .accounts
-            .insert(addr, Some(Account { nonce: 5, ..Default::default() }));
+        let mut diff_b_post_state = HashedPostState::default();
+        diff_b_post_state.accounts.insert(addr, Some(Account { nonce: 5, ..Default::default() }));
 
+        let diff_b = BlockStateDiff {
+            sorted_trie_updates: TrieUpdatesSorted::default(),
+            sorted_post_state: diff_b_post_state.into_sorted(),
+        };
         store.store_trie_updates(block_b, diff_b).await.expect("store B");
 
         // verify we can retrieve entries for both block numbers
@@ -1601,7 +1601,6 @@ mod tests {
         store.store_trie_updates(block, diff).await.expect("store");
         let got = store.fetch_trie_updates(1).await.expect("fetch");
         assert!(got.sorted_trie_updates.account_nodes.is_empty());
-        assert!(got.sorted_trie_updates.removed_nodes.is_empty());
         assert!(got.sorted_trie_updates.storage_tries.is_empty());
         assert!(got.sorted_post_state.accounts.is_empty());
         assert!(got.sorted_post_state.storages.is_empty());
@@ -1891,34 +1890,33 @@ mod tests {
             BranchNodeCompact { root_hash: Some(B256::random()), ..Default::default() };
 
         // Construct BlockStateDiff
-        let mut block_state_diff = BlockStateDiff::default();
-        block_state_diff
-            .sorted_trie_updates
-            .account_nodes
-            .insert(account_path1, account_node1.clone());
-        block_state_diff
-            .sorted_trie_updates
-            .account_nodes
-            .insert(account_path2, account_node2.clone());
+        let mut block_state_diff_trie_updates = TrieUpdates::default();
+        block_state_diff_trie_updates.account_nodes.insert(account_path1, account_node1.clone());
+        block_state_diff_trie_updates.account_nodes.insert(account_path2, account_node2.clone());
         // storage trie for addr1
         let mut storage_nodes1 = StorageTrieUpdates::default();
         storage_nodes1.storage_nodes.insert(storage_path1, storage_node1.clone());
-        block_state_diff.sorted_trie_updates.storage_tries.insert(addr1, storage_nodes1);
+        block_state_diff_trie_updates.storage_tries.insert(addr1, storage_nodes1);
 
         // hashed accounts: addr1 -> Some, addr2 -> None
-        block_state_diff.sorted_post_state.accounts.insert(addr1, Some(acc1));
-        block_state_diff.sorted_post_state.accounts.insert(addr2, None);
+        let mut block_state_diff_post_state = HashedPostState::default();
+        block_state_diff_post_state.accounts.insert(addr1, Some(acc1));
+        block_state_diff_post_state.accounts.insert(addr2, None);
 
         // hashed storages
         let mut storage1 = HashedStorage::default();
         storage1.storage.insert(slot1, val1);
-        block_state_diff.sorted_post_state.storages.insert(addr1, storage1);
+        block_state_diff_post_state.storages.insert(addr1, storage1);
 
         let mut storage2 = HashedStorage::default();
         storage2.storage.insert(slot2, val2);
-        block_state_diff.sorted_post_state.storages.insert(addr2, storage2);
+        block_state_diff_post_state.storages.insert(addr2, storage2);
 
         // store then fetch
+        let block_state_diff = BlockStateDiff {
+            sorted_trie_updates: block_state_diff_trie_updates.into_sorted(),
+            sorted_post_state: block_state_diff_post_state.into_sorted(),
+        };
         store.store_trie_updates(block, block_state_diff.clone()).await.expect("store");
         let got = store.fetch_trie_updates(1).await.expect("fetch");
 
@@ -1926,10 +1924,6 @@ mod tests {
         assert_eq!(
             got.sorted_trie_updates.account_nodes,
             block_state_diff.sorted_trie_updates.account_nodes,
-        );
-        assert_eq!(
-            got.sorted_trie_updates.removed_nodes,
-            block_state_diff.sorted_trie_updates.removed_nodes,
         );
         assert_eq!(
             got.sorted_trie_updates.storage_tries,
@@ -1950,8 +1944,12 @@ mod tests {
 
         // Insert a single entry to be pruned
         let addr = B256::random();
-        let mut state_diff = BlockStateDiff::default();
-        state_diff.sorted_post_state.accounts.insert(addr, Some(Account::default()));
+        let mut state_diff_post_state = HashedPostState::default();
+        state_diff_post_state.accounts.insert(addr, Some(Account::default()));
+        let state_diff = BlockStateDiff {
+            sorted_post_state: state_diff_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block, state_diff).await.unwrap();
 
         // Prune the entry - pass empty diff since we're just removing data
@@ -1981,9 +1979,13 @@ mod tests {
         // Insert multiple entries for the same block
         let addr1 = B256::random();
         let addr2 = B256::random();
-        let mut state_diff = BlockStateDiff::default();
-        state_diff.sorted_post_state.accounts.insert(addr1, Some(Account::default()));
-        state_diff.sorted_post_state.accounts.insert(addr2, Some(Account::default()));
+        let mut state_diff_post_state = HashedPostState::default();
+        state_diff_post_state.accounts.insert(addr1, Some(Account::default()));
+        state_diff_post_state.accounts.insert(addr2, Some(Account::default()));
+        let state_diff = BlockStateDiff {
+            sorted_post_state: state_diff_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block, state_diff).await.unwrap();
 
         // Prune the entries
@@ -2012,12 +2014,20 @@ mod tests {
         // Insert entries for multiple blocks
         let addr1 = B256::random();
         let addr2 = B256::random();
-        let mut state_diff1 = BlockStateDiff::default();
-        state_diff1.sorted_post_state.accounts.insert(addr1, Some(Account::default()));
+        let mut state_diff1_post_state = HashedPostState::default();
+        state_diff1_post_state.accounts.insert(addr1, Some(Account::default()));
+        let state_diff1 = BlockStateDiff {
+            sorted_post_state: state_diff1_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block_1, state_diff1).await.unwrap();
 
-        let mut state_diff2 = BlockStateDiff::default();
-        state_diff2.sorted_post_state.accounts.insert(addr2, Some(Account::default()));
+        let mut state_diff2_post_state = HashedPostState::default();
+        state_diff2_post_state.accounts.insert(addr2, Some(Account::default()));
+        let state_diff2 = BlockStateDiff {
+            sorted_post_state: state_diff2_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block_2, state_diff2).await.unwrap();
 
         // Prune up to block 3 (should remove blocks 1 and 2)
@@ -2077,8 +2087,12 @@ mod tests {
         let acc2 = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
 
         let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
-        let mut state_diff1 = BlockStateDiff::default();
-        state_diff1.sorted_post_state.accounts.insert(addr1, Some(acc1));
+        let mut state_diff1_post_state = HashedPostState::default();
+        state_diff1_post_state.accounts.insert(addr1, Some(acc1));
+        let state_diff1 = BlockStateDiff {
+            sorted_post_state: state_diff1_post_state.into_sorted(),
+            ..Default::default()
+        };
         store.store_trie_updates(block_1, state_diff1).await.unwrap();
 
         let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
@@ -2977,7 +2991,10 @@ mod tests {
         let make_diff = |nonce: u64| {
             let mut d_post_state = HashedPostState::default();
             d_post_state.accounts.insert(addr, Some(Account { nonce, ..Default::default() }));
-            d
+            BlockStateDiff {
+                sorted_trie_updates: TrieUpdatesSorted::default(),
+                sorted_post_state: d_post_state.into_sorted(),
+            }
         };
 
         // Build chain: blocks 1 -> 2 -> 3
@@ -3295,7 +3312,7 @@ mod tests {
 
         let addr = B256::random();
         let make_diff = |nonce: u64| {
-            let mut d_oost_state = HashedPostState::default();
+            let mut d_post_state = HashedPostState::default();
             d_post_state.accounts.insert(addr, Some(Account { nonce, ..Default::default() }));
             BlockStateDiff {
                 sorted_trie_updates: TrieUpdatesSorted::default(),

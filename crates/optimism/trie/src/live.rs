@@ -138,18 +138,15 @@ where
     pub async fn store_block_updates(
         &self,
         block: BlockWithParent,
-        trie_updates: TrieUpdatesSorted,
-        post_state: HashedPostStateSorted,
+        sorted_trie_updates: TrieUpdatesSorted,
+        sorted_post_state: HashedPostStateSorted,
     ) -> eyre::Result<()> {
         let start = Instant::now();
         let mut operation_durations = OperationDurations::default();
 
         let storage_result = self
             .storage
-            .store_trie_updates(
-                block,
-                BlockStateDiff { sorted_trie_updates: trie_updates, sorted_post_state: post_state },
-            )
+            .store_trie_updates(block, BlockStateDiff { sorted_trie_updates, sorted_post_state })
             .await?;
 
         let write_duration = start.elapsed();
