@@ -1,4 +1,4 @@
-use super::{BlockNumberHash, ProofWindow, ProofWindowKey, Tables};
+use super::{AddressMap, BlockNumberHash, ProofWindow, ProofWindowKey, Tables};
 use crate::{
     api::WriteCounts,
     db::{
@@ -13,7 +13,7 @@ use crate::{
     BlockStateDiff, OpProofsStorageError, OpProofsStorageResult, OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
-use alloy_primitives::{map::HashMap, B256, U256};
+use alloy_primitives::{keccak256, map::HashMap, Address, B256, U256};
 use eyre::WrapErr;
 use itertools::Itertools;
 use metrics::{gauge, Label};
@@ -25,18 +25,27 @@ use reth_db::{
     transaction::{DbTx, DbTxMut},
     Database, DatabaseEnv, DatabaseError,
 };
-use reth_primitives_traits::Account;
+use reth_primitives_traits::{Account, StorageEntry};
 use reth_trie::{
     hashed_cursor::HashedCursor, trie_cursor::TrieCursor, updates::StorageTrieUpdates,
     BranchNodeCompact, HashedStorage, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
+use std::ops::Bound::{Excluded, Included};
+use std::ops::RangeInclusive;
+use std::ptr::hash;
 use tracing::error;
+use reth_db::BlockNumberList;
+use reth_db::models::{AccountBeforeTx, ShardedKey};
+use reth_db::models::BlockNumberAddress;
+use reth_db::models::storage_sharded_key::StorageShardedKey;
+use reth_db::AccountChangeSets;
+use reth_db::StorageChangeSets;
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
 pub struct MdbxProofsStorage {
-    env: DatabaseEnv,
+    pub(crate) env: DatabaseEnv,
 }
 
 struct ProofWindowValue {
@@ -44,12 +53,24 @@ struct ProofWindowValue {
     latest: NumHash,
 }
 
+pub fn b256_to_address_gen(hash: B256) -> Address {
+    let bytes = hash.as_slice();
+    // Address is last 20 bytes of 32-byte array
+    Address::from_slice(&bytes[12..32])
+}
+
 impl MdbxProofsStorage {
     /// Creates a new [`MdbxProofsStorage`] instance with the given path.
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
-        let env = init_db_for::<_, Tables>(path, DatabaseArguments::default())
+        let mut env = init_db_for::<_, Tables>(path, DatabaseArguments::default())
             .map_err(|e| DatabaseError::Other(format!("Failed to open database: {e}")))?;
+        env.create_tables()?;
         Ok(Self { env })
+    }
+
+    fn store_address(&self, tx: &impl DbTxMut, address: Address, hash: B256)->OpProofsStorageResult<()>{
+        tx.put::<AddressMap>(hash, address)?;
+        Ok(())
     }
 
     fn inner_get_latest_block_number_hash(
@@ -175,6 +196,61 @@ impl MdbxProofsStorage {
         Ok(keys)
     }
 
+    fn append_hashed_account_reth_table(
+        &self,
+        tx: &(impl DbTxMut + DbTx),
+        block_number: u64,
+        accounts: Vec<(B256, Option<Account>)>,
+    ) -> OpProofsStorageResult<()> {
+        let mut cursor = tx.cursor_dup_write::<reth_db::AccountChangeSets>()?;
+        let mut history_cursor =tx.cursor_write::<reth_db::AccountsHistory>()?;
+        for (address, account) in accounts {
+            let addrs = b256_to_address_gen(address);
+            self.store_address(tx,addrs, address)?;
+            let val = AccountBeforeTx{
+                address: addrs,
+                info: account
+            };
+            cursor.append_dup(block_number, val)?;
+            let mut val = BlockNumberList::empty();
+            let key = ShardedKey::new(addrs, 1000000);
+            let mut history = history_cursor.seek_exact(key.clone())?;
+            if history.is_some() {
+                val = history.unwrap().1
+            }
+            val.push(block_number).expect("panic: append_hashed_account_reth_table");
+            history_cursor.upsert(key, &val)?;
+        }
+        Ok(())
+    }
+
+    fn append_hashed_storage_reth_table(
+        &self,
+        tx: &(impl DbTxMut + DbTx),
+        block_number: u64,
+        storages: Vec<(B256, B256, U256)>,
+    ) -> OpProofsStorageResult<()> {
+        let mut cursor = tx.cursor_dup_write::<reth_db::StorageChangeSets>()?;
+        let mut history_cursor =tx.cursor_write::<reth_db::StoragesHistory>()?;
+        for (hashed_address, address, storage) in storages {
+            let addrs = b256_to_address_gen(hashed_address);
+            self.store_address(tx,addrs, address)?;
+            let val = StorageEntry::new(address, storage);
+            let key = BlockNumberAddress::from((block_number, addrs));
+            cursor.append_dup(key, val)?;
+            
+            let mut val = BlockNumberList::empty();
+            let key = StorageShardedKey::new(addrs, address, 1000000);
+            let mut history = history_cursor.seek_exact(key.clone())?;
+            if history.is_some() {
+                val = history.unwrap().1
+            }
+            val.push(block_number).expect("panic: append_hashed_storage_reth_table");
+            history_cursor.upsert(key, &val)?;
+        }
+        Ok(())
+    }
+
     /// Delete entries for `items` at exactly `block_number` in a dup-sorted table.
     /// Seeks (key, block) and deletes current if the subkey matches.
     fn delete_dup_sorted<T, I, V>(
@@ -232,7 +308,7 @@ impl MdbxProofsStorage {
 
     /// Delete versioned history over `block_range` using `BlockChangeSet`.
     /// For each block: delete referenced rows at that block and drop the changeset entry.
-    fn delete_history_ranged(
+    pub(crate) fn delete_history_ranged(
         &self,
         tx: &(impl DbTxMut + DbTx),
         block_range: impl RangeBounds<u64>,
@@ -240,21 +316,21 @@ impl MdbxProofsStorage {
         let mut change_set_cursor = tx.cursor_write::<BlockChangeSet>()?;
         let mut walker = change_set_cursor.walk_range(block_range)?;
         while let Some(Ok((block_number, change_set))) = walker.next() {
-            self.delete_dup_sorted::<AccountTrieHistory, _, _>(
-                tx,
-                block_number,
-                change_set.account_trie_keys,
-            )?;
-            self.delete_dup_sorted::<StorageTrieHistory, _, _>(
-                tx,
-                block_number,
-                change_set.storage_trie_keys,
-            )?;
-            self.delete_dup_sorted::<HashedAccountHistory, _, _>(
-                tx,
-                block_number,
-                change_set.hashed_account_keys,
-            )?;
+            // self.delete_dup_sorted::<AccountTrieHistory, _, _>(
+            //     tx,
+            //     block_number,
+            //     change_set.account_trie_keys,
+            // )?;
+            // self.delete_dup_sorted::<StorageTrieHistory, _, _>(
+            //     tx,
+            //     block_number,
+            //     change_set.storage_trie_keys,
+            // )?;
+            // self.delete_dup_sorted::<HashedAccountHistory, _, _>(
+            //     tx,
+            //     block_number,
+            //     change_set.hashed_account_keys,
+            // )?;
             self.delete_dup_sorted::<HashedStorageHistory, _, _>(
                 tx,
                 block_number,
@@ -265,6 +341,70 @@ impl MdbxProofsStorage {
         }
         Ok(())
     }
+    
+    pub(crate) fn delete_history_ranged_reth(
+        &self,
+        tx: &(impl DbTxMut + DbTx),
+        block_range: impl RangeBounds<u64>,
+    ) -> OpProofsStorageResult<()> {
+
+        // Normalize RangeBounds<u64> to an inclusive [start, end] range.
+        let start = match block_range.start_bound() {
+            Included(&n) => n,
+            Excluded(&n) => n.saturating_add(1),
+            std::collections::Bound::Unbounded => u64::MIN,
+        };
+
+        let end = match block_range.end_bound() {
+            Included(&n) => n,
+            Excluded(&n) => n.saturating_sub(1),
+            std::collections::Bound::Unbounded => u64::MAX,
+        };
+
+        // Early-out if the range is empty
+        if start > end {
+            return Ok(());
+        }
+
+        // let mut account_cursor = tx.cursor_dup_write::<AccountChangeSets>()?;
+        // for block in start..=end {
+        //     if let Some(_res) = account_cursor.seek_exact(block)? {
+        //         // Deletes all dup-sorted entries at this key
+        //         account_cursor.delete_current_duplicates()?;
+        //     }
+        // }
+
+        // let mut storage_cursor = tx.cursor_dup_write::<StorageChangeSets>()?;
+        // let mut walker = storage_cursor.walk_range(BlockNumberAddress::range(RangeInclusive::new(start, end)))?;
+        // while let Some(Ok((_, _))) = walker.next() {
+        //     walker.delete_current()?;
+        // }
+
+        let mut storage_cursor = tx.cursor_dup_write::<StorageChangeSets>()?;
+        let range = BlockNumberAddress::range(RangeInclusive::new(start, end));
+        if let Some((key, _)) = storage_cursor.seek(range.start)?{
+            if key.gt(&range.end){
+                return Ok(());
+            }
+            storage_cursor.delete_current_duplicates()?;
+            while let Some((key, _)) = storage_cursor.next()?{
+                if key.gt(&range.end){
+                    return Ok(());
+                }
+                storage_cursor.delete_current_duplicates()?;
+            }
+        }
+        
+        
+        
+        // let mut walker = storage_cursor.walk_range(BlockNumberAddress::range(RangeInclusive::new(start, end)))?;
+        // while let Some(Ok((_, _))) = walker.next() {
+        //     walker.delete_current()?;
+        // }
+
+        Ok(())
+    }
+
 
     /// Write trie/state history for `block_number` from `block_state_diff`.
     fn store_trie_updates_for_block(
@@ -309,6 +449,10 @@ impl MdbxProofsStorage {
             sorted_post_state.accounts().iter().copied(),
             soft_delete,
         )?;
+        
+        // Experiment reth table
+        let list  = sorted_post_state.accounts;
+        self.append_hashed_account_reth_table(tx, block_number, list)?;
 
         let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
         for (hashed_address, nodes) in sorted_storage_nodes {
@@ -357,6 +501,9 @@ impl MdbxProofsStorage {
                     .map(|(key, val)| (hashed_address, *key, Some(StorageValue(*val)))),
                 soft_delete,
             )?;
+            // reth experiment
+            let list = storage.storage_slots.into_iter().map(|(key,val)|(hashed_address, key, val)).collect();
+            self.append_hashed_storage_reth_table(tx, block_number, list)?;
             hashed_storage_keys.extend(keys);
         }
 

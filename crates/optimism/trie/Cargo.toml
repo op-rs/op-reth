@@ -46,6 +46,9 @@ strum.workspace = true
 tracing.workspace = true
 derive_more.workspace = true
 itertools.workspace = true
+rand.workspace = true
+tempfile.workspace = true
+log = "0.4.29"
 
 [dev-dependencies]
 reth-codecs = { workspace = true, features = ["test-utils"] }

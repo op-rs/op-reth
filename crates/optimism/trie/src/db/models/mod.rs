@@ -16,7 +16,7 @@ pub(crate) mod kv;
 pub use change_set::*;
 pub use kv::*;
 
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256};
 use reth_db::{
     table::{DupSort, TableInfo},
     tables, TableSet, TableType, TableViewer,
@@ -54,6 +54,11 @@ tables! {
         type Key = B256;
         type Value = VersionedValue<Account>;
         type SubKey = u64; // block number
+    }
+    
+    table AddressMap {
+        type Key = B256;
+        type Value = Address;
     }
 
     /// Stores versioned storage state across block history.

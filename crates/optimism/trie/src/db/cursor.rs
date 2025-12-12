@@ -7,19 +7,24 @@ use crate::{
     },
     OpProofsStorageResult,
 };
-use alloy_primitives::{B256, U256};
+use alloy_primitives::{Address, B256, U256};
+use derive_more::Constructor;
+use log::info;
 use reth_db::{
     cursor::{DbCursorRO, DbDupCursorRO},
     table::{DupSort, Table},
     transaction::DbTx,
     Database, DatabaseEnv, DatabaseError,
 };
+use reth_db::models::{BlockNumberAddress, ShardedKey};
+use reth_db::models::storage_sharded_key::StorageShardedKey;
 use reth_primitives_traits::Account;
 use reth_trie::{
     hashed_cursor::{HashedCursor, HashedStorageCursor},
     trie_cursor::{TrieCursor, TrieStorageCursor},
     BranchNodeCompact, Nibbles, StoredNibbles,
 };
+use crate::db::AddressMap;
 
 /// Generic alias for dup cursor for T
 pub(crate) type Dup<'tx, T> = <<DatabaseEnv as Database>::TX as DbTx>::DupCursor<T>;
@@ -377,6 +382,122 @@ where
         // Database cursors are stateless, no reset needed
     }
 }
+
+/// MDBX implementation of [`HashedCursor`] for storage state using the reth tables
+#[derive(Debug, Constructor)]
+pub struct RethAccountCursor<H, C, M> {
+    block_number: u64,
+    history_cursor: H,
+    change_set_cursor: C,
+    address_map: M
+}
+
+impl<H, C, M> HashedCursor for RethAccountCursor<H, C, M>
+where
+    H: DbCursorRO<reth_db::AccountsHistory> + Send + Sync,
+    C: DbCursorRO<reth_db::AccountChangeSets> + DbDupCursorRO<reth_db::AccountChangeSets> + Send + Sync,
+    M: DbCursorRO<AddressMap> + Send + Sync,
+{
+    type Value = Account;
+
+    fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
+        if let Some((hash, address)) = self.address_map.seek(key)?{
+            // Get the latest value up to block_number for this address
+            // If not found proceed to next hash and repeat
+            let sk = ShardedKey::new(address, 100000);
+            if let Some(history) = self.history_cursor.seek_exact(sk)?{
+                if let Some(target_block) = history.1.iter().take_while(|&v| v <= self.block_number).last(){
+                    if let Some(res) =  self.change_set_cursor.seek_by_key_subkey(target_block, address)?{
+                        if res.info.is_some(){
+                            return Ok(Some((hash, res.info.unwrap())));
+                        }
+                    }
+                }
+            }
+            // check the next hash
+            return self.next();
+        }
+
+        Ok(None)
+    }
+
+    fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
+        while let Some((hash, address)) = self.address_map.next()?{
+            let sk = ShardedKey::new(address, 100000);
+            if let Some(history) = self.history_cursor.seek(sk)?{
+                if let Some(target_block) = history.1.iter().take_while(|&v| v <= self.block_number).last(){
+                    if let Some(res) =  self.change_set_cursor.seek_by_key_subkey(target_block, address)?{
+                        if res.info.is_some(){
+                            return Ok(Some((hash, res.info.unwrap())));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn reset(&mut self) {
+        todo!()
+    }
+}
+
+/// MDBX implementation of [`HashedCursor`] for storage state using the reth tables
+#[derive(Debug, Constructor)]
+pub struct RethStorageCursor<H, C> {
+    hashed_address: B256,
+    address: Address,
+    block_number: u64,
+    history_cursor: H,
+    change_set_cursor: C
+}
+
+impl<H, C> HashedCursor for RethStorageCursor<H, C>
+where
+    H: DbCursorRO<reth_db::StoragesHistory> + Send + Sync,
+    C: DbCursorRO<reth_db::StorageChangeSets> + DbDupCursorRO<reth_db::StorageChangeSets> + Send + Sync,
+
+{
+    type Value = U256;
+
+    fn seek(&mut self, key: B256) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
+        let hk = StorageShardedKey::new(self.address, key, 100000);
+        if let Some(history) = self.history_cursor.seek(hk)?{
+            if history.0.address != self.address {// jumped to next address
+                return Ok(None);
+            }
+            if let Some(target_block) = history.1.iter().take_while(|&v| v <= self.block_number).last(){
+                let pkey = BlockNumberAddress::from((target_block, self.address));
+                if let Some(res) =  self.change_set_cursor.seek_by_key_subkey(pkey, history.0.sharded_key.key)?{
+                    return Ok(Some((history.0.sharded_key.key, res.value)));
+                }
+            }
+            return self.next()
+        }
+        Ok(None)
+    }
+
+    fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
+        while let Some(history) = self.history_cursor.next()?{
+            if history.0.address != self.address {// jumped to next address
+                return Ok(None);
+            }
+            if let Some(target_block) = history.1.iter().take_while(|&v| v <= self.block_number).last(){
+                let pkey = BlockNumberAddress::from((target_block, self.address));
+                if let Some(res) =  self.change_set_cursor.seek_by_key_subkey(pkey, history.0.sharded_key.key)?{
+                    return Ok(Some((history.0.sharded_key.key, res.value)));
+                }
+            }
+            return self.next()
+        }
+        Ok(None)
+    }
+
+    fn reset(&mut self) {
+        todo!()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
