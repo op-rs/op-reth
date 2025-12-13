@@ -125,7 +125,7 @@ pub trait HeaderValidator<H = Header>: Debug + Send + Sync {
 }
 
 /// Consensus Errors
-#[derive(Debug, PartialEq, Eq, Clone, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ConsensusError {
     /// Error when the gas used in the header exceeds the gas limit.
     #[error("block used gas ({gas_used}) is greater than gas limit ({gas_limit})")]
@@ -410,6 +410,9 @@ pub enum ConsensusError {
     /// Other, likely an injected L2 error.
     #[error("{0}")]
     Other(String),
+    /// Other unspecified error.
+    #[error(transparent)]
+    Custom(#[from] alloc::sync::Arc<dyn core::error::Error + Send + Sync>),
 }
 
 impl ConsensusError {
@@ -446,4 +449,42 @@ pub struct TxGasLimitTooHighErr {
     pub gas_limit: u64,
     /// The maximum allowed gas limit
     pub max_allowed: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(thiserror::Error, Debug)]
+    #[error("Custom L2 consensus error")]
+    struct CustomL2Error;
+
+    #[test]
+    fn test_custom_error_conversion() {
+        // Test conversion from custom error to ConsensusError
+        let custom_err = CustomL2Error;
+        let arc_err: alloc::sync::Arc<dyn core::error::Error + Send + Sync> = 
+            alloc::sync::Arc::new(custom_err);
+        let consensus_err: ConsensusError = arc_err.into();
+        
+        // Verify it's the Custom variant
+        match consensus_err {
+            ConsensusError::Custom(_) => {
+                // Success - the error was properly converted to Custom variant
+            }
+            _ => panic!("Expected Custom variant"),
+        }
+    }
+
+    #[test]
+    fn test_custom_error_display() {
+        let custom_err = CustomL2Error;
+        let arc_err: alloc::sync::Arc<dyn core::error::Error + Send + Sync> = 
+            alloc::sync::Arc::new(custom_err);
+        let consensus_err: ConsensusError = arc_err.into();
+        
+        // Verify the error message is preserved through transparent attribute
+        let error_message = format!("{}", consensus_err);
+        assert_eq!(error_message, "Custom L2 consensus error");
+    }
 }
