@@ -1,5 +1,17 @@
 # Database
 
+This document describes the reth database schema structure and how initial state is saved.
+
+## Table of Contents
+
+- [Abstractions](#abstractions)
+- [Codecs](#codecs)
+- [Table Layout](#table-layout)
+- [Table Reference](#table-reference)
+- [DupSort Tables](#dupsort-tables)
+- [Initial State & Genesis Initialization](#initial-state--genesis-initialization)
+- [Optimism-Specific Initialization](#optimism-specific-initialization)
+
 ## Abstractions
 
 - We created a [Database trait abstraction](https://github.com/paradigmxyz/reth/blob/main/crates/cli/commands/src/db/mod.rs) using Rust Stable GATs which frees us from being bound to a single database implementation. We currently use MDBX, but are exploring [redb](https://github.com/cberner/redb) as an alternative.
@@ -144,3 +156,157 @@ Transactions ||--|| TransactionSenders : "a tx has exactly 1 sender"
 PlainAccountState ||--|| HashedAccounts : "hashed representation"
 PlainStorageState ||--|| HashedStorages : "hashed representation"
 ```
+
+## Table Reference
+
+### Block Data Tables
+
+| Table | Key | Value | Description |
+|-------|-----|-------|-------------|
+| `CanonicalHeaders` | `BlockNumber` | `HeaderHash` | Maps block numbers to header hashes for the canonical chain |
+| `HeaderNumbers` | `BlockHash` | `BlockNumber` | Reverse lookup: block hash to block number |
+| `Headers` | `BlockNumber` | `Header` | Stores block header data |
+| `BlockBodyIndices` | `BlockNumber` | `StoredBlockBodyIndices` | Transaction range pointers (`first_tx_num`, `tx_count`) |
+| `BlockOmmers` | `BlockNumber` | `StoredBlockOmmers` | Uncle/ommer headers (pre-merge) |
+| `BlockWithdrawals` | `BlockNumber` | `StoredBlockWithdrawals` | Post-Shanghai withdrawal data |
+| `HeaderTerminalDifficulties` | `BlockNumber` | `CompactU256` | **Deprecated**: Total difficulty tracking |
+
+### Transaction Tables
+
+| Table | Key | Value | Description |
+|-------|-----|-------|-------------|
+| `Transactions` | `TxNumber` | `TransactionSigned` | Canonical transaction bodies |
+| `TransactionHashNumbers` | `TxHash` | `TxNumber` | Hash to transaction number lookup |
+| `TransactionBlocks` | `TxNumber` | `BlockNumber` | Maps highest tx number in block to block number |
+| `TransactionSenders` | `TxNumber` | `Address` | Pre-recovered transaction senders (optimization) |
+| `Receipts` | `TxNumber` | `Receipt` | Transaction receipts |
+
+### State Tables
+
+| Table | Key | Value | DupSort SubKey | Description |
+|-------|-----|-------|----------------|-------------|
+| `PlainAccountState` | `Address` | `Account` | - | Current account state (nonce, balance, code_hash) |
+| `PlainStorageState` | `Address` | `StorageEntry` | `B256` | Current storage slot values |
+| `HashedAccounts` | `B256` | `Account` | - | Hashed account state for merklization |
+| `HashedStorages` | `B256` | `StorageEntry` | `B256` | Hashed storage for merklization |
+| `Bytecodes` | `B256` | `Bytecode` | - | Smart contract bytecode |
+
+### History Tables
+
+| Table | Key | Value | DupSort SubKey | Description |
+|-------|-----|-------|----------------|-------------|
+| `AccountsHistory` | `ShardedKey<Address>` | `BlockNumberList` | - | Block numbers where account changed |
+| `StoragesHistory` | `StorageShardedKey` | `BlockNumberList` | - | Block numbers where storage slot changed |
+| `AccountChangeSets` | `BlockNumber` | `AccountBeforeTx` | `Address` | Account state before block execution |
+| `StorageChangeSets` | `BlockNumberAddress` | `StorageEntry` | `B256` | Storage state before block execution |
+
+### Trie Tables
+
+| Table | Key | Value | DupSort SubKey | Description |
+|-------|-----|-------|----------------|-------------|
+| `AccountsTrie` | `StoredNibbles` | `BranchNodeCompact` | - | Account trie branch nodes |
+| `StoragesTrie` | `B256` | `StorageTrieEntry` | `StoredNibblesSubKey` | Storage trie nodes per account |
+| `AccountsTrieChangeSets` | `BlockNumber` | `TrieChangeSetsEntry` | `StoredNibblesSubKey` | Account trie state before block |
+| `StoragesTrieChangeSets` | `BlockNumberHashedAddress` | `TrieChangeSetsEntry` | `StoredNibblesSubKey` | Storage trie state before block |
+
+### Pipeline & Metadata Tables
+
+| Table | Key | Value | Description |
+|-------|-----|-------|-------------|
+| `StageCheckpoints` | `StageId` | `StageCheckpoint` | Sync progress per pipeline stage |
+| `StageCheckpointProgresses` | `StageId` | `Vec<u8>` | Stage-specific progress data |
+| `PruneCheckpoints` | `PruneSegment` | `PruneCheckpoint` | Pruning progress per segment |
+| `VersionHistory` | `u64` | `ClientVersion` | Client version access history |
+| `ChainState` | `ChainStateKey` | `BlockNumber` | Chain state (finalized/safe blocks) |
+| `Metadata` | `String` | `Vec<u8>` | Generic key-value metadata storage |
+
+## DupSort Tables
+
+DupSort tables allow multiple values per key, optimizing storage for related data:
+
+| Table | Key | SubKey | Value |
+|-------|-----|--------|-------|
+| `PlainStorageState` | Address | StorageKey (B256) | StorageEntry |
+| `HashedStorages` | HashedAddress | HashedStorageKey | StorageEntry |
+| `AccountChangeSets` | BlockNumber | Address | AccountBeforeTx |
+| `StorageChangeSets` | BlockNumberAddress | StorageKey | StorageEntry |
+| `StoragesTrie` | HashedAddress | NibblesSubKey | StorageTrieEntry |
+| `AccountsTrieChangeSets` | BlockNumber | NibblesSubKey | TrieChangeSetsEntry |
+| `StoragesTrieChangeSets` | BlockNumberHashedAddress | NibblesSubKey | TrieChangeSetsEntry |
+
+## Initial State & Genesis Initialization
+
+Genesis initialization writes the initial blockchain state to the database. This process is handled by the `init_genesis` function in [`crates/storage/db-common/src/init.rs`](https://github.com/paradigmxyz/reth/blob/main/crates/storage/db-common/src/init.rs).
+
+### Genesis Initialization Flow
+
+```mermaid
+flowchart TD
+    A[init_genesis] --> B{Check existing state}
+    B -->|No conflicts| C[insert_genesis_hashes]
+    B -->|Hash mismatch| E[Return GenesisHashMismatch error]
+    C --> D[insert_genesis_history]
+    D --> F[insert_genesis_header]
+    F --> G[insert_genesis_state]
+    G --> H[compute_state_root]
+    H --> I[Initialize stage checkpoints]
+    I --> J[Initialize static file segments]
+    J --> K[Commit transaction]
+```
+
+### Tables Written During Genesis
+
+| Step | Tables Modified |
+|------|-----------------|
+| Hashes | `HashedAccounts`, `HashedStorages` |
+| History | `AccountsHistory`, `StoragesHistory` |
+| Header | `HeaderNumbers`, `BlockBodyIndices`, Static Files (Headers) |
+| State | `PlainAccountState`, `PlainStorageState`, `Bytecodes` |
+| Trie | `AccountsTrie`, `StoragesTrie` |
+| Checkpoints | `StageCheckpoints` |
+
+### State Dump Initialization
+
+For large state imports (e.g., OP mainnet at Bedrock), the `init_from_state_dump` function handles streaming state from a file:
+
+```rust
+// Key constants for state dump processing
+const DEFAULT_SOFT_LIMIT_BYTE_LEN_ACCOUNTS_CHUNK: usize = 1_000_000_000; // 1 GB chunks
+const AVERAGE_COUNT_ACCOUNTS_PER_GB_STATE_DUMP: usize = 285_228;
+```
+
+**Process:**
+1. Parse state root from dump file header
+2. Stream accounts in chunks (default 1GB)
+3. For each chunk:
+   - Insert hashes (`HashedAccounts`, `HashedStorages`)
+   - Insert history indices
+   - Insert state (`PlainAccountState`, `PlainStorageState`)
+4. Compute and verify state root
+5. Update stage checkpoints
+
+## Optimism-Specific Initialization
+
+OP Stack chains have special initialization requirements handled in [`crates/optimism/cli/src/commands/init_state.rs`](https://github.com/paradigmxyz/reth/blob/main/crates/optimism/cli/src/commands/init_state.rs).
+
+### OP Mainnet Bedrock Migration
+
+When using `--without-ovm` flag for OP mainnet:
+
+```mermaid
+flowchart TD
+    A[init-state --without-ovm] --> B{Is OP mainnet?}
+    B -->|Yes| C[setup_without_evm]
+    B -->|No| D[Use base InitStateCommand]
+    C --> E[Create dummy headers 0 to 105235062]
+    E --> F[Append BEDROCK_HEADER]
+    F --> G[Commit static files]
+    G --> H[init_from_state_dump]
+    H --> I[Verify state root]
+    I --> J[Commit transaction]
+```
+
+**Important Notes:**
+- Do NOT import receipts/blocks before using `--without-ovm`
+- The Bedrock header and hash are hardcoded for OP mainnet
+- For other OP chains, pass a custom header via the base `InitStateCommand`
