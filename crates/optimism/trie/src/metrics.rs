@@ -539,7 +539,7 @@ where
         &self,
         new_earliest_block_ref: BlockWithParent,
         diff: BlockStateDiff,
-    ) -> OpProofsStorageResult<()> {
+    ) -> OpProofsStorageResult<WriteCounts> {
         self.storage.prune_earliest_state(new_earliest_block_ref, diff).await
     }
 
