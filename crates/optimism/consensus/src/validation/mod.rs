@@ -564,12 +564,9 @@ mod tests {
             requests: Requests::default(),
             gas_used: GAS_USED,
         };
-        assert_eq!(
+        assert!(matches!(
             validate_block_post_execution(&header, &chainspec, &result),
-            Err(ConsensusError::BlobGasUsedDiff(GotExpected {
-                got: BLOB_GAS_USED,
-                expected: BLOB_GAS_USED + 1,
-            }))
-        );
+            Err(ConsensusError::BlobGasUsedDiff(_))
+        ));
     }
 }

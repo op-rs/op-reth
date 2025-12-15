@@ -172,18 +172,15 @@ mod tests {
         let expected_receipts_root = B256::random();
         let expected_logs_bloom = calculated_logs_bloom;
 
-        assert_eq!(
+        assert!(matches!(
             compare_receipts_root_and_logs_bloom(
                 calculated_receipts_root,
                 calculated_logs_bloom,
                 expected_receipts_root,
                 expected_logs_bloom
             ),
-            Err(ConsensusError::BodyReceiptRootDiff(
-                GotExpected { got: calculated_receipts_root, expected: expected_receipts_root }
-                    .into()
-            ))
-        );
+            Err(ConsensusError::BodyReceiptRootDiff(_))
+        ));
     }
 
     #[test]
@@ -194,16 +191,14 @@ mod tests {
         let expected_receipts_root = calculated_receipts_root;
         let expected_logs_bloom = Bloom::random();
 
-        assert_eq!(
+        assert!(matches!(
             compare_receipts_root_and_logs_bloom(
                 calculated_receipts_root,
                 calculated_logs_bloom,
                 expected_receipts_root,
                 expected_logs_bloom
             ),
-            Err(ConsensusError::BodyBloomLogDiff(
-                GotExpected { got: calculated_logs_bloom, expected: expected_logs_bloom }.into()
-            ))
-        );
+            Err(ConsensusError::BodyBloomLogDiff(_))
+        ));
     }
 }

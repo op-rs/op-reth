@@ -492,13 +492,9 @@ mod tests {
         let expected_blob_gas_used = 10 * DATA_GAS_PER_BLOB;
 
         // validate blob, it should fail blob gas used validation
-        assert_eq!(
-            validate_block_pre_execution(&block, &chain_spec),
-            Err(ConsensusError::BlobGasUsedDiff(GotExpected {
-                got: 1,
-                expected: expected_blob_gas_used
-            }))
-        );
+        let result = validate_block_pre_execution(&block, &chain_spec);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConsensusError::BlobGasUsedDiff(diff) if diff.got == 1 && diff.expected == expected_blob_gas_used));
     }
 
     #[test]
@@ -509,10 +505,10 @@ mod tests {
 
         // Test exceeding default - should fail
         let header_33 = Header { extra_data: Bytes::from(vec![0; 33]), ..Default::default() };
-        assert_eq!(
+        assert!(matches!(
             validate_header_extra_data(&header_33, 32),
             Err(ConsensusError::ExtraDataExceedsMax { len: 33 })
-        );
+        ));
 
         // Test with custom larger limit - should pass
         assert!(validate_header_extra_data(&header_33, 64).is_ok());

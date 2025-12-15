@@ -11,7 +11,8 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, fmt::Debug, string::String, vec::Vec};
+use alloc::{boxed::Box, fmt::Debug, string::String, sync::Arc, vec::Vec};
+use core::error::Error;
 use alloy_consensus::Header;
 use alloy_primitives::{BlockHash, BlockNumber, Bloom, B256};
 use reth_execution_types::BlockExecutionResult;
@@ -412,7 +413,7 @@ pub enum ConsensusError {
     Other(String),
     /// Other unspecified error.
     #[error(transparent)]
-    Custom(#[from] alloc::sync::Arc<dyn core::error::Error + Send + Sync>),
+    Custom(#[from] Arc<dyn Error + Send + Sync>),
 }
 
 impl ConsensusError {
@@ -463,24 +464,17 @@ mod tests {
     fn test_custom_error_conversion() {
         // Test conversion from custom error to ConsensusError
         let custom_err = CustomL2Error;
-        let arc_err: alloc::sync::Arc<dyn core::error::Error + Send + Sync> = 
-            alloc::sync::Arc::new(custom_err);
+        let arc_err: Arc<dyn Error + Send + Sync> = Arc::new(custom_err);
         let consensus_err: ConsensusError = arc_err.into();
         
         // Verify it's the Custom variant
-        match consensus_err {
-            ConsensusError::Custom(_) => {
-                // Success - the error was properly converted to Custom variant
-            }
-            _ => panic!("Expected Custom variant"),
-        }
+        assert!(matches!(consensus_err, ConsensusError::Custom(_)));
     }
 
     #[test]
     fn test_custom_error_display() {
         let custom_err = CustomL2Error;
-        let arc_err: alloc::sync::Arc<dyn core::error::Error + Send + Sync> = 
-            alloc::sync::Arc::new(custom_err);
+        let arc_err: Arc<dyn Error + Send + Sync> = Arc::new(custom_err);
         let consensus_err: ConsensusError = arc_err.into();
         
         // Verify the error message is preserved through transparent attribute
