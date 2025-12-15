@@ -927,8 +927,8 @@ impl<N: NodePrimitives<SignedTx: SignedTransaction>> NewCanonicalChain<N> {
                     chain.append_block(
                         exec.recovered_block().clone(),
                         exec.execution_outcome().clone(),
-                        Arc::new((*exec.trie_updates()).clone().into()),
-                        Arc::new((*exec.hashed_state()).clone().into()),
+                        exec.trie_updates(),
+                        exec.hashed_state(),
                     );
                     chain
                 }));
@@ -939,8 +939,8 @@ impl<N: NodePrimitives<SignedTx: SignedTransaction>> NewCanonicalChain<N> {
                     chain.append_block(
                         exec.recovered_block().clone(),
                         exec.execution_outcome().clone(),
-                        Arc::new((*exec.trie_updates()).clone().into()),
-                        Arc::new((*exec.hashed_state()).clone().into()),
+                        exec.trie_updates(),
+                        exec.hashed_state(),
                     );
                     chain
                 }));
@@ -948,8 +948,8 @@ impl<N: NodePrimitives<SignedTx: SignedTransaction>> NewCanonicalChain<N> {
                     chain.append_block(
                         exec.recovered_block().clone(),
                         exec.execution_outcome().clone(),
-                        Arc::new((*exec.trie_updates()).clone().into()),
-                        Arc::new((*exec.hashed_state()).clone().into()),
+                        exec.trie_updates(),
+                        exec.hashed_state(),
                     );
                     chain
                 }));
@@ -1536,19 +1536,24 @@ mod tests {
         let chain_commit = NewCanonicalChain::Commit { new: vec![block0.clone(), block1.clone()] };
 
         // Build expected trie updates map
-        let mut expected_trie_updates: BTreeMap<BlockNumber, Arc<TrieUpdates>> = BTreeMap::new();
+        let mut expected_trie_updates: BTreeMap<BlockNumber, Arc<TrieUpdatesSorted>> =
+            BTreeMap::new();
         expected_trie_updates
-            .insert(0, Arc::new(TrieUpdates::from((*block0.trie_updates()).clone())));
+            .insert(0, Arc::new(TrieUpdates::from((*block0.trie_updates()).clone()).into_sorted()));
         expected_trie_updates
-            .insert(1, Arc::new(TrieUpdates::from((*block1.trie_updates()).clone())));
+            .insert(1, Arc::new(TrieUpdates::from((*block1.trie_updates()).clone()).into_sorted()));
 
         // Build expected hashed state map
-        let mut expected_hashed_state: BTreeMap<BlockNumber, Arc<HashedPostState>> =
+        let mut expected_hashed_state: BTreeMap<BlockNumber, Arc<HashedPostStateSorted>> =
             BTreeMap::new();
-        expected_hashed_state
-            .insert(0, Arc::new(HashedPostState::from((*block0.hashed_state()).clone())));
-        expected_hashed_state
-            .insert(1, Arc::new(HashedPostState::from((*block1.hashed_state()).clone())));
+        expected_hashed_state.insert(
+            0,
+            Arc::new(HashedPostState::from((*block0.hashed_state()).clone()).into_sorted()),
+        );
+        expected_hashed_state.insert(
+            1,
+            Arc::new(HashedPostState::from((*block1.hashed_state()).clone()).into_sorted()),
+        );
 
         assert_eq!(
             chain_commit.to_chain_notification(),
@@ -1569,26 +1574,44 @@ mod tests {
         };
 
         // Build expected trie updates for old chain
-        let mut old_trie_updates: BTreeMap<BlockNumber, Arc<TrieUpdates>> = BTreeMap::new();
-        old_trie_updates.insert(1, Arc::new(TrieUpdates::from((*block1.trie_updates()).clone())));
-        old_trie_updates.insert(2, Arc::new(TrieUpdates::from((*block2.trie_updates()).clone())));
+        let mut old_trie_updates: BTreeMap<BlockNumber, Arc<TrieUpdatesSorted>> = BTreeMap::new();
+        old_trie_updates
+            .insert(1, Arc::new(TrieUpdates::from((*block1.trie_updates()).clone()).into_sorted()));
+        old_trie_updates
+            .insert(2, Arc::new(TrieUpdates::from((*block2.trie_updates()).clone()).into_sorted()));
 
         // Build expected trie updates for new chain
-        let mut new_trie_updates: BTreeMap<BlockNumber, Arc<TrieUpdates>> = BTreeMap::new();
-        new_trie_updates.insert(1, Arc::new(TrieUpdates::from((*block1a.trie_updates()).clone())));
-        new_trie_updates.insert(2, Arc::new(TrieUpdates::from((*block2a.trie_updates()).clone())));
+        let mut new_trie_updates: BTreeMap<BlockNumber, Arc<TrieUpdatesSorted>> = BTreeMap::new();
+        new_trie_updates.insert(
+            1,
+            Arc::new(TrieUpdates::from((*block1a.trie_updates()).clone()).into_sorted()),
+        );
+        new_trie_updates.insert(
+            2,
+            Arc::new(TrieUpdates::from((*block2a.trie_updates()).clone()).into_sorted()),
+        );
         // Build expected hashed state for old chain
-        let mut old_hashed_state: BTreeMap<BlockNumber, Arc<HashedPostState>> = BTreeMap::new();
-        old_hashed_state
-            .insert(1, Arc::new(HashedPostState::from((*block1.hashed_state()).clone())));
-        old_hashed_state
-            .insert(2, Arc::new(HashedPostState::from((*block2.hashed_state()).clone())));
+        let mut old_hashed_state: BTreeMap<BlockNumber, Arc<HashedPostStateSorted>> =
+            BTreeMap::new();
+        old_hashed_state.insert(
+            1,
+            Arc::new(HashedPostState::from((*block1.hashed_state()).clone()).into_sorted()),
+        );
+        old_hashed_state.insert(
+            2,
+            Arc::new(HashedPostState::from((*block2.hashed_state()).clone()).into_sorted()),
+        );
         // Build expected hashed state for new chain
-        let mut new_hashed_state: BTreeMap<BlockNumber, Arc<HashedPostState>> = BTreeMap::new();
-        new_hashed_state
-            .insert(1, Arc::new(HashedPostState::from((*block1a.hashed_state()).clone())));
-        new_hashed_state
-            .insert(2, Arc::new(HashedPostState::from((*block2a.hashed_state()).clone())));
+        let mut new_hashed_state: BTreeMap<BlockNumber, Arc<HashedPostStateSorted>> =
+            BTreeMap::new();
+        new_hashed_state.insert(
+            1,
+            Arc::new(HashedPostState::from((*block1a.hashed_state()).clone()).into_sorted()),
+        );
+        new_hashed_state.insert(
+            2,
+            Arc::new(HashedPostState::from((*block2a.hashed_state()).clone()).into_sorted()),
+        );
         assert_eq!(
             chain_reorg.to_chain_notification(),
             CanonStateNotification::Reorg {
