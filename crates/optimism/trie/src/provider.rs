@@ -225,9 +225,6 @@ mod tests {
 
         let debug_output = format!("{:?}", provider);
 
-        assert!(debug_output.contains("OpProofsStateProviderRef"));
-        assert!(debug_output.contains("storage"));
-        assert!(debug_output.contains("block_number"));
-        assert!(debug_output.contains("42"));
+        assert_equals!(debug_output, "OpProofsStateProviderRef { .. }"));
     }
 }
