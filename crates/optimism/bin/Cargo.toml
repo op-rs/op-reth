@@ -19,9 +19,20 @@ reth-optimism-evm.workspace = true
 reth-optimism-payload-builder.workspace = true
 reth-optimism-primitives.workspace = true
 reth-optimism-forks.workspace = true
+reth-optimism-exex = { workspace = true, features = ["metrics"] }
+reth-optimism-trie = { workspace = true, features = ["metrics"] }
+reth-node-builder.workspace = true
+reth-db-api.workspace = true
+reth-chainspec.workspace = true
+reth-db.workspace = true
+reth-tasks.workspace = true
 
 clap = { workspace = true, features = ["derive", "env"] }
 tracing.workspace = true
+eyre.workspace = true
+futures-util.workspace = true
+tokio.workspace = true
+humantime.workspace = true
 
 [lints]
 workspace = true
@@ -33,6 +44,7 @@ otlp = ["reth-optimism-cli/otlp"]
 
 js-tracer = [
     "reth-optimism-node/js-tracer",
+    "reth-node-builder/js-tracer",
 ]
 
 jemalloc = ["reth-cli-util/jemalloc", "reth-optimism-cli/jemalloc"]

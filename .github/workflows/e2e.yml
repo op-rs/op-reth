@@ -6,7 +6,7 @@ on:
   pull_request:
   merge_group:
   push:
-    branches: [main]
+    branches: [unstable, main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   test:
     name: e2e-testsuite
-    runs-on: depot-ubuntu-latest-16
+    runs-on: ubuntu-latest
     env:
       RUST_BACKTRACE: 1
     timeout-minutes: 90
