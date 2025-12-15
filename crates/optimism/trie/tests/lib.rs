@@ -1457,8 +1457,8 @@ async fn test_store_trie_updates_comprehensive<S: OpProofsStore>(
     // Check that trie updates are stored
     assert_eq!(
         fetched_diff.sorted_trie_updates.account_nodes_ref().len(),
-        2,
-        "Should have 2 account nodes"
+        3,
+        "Should have 3 account nodes, including removed"
     );
     assert_eq!(
         fetched_diff.sorted_trie_updates.storage_tries_ref().len(),
