@@ -208,8 +208,9 @@ mod tests {
     async fn run_inner_and_and_verify_updated_state() {
         // --- env/store ---
         let dir = TempDir::new().unwrap();
-        let store =
-            OpProofsStorage::new(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
+        let store:OpProofsStorage<Arc<MdbxProofsStorage>> =
+            OpProofsStorage::from(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
+
         store.set_earliest_block_number(0, B256::ZERO).await.expect("set earliest");
 
         // --- entities ---
@@ -467,8 +468,8 @@ mod tests {
     #[tokio::test]
     async fn run_inner_where_latest_block_is_none() {
         let dir = TempDir::new().unwrap();
-        let store =
-            OpProofsStorage::new(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
+        let store:OpProofsStorage<Arc<MdbxProofsStorage>> =
+            OpProofsStorage::from(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
 
         let earliest = store.get_earliest_block_number().await.unwrap();
         let latest = store.get_latest_block_number().await.unwrap();
@@ -488,8 +489,8 @@ mod tests {
         use crate::BlockStateDiff;
 
         let dir = TempDir::new().unwrap();
-        let store =
-            OpProofsStorage::new(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
+        let store:OpProofsStorage<Arc<MdbxProofsStorage>> =
+            OpProofsStorage::from(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
 
         // Write a single block to set *latest* only.
         store
@@ -514,8 +515,8 @@ mod tests {
         use crate::BlockStateDiff;
 
         let dir = TempDir::new().unwrap();
-        let store =
-            OpProofsStorage::new(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
+        let store:OpProofsStorage<Arc<MdbxProofsStorage>> =
+            OpProofsStorage::from(Arc::new(MdbxProofsStorage::new(dir.path()).expect("env")));
 
         // Set earliest=4 explicitly
         let earliest_num = 4u64;
