@@ -63,7 +63,6 @@ impl<C: ChainSpecParser> UnwindOpProofsCommand<C> {
 
 impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> UnwindOpProofsCommand<C> {
     /// Execute [`UnwindOpProofsCommand`].
-    /// Execute `unwind-op-proofs` command
     pub async fn execute<N: CliNodeTypes<ChainSpec = C::ChainSpec, Primitives = OpPrimitives>>(
         self,
     ) -> eyre::Result<()> {
