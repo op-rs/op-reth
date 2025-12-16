@@ -208,14 +208,13 @@ impl<'a, Storage: OpProofsStore> BytecodeReader for OpProofsStateProviderRef<'a,
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "metrics")))]
 mod tests {
     use super::*;
     use crate::InMemoryProofsStorage;
     use reth_provider::noop::NoopProvider;
 
     #[test]
-    #[cfg(not(feature = "metrics"))]
     fn test_op_proofs_state_provider_ref_debug() {
         let latest: Box<dyn StateProvider> = Box::new(NoopProvider::default());
         let storage: crate::OpProofsStorage<InMemoryProofsStorage> =
