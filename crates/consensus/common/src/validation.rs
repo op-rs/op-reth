@@ -494,7 +494,7 @@ mod tests {
         // validate blob, it should fail blob gas used validation
         assert!(matches!(
             validate_block_pre_execution(&block, &chain_spec).unwrap_err(),
-            ConsensusError::BlobGasUsedDiff(diff) 
+            ConsensusError::BlobGasUsedDiff(diff)
                 if diff.got == 1 && diff.expected == expected_blob_gas_used
         ));
     }

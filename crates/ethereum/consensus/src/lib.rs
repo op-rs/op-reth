@@ -228,7 +228,12 @@ mod tests {
         let parent = header_with_gas_limit(GAS_LIMIT_BOUND_DIVISOR * 10);
         let child = header_with_gas_limit((parent.gas_limit + 5) as u64);
 
-        assert!(validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()).is_ok());
+        assert!(validate_against_parent_gas_limit(
+            &child,
+            &parent,
+            &ChainSpec::<Header>::default()
+        )
+        .is_ok());
     }
 
     #[test]
@@ -262,7 +267,12 @@ mod tests {
         let parent = header_with_gas_limit(GAS_LIMIT_BOUND_DIVISOR * 10);
         let child = header_with_gas_limit(parent.gas_limit - 5);
 
-        assert!(validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()).is_ok());
+        assert!(validate_against_parent_gas_limit(
+            &child,
+            &parent,
+            &ChainSpec::<Header>::default()
+        )
+        .is_ok());
     }
 
     #[test]
@@ -291,6 +301,8 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(EthBeaconConsensus::new(chain_spec).validate_header(&SealedHeader::seal_slow(header,)).is_ok());
+        assert!(EthBeaconConsensus::new(chain_spec)
+            .validate_header(&SealedHeader::seal_slow(header,))
+            .is_ok());
     }
 }
