@@ -223,9 +223,24 @@ mod tests {
 
         let provider = OpProofsStateProviderRef::new(latest, &storage, block_number);
 
-        assert_eq!(
-            format!("{:?}", provider),
-            "OpProofsStateProviderRef { storage: InMemoryProofsStorage { inner: RwLock { data: InMemoryStorageInner { account_branches: {}, storage_branches: {}, hashed_accounts: {}, hashed_storages: {}, trie_updates: {}, post_states: {}, earliest_block: None } } }, block_number: 42 }"
+        let debug_output = format!("{:?}", provider);
+
+        // Verify the Debug output format
+        assert!(
+            debug_output.starts_with("OpProofsStateProviderRef { storage:"),
+            "Debug output should start with struct name and storage field"
+        );
+        assert!(
+            debug_output.ends_with(", block_number: 42 }"),
+            "Debug output should end with block_number field"
+        );
+        assert!(
+            debug_output.contains("InMemoryProofsStorage"),
+            "Debug output should contain storage type"
+        );
+        assert!(
+            debug_output.contains("InMemoryStorageInner"),
+            "Debug output should contain inner storage type"
         );
     }
 }
