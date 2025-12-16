@@ -85,6 +85,7 @@ reth-stages-types.workspace = true
 alloy-network.workspace = true
 futures.workspace = true
 op-alloy-network.workspace = true
+alloy-op-hardforks.workspace = true
 
 [features]
 default = ["reth-codec"]

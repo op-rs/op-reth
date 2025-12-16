@@ -9713,6 +9713,7 @@ dependencies = [
  "alloy-consensus",
  "alloy-genesis",
  "alloy-network",
+ "alloy-op-hardforks",
  "alloy-primitives",
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth",
