@@ -40,20 +40,19 @@ impl<C: ChainSpecParser> UnwindOpProofsCommand<C> {
         &self,
         storage: &OpProofsStorage<Store>,
     ) -> eyre::Result<bool> {
-        let (Some((earliest, _)), Some((latest, _))) = (
-            storage.get_earliest_block_number().await?,
-            storage.get_latest_block_number().await?,
-        ) else {
+        let (Some((earliest, _)), Some((latest, _))) =
+            (storage.get_earliest_block_number().await?, storage.get_latest_block_number().await?)
+        else {
             warn!(target: "reth::cli", "No blocks found in proofs storage. Nothing to unwind.");
             return Ok(false);
         };
 
         if self.target <= earliest {
-            warn!(target: "reth::cli", unwind_target = ?self.target, ?earliest, "Target block is earlier than the earliest block in proofs storage. Nothing to unwind.");
+            warn!(target: "reth::cli", unwind_target = ?self.target, ?earliest, "Target block is less than the earliest block in proofs storage. Nothing to unwind.");
             return Ok(false);
         }
 
-        if self.target >= latest {
+        if self.target > latest {
             warn!(target: "reth::cli", unwind_target = ?self.target, ?latest, "Target block is not less than the latest block in proofs storage. Nothing to unwind.");
             return Ok(false);
         }
