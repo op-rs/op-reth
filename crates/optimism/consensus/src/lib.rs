@@ -345,8 +345,8 @@ mod tests {
         let pre_execution = beacon_consensus.validate_block_pre_execution(&block);
 
         assert!(matches!(
-            pre_execution,
-            Err(ConsensusError::BlobGasUsedDiff(_))
+            pre_execution.unwrap_err(),
+            ConsensusError::BlobGasUsedDiff(diff) if diff.got == 10 && diff.expected == 0
         ));
     }
 
@@ -484,8 +484,9 @@ mod tests {
 
         // validate blob, it should fail blob gas used validation post execution.
         assert!(matches!(
-            post_execution,
-            Err(ConsensusError::BlobGasUsedDiff(_))
+            post_execution.unwrap_err(),
+            ConsensusError::BlobGasUsedDiff(diff)
+                if diff.got == BLOB_GAS_USED + 1 && diff.expected == BLOB_GAS_USED
         ));
     }
 
@@ -621,8 +622,9 @@ mod tests {
         let result = beacon_consensus.validate_header_against_parent(&header, &parent);
 
         assert!(matches!(
-            result,
-            Err(ConsensusError::BaseFeeDiff(_))
+            result.unwrap_err(),
+            ConsensusError::BaseFeeDiff(diff)
+                if diff.got == MIN_BASE_FEE - 1 && diff.expected == MIN_BASE_FEE
         ));
     }
 
@@ -760,8 +762,9 @@ mod tests {
         let result = beacon_consensus.validate_header_against_parent(&header, &parent);
 
         assert!(matches!(
-            result,
-            Err(ConsensusError::BlobGasUsedDiff(_))
+            result.unwrap_err(),
+            ConsensusError::BlobGasUsedDiff(diff)
+                if diff.got == DA_FOOTPRINT && diff.expected == 0
         ));
     }
 }

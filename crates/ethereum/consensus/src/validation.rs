@@ -178,8 +178,11 @@ mod tests {
                 calculated_logs_bloom,
                 expected_receipts_root,
                 expected_logs_bloom
-            ),
-            Err(ConsensusError::BodyReceiptRootDiff(_))
+            ).unwrap_err(),
+            ConsensusError::BodyReceiptRootDiff(err)
+                if matches!(*err, GotExpected { got, expected }
+                    if got == calculated_receipts_root && expected == expected_receipts_root
+                )
         ));
     }
 
