@@ -12,6 +12,7 @@ use crate::{
     },
     BlockStateDiff, OpProofsStorageError, OpProofsStorageResult, OpProofsStore,
 };
+use std::sync::Arc;
 use alloy_eips::{eip1898::BlockWithParent, NumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
 #[cfg(feature = "metrics")]
@@ -47,7 +48,7 @@ impl MdbxProofsStorage {
     /// Creates a new [`MdbxProofsStorage`] instance with the given path.
     pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, Tables>(path, DatabaseArguments::default())
-            .map_err(|e| DatabaseError::Other(format!("Failed to open database: {e}")))?;
+            .map_err(|e| DatabaseError::Custom(Arc::new(e)))?;
         Ok(Self { env })
     }
 
