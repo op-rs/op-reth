@@ -41,12 +41,15 @@ pub struct OpProofsStateProviderRef<'a, Storage: OpProofsStore> {
     block_number: BlockNumber,
 }
 
-impl<Storage> Debug for OpProofsStateProviderRef<'_, Storage>
+impl<'a, Storage> Debug for OpProofsStateProviderRef<'a, Storage>
 where
-    Storage: OpProofsStore,
+    Storage: OpProofsStore + 'a + Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OpProofsStateProviderRef").finish_non_exhaustive()
+        f.debug_struct("OpProofsStateProviderRef")
+            .field("storage", &self.storage)
+            .field("block_number", &self.block_number)
+            .finish()
     }
 }
 
@@ -220,6 +223,9 @@ mod tests {
 
         let provider = OpProofsStateProviderRef::new(latest, &storage, block_number);
 
-        assert_eq!(format!("{:?}", provider), "OpProofsStateProviderRef { .. }");
+        assert_eq!(
+            format!("{:?}", provider),
+            "OpProofsStateProviderRef { storage: InMemoryProofsStorage { inner: RwLock { data: InMemoryStorageInner { account_branches: {}, storage_branches: {}, hashed_accounts: {}, hashed_storages: {}, trie_updates: {}, post_states: {}, earliest_block: None } } }, block_number: 42 }"
+        );
     }
 }
