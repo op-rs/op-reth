@@ -509,7 +509,7 @@ mod tests {
         let header_33 = Header { extra_data: Bytes::from(vec![0; 33]), ..Default::default() };
         assert!(matches!(
             validate_header_extra_data(&header_33, 32).unwrap_err(),
-            ConsensusError::ExtraDataExceedsMax { len: 33 }
+            ConsensusError::ExtraDataExceedsMax { len } if len == 33
         ));
 
         // Test with custom larger limit - should pass

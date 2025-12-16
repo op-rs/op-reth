@@ -179,10 +179,8 @@ mod tests {
                 expected_receipts_root,
                 expected_logs_bloom
             ).unwrap_err(),
-            ConsensusError::BodyReceiptRootDiff(err)
-                if matches!(*err, GotExpected { got, expected }
-                    if got == calculated_receipts_root && expected == expected_receipts_root
-                )
+            ConsensusError::BodyReceiptRootDiff(diff) 
+                if diff.got == calculated_receipts_root && diff.expected == expected_receipts_root
         ));
     }
 
@@ -201,10 +199,8 @@ mod tests {
                 expected_receipts_root,
                 expected_logs_bloom
             ).unwrap_err(),
-            ConsensusError::BodyBloomLogDiff(err)
-                if matches!(*err, GotExpected { got, expected }
-                    if got == calculated_logs_bloom && expected == expected_logs_bloom
-                )
+            ConsensusError::BodyBloomLogDiff(diff) 
+                if diff.got == calculated_logs_bloom && diff.expected == expected_logs_bloom
         ));
     }
 }
