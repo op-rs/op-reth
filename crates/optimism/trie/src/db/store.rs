@@ -274,7 +274,7 @@ impl MdbxProofsStorage {
 
             blocks_deleted += 1;
             // Progress log: only every 20 blocks, only if total >= 20
-            if blocks_deleted >= 20 && blocks_deleted % 20 == 0 {
+            if blocks_deleted >= 1000 && blocks_deleted % 1000 == 0 {
                 info!(target: "optimism.trie",  %blocks_deleted, "Deleting Proofs History");
             }
         }
