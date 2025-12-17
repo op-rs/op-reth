@@ -922,7 +922,7 @@ mod tests {
         StorageTrieKey,
     };
     use alloy_eips::NumHash;
-    use alloy_primitives::{B256, keccak256};
+    use alloy_primitives::{keccak256, B256};
     use reth_db::{
         cursor::DbDupCursorRO,
         transaction::{DbTx, DbTxMut},
