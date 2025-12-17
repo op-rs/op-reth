@@ -249,7 +249,7 @@ mod tests {
     use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator};
     use reth_optimism_chainspec::{OpChainSpec, OpChainSpecBuilder, OP_MAINNET};
     use reth_optimism_primitives::{OpPrimitives, OpReceipt, OpTransactionSigned};
-    use reth_primitives_traits::{proofs, GotExpected, RecoveredBlock, SealedBlock, SealedHeader};
+    use reth_primitives_traits::{proofs, RecoveredBlock, SealedBlock, SealedHeader};
     use reth_provider::BlockExecutionResult;
 
     use crate::OpBeaconConsensus;
@@ -344,10 +344,7 @@ mod tests {
         // validate blob, it should fail blob gas used validation
         let pre_execution = beacon_consensus.validate_block_pre_execution(&block);
 
-        assert!(matches!(
-            pre_execution,
-            Err(ConsensusError::BlobGasUsedDiff(_))
-        ));
+        assert!(matches!(pre_execution, Err(ConsensusError::BlobGasUsedDiff(_))));
     }
 
     #[test]
@@ -483,10 +480,7 @@ mod tests {
         );
 
         // validate blob, it should fail blob gas used validation post execution.
-        assert!(matches!(
-            post_execution,
-            Err(ConsensusError::BlobGasUsedDiff(_))
-        ));
+        assert!(matches!(post_execution, Err(ConsensusError::BlobGasUsedDiff(_))));
     }
 
     #[test]
@@ -620,10 +614,7 @@ mod tests {
 
         let result = beacon_consensus.validate_header_against_parent(&header, &parent);
 
-        assert!(matches!(
-            result,
-            Err(ConsensusError::BaseFeeDiff(_))
-        ));
+        assert!(matches!(result, Err(ConsensusError::BaseFeeDiff(_))));
     }
 
     #[test]
@@ -759,9 +750,6 @@ mod tests {
 
         let result = beacon_consensus.validate_header_against_parent(&header, &parent);
 
-        assert!(matches!(
-            result,
-            Err(ConsensusError::BlobGasUsedDiff(_))
-        ));
+        assert!(matches!(result, Err(ConsensusError::BlobGasUsedDiff(_))));
     }
 }

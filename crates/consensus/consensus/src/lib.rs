@@ -12,9 +12,9 @@
 extern crate alloc;
 
 use alloc::{boxed::Box, fmt::Debug, string::String, sync::Arc, vec::Vec};
-use core::error::Error;
 use alloy_consensus::Header;
 use alloy_primitives::{BlockHash, BlockNumber, Bloom, B256};
+use core::error::Error;
 use reth_execution_types::BlockExecutionResult;
 use reth_primitives_traits::{
     constants::{GAS_LIMIT_BOUND_DIVISOR, MAXIMUM_GAS_LIMIT_BLOCK, MINIMUM_GAS_LIMIT},
@@ -466,7 +466,7 @@ mod tests {
         let custom_err = CustomL2Error;
         let arc_err: Arc<dyn Error + Send + Sync> = Arc::new(custom_err);
         let consensus_err: ConsensusError = arc_err.into();
-        
+
         // Verify it's the Custom variant
         assert!(matches!(consensus_err, ConsensusError::Custom(_)));
     }
@@ -476,7 +476,7 @@ mod tests {
         let custom_err = CustomL2Error;
         let arc_err: Arc<dyn Error + Send + Sync> = Arc::new(custom_err);
         let consensus_err: ConsensusError = arc_err.into();
-        
+
         // Verify the error message is preserved through transparent attribute
         let error_message = format!("{}", consensus_err);
         assert_eq!(error_message, "Custom L2 consensus error");
