@@ -16,7 +16,7 @@ pub(crate) mod kv;
 pub use change_set::*;
 pub use kv::*;
 
-use alloy_primitives::{B256, Address};
+use alloy_primitives::{Address, B256};
 use reth_db::{
     table::{DupSort, TableInfo},
     tables, TableSet, TableType, TableViewer,
