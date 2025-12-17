@@ -15,8 +15,7 @@ pub fn validate_blob_gas_used<R: DepositReceipt>(
     result: &BlockExecutionResult<R>,
 ) -> Result<(), ConsensusError> {
     let computed_blob_gas_used = result.blob_gas_used;
-    let header_blob_gas_used =
-        header.blob_gas_used().ok_or(ConsensusError::BlobGasUsedMissing)?;
+    let header_blob_gas_used = header.blob_gas_used().ok_or(ConsensusError::BlobGasUsedMissing)?;
 
     if computed_blob_gas_used != header_blob_gas_used {
         return Err(ConsensusError::BlobGasUsedDiff(GotExpected {
@@ -27,4 +26,3 @@ pub fn validate_blob_gas_used<R: DepositReceipt>(
 
     Ok(())
 }
-
