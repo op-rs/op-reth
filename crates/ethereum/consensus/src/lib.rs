@@ -242,8 +242,9 @@ mod tests {
         let child = header_with_gas_limit(MINIMUM_GAS_LIMIT - 1);
 
         assert!(matches!(
-            validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()),
-            Err(ConsensusError::GasLimitInvalidMinimum { .. })
+            validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()).unwrap_err(),
+            ConsensusError::GasLimitInvalidMinimum { child_gas_limit }
+                if child_gas_limit == child.gas_limit as u64
         ));
     }
 
@@ -255,8 +256,9 @@ mod tests {
         );
 
         assert!(matches!(
-            validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()),
-            Err(ConsensusError::GasLimitInvalidIncrease { .. })
+            validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()).unwrap_err(),
+            ConsensusError::GasLimitInvalidIncrease { parent_gas_limit, child_gas_limit }
+                if parent_gas_limit == parent.gas_limit && child_gas_limit == child.gas_limit
         ));
     }
 
@@ -281,8 +283,9 @@ mod tests {
         );
 
         assert!(matches!(
-            validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()),
-            Err(ConsensusError::GasLimitInvalidDecrease { .. })
+            validate_against_parent_gas_limit(&child, &parent, &ChainSpec::<Header>::default()).unwrap_err(),
+            ConsensusError::GasLimitInvalidDecrease { parent_gas_limit, child_gas_limit }
+                if parent_gas_limit == parent.gas_limit && child_gas_limit == child.gas_limit
         ));
     }
 
