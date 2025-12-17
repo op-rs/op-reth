@@ -2,6 +2,7 @@
 
 pub mod canyon;
 pub mod isthmus;
+pub mod jovian;
 
 // Re-export the decode_holocene_base_fee function for compatibility
 use reth_execution_types::BlockExecutionResult;
@@ -92,16 +93,7 @@ pub fn validate_block_post_execution<R: DepositReceipt>(
 ) -> Result<(), ConsensusError> {
     // Validate that the blob gas used is present and correctly computed if Jovian is active.
     if chain_spec.is_jovian_active_at_timestamp(header.timestamp()) {
-        let computed_blob_gas_used = result.blob_gas_used;
-        let header_blob_gas_used =
-            header.blob_gas_used().ok_or(ConsensusError::BlobGasUsedMissing)?;
-
-        if computed_blob_gas_used != header_blob_gas_used {
-            return Err(ConsensusError::BlobGasUsedDiff(GotExpected {
-                got: computed_blob_gas_used,
-                expected: header_blob_gas_used,
-            }));
-        }
+        jovian::validate_blob_gas_used(&header, result)?;
     }
 
     let receipts = &result.receipts;
