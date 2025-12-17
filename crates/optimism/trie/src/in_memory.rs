@@ -668,7 +668,7 @@ impl OpProofsStore for InMemoryProofsStorage {
             .retain(|(block, _), _| *block == 0 || *block >= new_earliest_block_number);
         write_counts.account_trie_updates_written_total +=
             (length_before_prune - inner.account_branches.len()) as u64;
-        
+
         length_before_prune = inner.storage_branches.len();
         inner
             .storage_branches
