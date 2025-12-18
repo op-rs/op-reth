@@ -1,7 +1,5 @@
 # op-reth historical proofs
-
 ![Description](assets/op-rs-logo.png)
-
 > **⚠️ Under Construction**
 >
 > This is a work in progress. Stay tuned!
