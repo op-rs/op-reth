@@ -6,6 +6,7 @@ use crate::{
 };
 use alloy_eips::{eip1898::BlockWithParent, BlockNumHash};
 use reth_provider::BlockHashReader;
+use std::cmp;
 use tokio::time::Instant;
 use tracing::{error, info, trace};
 
@@ -92,10 +93,8 @@ where
         // Prune in batches
         while current_earliest_block < target_earliest_block {
             // Calculate the end of this batch
-            let batch_end_block = std::cmp::min(
-                current_earliest_block + self.prune_batch_size,
-                target_earliest_block,
-            );
+            let batch_end_block =
+                cmp::min(current_earliest_block + self.prune_batch_size, target_earliest_block);
 
             let batch_output = self.prune_batch(current_earliest_block, batch_end_block).await?;
 
