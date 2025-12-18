@@ -85,22 +85,22 @@ pub enum OpProofsStorageError {
     #[error("failed lock attempt")]
     TryLockError,
     /// Error occurred during block execution.
-    #[error(transparent)]
-    ExecutionError(Box<BlockExecutionError>),
+    #[error("block execution error: {0}")]
+    ExecutionError(String),
     /// Error occurred while interacting with the provider.
-    #[error(transparent)]
-    ProviderError(Box<ProviderError>),
+    #[error("provider error: {0}")]
+    ProviderError(String),
 }
 
 impl From<BlockExecutionError> for OpProofsStorageError {
     fn from(err: BlockExecutionError) -> Self {
-        Self::ExecutionError(Box::new(err))
+        Self::ExecutionError(err.to_string())
     }
 }
 
 impl From<ProviderError> for OpProofsStorageError {
     fn from(err: ProviderError) -> Self {
-        Self::ProviderError(Box::new(err))
+        Self::ProviderError(err.to_string())
     }
 }
 
