@@ -89,7 +89,7 @@ derive_more = { workspace = true, features = ["constructor"] }
 reth-metrics.workspace = true
 metrics.workspace = true
 
-#enum
+# enum
 strum.workspace = true
 
 [dev-dependencies]
