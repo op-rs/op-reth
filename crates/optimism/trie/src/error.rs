@@ -10,7 +10,7 @@ use thiserror::Error;
 use tokio::sync::TryLockError;
 
 /// Error type for storage operations
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Error)]
 pub enum OpProofsStorageError {
     /// No blocks found
     #[error("No blocks found")]
@@ -86,22 +86,10 @@ pub enum OpProofsStorageError {
     TryLockError,
     /// Error occurred during block execution.
     #[error(transparent)]
-    ExecutionError(Arc<BlockExecutionError>),
+    ExecutionError(#[from] BlockExecutionError),
     /// Error occurred while interacting with the provider.
     #[error(transparent)]
-    ProviderError(Arc<ProviderError>),
-}
-
-impl From<BlockExecutionError> for OpProofsStorageError {
-    fn from(err: BlockExecutionError) -> Self {
-        Self::ExecutionError(Arc::new(err))
-    }
-}
-
-impl From<ProviderError> for OpProofsStorageError {
-    fn from(err: ProviderError) -> Self {
-        Self::ProviderError(Arc::new(err))
-    }
+    ProviderError(#[from] ProviderError),
 }
 
 impl From<TryLockError> for OpProofsStorageError {
@@ -121,11 +109,6 @@ impl From<OpProofsStorageError> for DatabaseError {
 
 impl From<DatabaseError> for OpProofsStorageError {
     fn from(error: DatabaseError) -> Self {
-        if let DatabaseError::Custom(ref err) = error &&
-            let Some(err) = err.downcast_ref::<Self>()
-        {
-            return err.clone()
-        }
         Self::DatabaseError(error)
     }
 }
