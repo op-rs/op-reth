@@ -156,5 +156,5 @@ Benchmark Configuration
 The test script iterates through the block range, spawning 10 concurrent workers. Each worker selects an address round-robin from a pre-defined set, dynamically calculates the storage slot for balanceOf[address], and sends an eth_getProof request.
 
 Visual Proof:
-- [Grafana Snaphot: Proof Metrics](https://snapshots.raintank.io/dashboard/snapshot/bzYXscOCugsxO6C2bzFB1XbskxG0KFdo)
+- [Grafana Snapshot: Proof Metrics](https://snapshots.raintank.io/dashboard/snapshot/bzYXscOCugsxO6C2bzFB1XbskxG0KFdo)
 - [Grafana Snapshot: Reth Metrics](https://snapshots.raintank.io/dashboard/snapshot/hxZaChzsrez3Q3w52IHj0Wab3H1wndUg)
