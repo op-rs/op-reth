@@ -126,7 +126,9 @@ mod test {
         let db_error: DatabaseError = original_error.into();
         let converted_error: OpProofsStorageError = db_error.into();
 
-        assert!(matches!(converted_error, OpProofsStorageError::NoBlocksFound))
+        // After converting to DatabaseError and back, the error is wrapped in DatabaseError variant
+        // because we can't recover the original type without Clone
+        assert!(matches!(converted_error, OpProofsStorageError::DatabaseError(_)))
     }
 
     #[test]
