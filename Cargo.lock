@@ -9866,7 +9866,7 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-exex"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10149,7 +10149,7 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-trie"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
