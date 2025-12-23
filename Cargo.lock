@@ -10149,7 +10149,11 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-trie"
+<<<<<<< HEAD
 version = "1.10.1"
+=======
+version = "1.10.0"
+>>>>>>> 344aefdd73 (refactor(trie): return `OpProofsStorageError` from `store_block_updates` (#537))
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
