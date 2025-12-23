@@ -10,7 +10,7 @@ use thiserror::Error;
 use tokio::sync::TryLockError;
 
 /// Error type for storage operations
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum OpProofsStorageError {
     /// No blocks found
     #[error("No blocks found")]
@@ -86,15 +86,27 @@ pub enum OpProofsStorageError {
     TryLockError,
     /// Error occurred during block execution.
     #[error(transparent)]
-    ExecutionError(#[from] BlockExecutionError),
+    ExecutionError(Arc<BlockExecutionError>),
     /// Error occurred while interacting with the provider.
     #[error(transparent)]
-    ProviderError(#[from] ProviderError),
+    ProviderError(Arc<ProviderError>),
 }
 
 impl From<TryLockError> for OpProofsStorageError {
     fn from(_: TryLockError) -> Self {
         Self::TryLockError
+    }
+}
+
+impl From<BlockExecutionError> for OpProofsStorageError {
+    fn from(error: BlockExecutionError) -> Self {
+        Self::ExecutionError(Arc::new(error))
+    }
+}
+
+impl From<ProviderError> for OpProofsStorageError {
+    fn from(error: ProviderError) -> Self {
+        Self::ProviderError(Arc::new(error))
     }
 }
 
@@ -109,6 +121,11 @@ impl From<OpProofsStorageError> for DatabaseError {
 
 impl From<DatabaseError> for OpProofsStorageError {
     fn from(error: DatabaseError) -> Self {
+        if let DatabaseError::Custom(ref err) = error &&
+            let Some(err) = err.downcast_ref::<Self>()
+        {
+            return err.clone()
+        }
         Self::DatabaseError(error)
     }
 }
@@ -126,9 +143,7 @@ mod test {
         let db_error: DatabaseError = original_error.into();
         let converted_error: OpProofsStorageError = db_error.into();
 
-        // After converting to DatabaseError and back, the error is wrapped in DatabaseError variant
-        // because we can't recover the original type without Clone
-        assert!(matches!(converted_error, OpProofsStorageError::DatabaseError(_)))
+        assert!(matches!(converted_error, OpProofsStorageError::NoBlocksFound))
     }
 
     #[test]
