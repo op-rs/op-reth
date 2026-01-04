@@ -22,7 +22,7 @@ highlight = "all"
 # List of crates to deny
 deny = [{ name = "openssl" }]
 # Certain crates/versions that will be skipped when doing duplicate detection.
-skip = []
+skip = ["base64"]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
 # dependencies starting at the specified crate, up to a certain depth, which is
@@ -53,7 +53,6 @@ allow = [
     # https://github.com/rustls/webpki/blob/main/LICENSE ISC Style
     "LicenseRef-rustls-webpki",
     "CDLA-Permissive-2.0",
-    "MPL-2.0",
 ]
 
 # Allow 1 or more licenses on a per-crate basis, so that particular licenses
@@ -62,7 +61,6 @@ exceptions = [
     # TODO: decide on MPL-2.0 handling
     # These dependencies are grandfathered in https://github.com/paradigmxyz/reth/pull/6980
     { allow = ["MPL-2.0"], name = "option-ext" },
-    { allow = ["MPL-2.0"], name = "webpki-root-certs" },
 ]
 
 [[licenses.clarify]]
