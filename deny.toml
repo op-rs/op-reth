@@ -22,7 +22,7 @@ highlight = "all"
 # List of crates to deny
 deny = [{ name = "openssl" }]
 # Certain crates/versions that will be skipped when doing duplicate detection.
-skip = ["base64", "bindgen", "bitflags"]
+skip = []
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
 # dependencies starting at the specified crate, up to a certain depth, which is
