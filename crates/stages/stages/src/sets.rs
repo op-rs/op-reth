@@ -22,7 +22,7 @@
 //! # use reth_config::config::StageConfig;
 //! # use reth_ethereum_primitives::EthPrimitives;
 //! # use std::sync::Arc;
-//! # use reth_consensus::{FullConsensus};
+//! # use reth_consensus::FullConsensus;
 //!
 //! # fn create(exec: impl ConfigureEvm<Primitives = EthPrimitives> + 'static, consensus: impl FullConsensus<EthPrimitives> + 'static) {
 //!
