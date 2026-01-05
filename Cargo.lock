@@ -10129,6 +10129,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "strum 0.27.2",
  "tokio",
  "tokio-stream",
  "tower",
@@ -10149,11 +10150,7 @@ dependencies = [
 
 [[package]]
 name = "reth-optimism-trie"
-<<<<<<< HEAD
 version = "1.10.1"
-=======
-version = "1.10.0"
->>>>>>> 344aefdd73 (refactor(trie): return `OpProofsStorageError` from `store_block_updates` (#537))
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
