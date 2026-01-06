@@ -12,7 +12,9 @@
 //   - Spawns concurrent workers to send `eth_getProof` requests.
 //   - Measures the HTTP round-trip latency.
 //
-// 5. Reporting: Aggregates and prints latency statistics (Avg/Min/Max) per block interval.
+// 5. Reporting:
+//   - Aggregates and prints latency statistics (Avg/Min/Max) per block interval.
+//   - Performance metrics from the node's grafana dashboard can be correlated with these results for deeper analysis.
 package main
 
 import (
