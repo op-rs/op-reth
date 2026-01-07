@@ -174,9 +174,9 @@ where
             let blocks_to_prune = target_earliest - earliest_block_number;
             if blocks_to_prune > MAX_PRUNE_BLOCKS_STARTUP {
                 return Err(eyre::eyre!(
-                    "Configuration requires pruning {} blocks, which exceeds the safety threshold of {}. 
-                    Huge prune operations can stall the node.
-                    Please run 'op-reth prune-op-proofs' manually before starting the node.",
+                    "Configuration requires pruning {} blocks, which exceeds the safety threshold of {}. \
+                     Huge prune operations can stall the node. \
+                     Please run 'op-reth prune-op-proofs' manually before starting the node.",
                         blocks_to_prune,
                         MAX_PRUNE_BLOCKS_STARTUP
                 ));
