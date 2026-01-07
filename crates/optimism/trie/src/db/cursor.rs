@@ -24,6 +24,9 @@ use reth_trie::{
 /// Generic alias for dup cursor for T
 pub(crate) type Dup<'tx, T> = <<DatabaseEnv as Database>::TX as DbTx>::DupCursor<T>;
 
+/// Generic alias for cursor for T
+pub(crate) type Cur<'tx, T> = <<DatabaseEnv as Database>::TX as DbTx>::Cursor<T>;
+
 /// Iterates versioned dup-sorted rows and returns the latest value (<= `max_block_number`),
 /// skipping tombstones.
 #[derive(Debug, Clone)]

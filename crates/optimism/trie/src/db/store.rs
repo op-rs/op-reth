@@ -2,7 +2,8 @@ use super::{BlockNumberHash, ProofWindow, ProofWindowKey, Tables};
 use crate::{
     api::WriteCounts,
     db::{
-        cursor::Dup,
+        cursor::{Cur, Dup},
+        hybrid_cursor::{HybridAccountHashedCursor, RethAccountCursor, RethAccountProvider},
         models::{
             kv::IntoKV, AccountTrieHistory, AddressLookup, BlockChangeSet, ChangeSet,
             HashedAccountHistory, HashedStorageHistory, HashedStorageKey, MaybeDeleted,
@@ -32,11 +33,22 @@ use reth_trie::{
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
 use tracing::info;
+use reth_db::mdbx::RO;
+use reth_db::mdbx::tx::Tx;
+use reth_provider::{DatabaseProviderFactory, ProviderFactory};
+
+#[derive(Clone, Copy, Debug)]
+pub enum CursorBackend {
+    OpProofsStorage,
+    Reth,
+}
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
 pub struct MdbxProofsStorage {
     env: DatabaseEnv,
+    cursor_backend: CursorBackend,
+    reth_provider_tx: Tx<RO>
 }
 
 struct ProofWindowValue {
@@ -46,10 +58,10 @@ struct ProofWindowValue {
 
 impl MdbxProofsStorage {
     /// Creates a new [`MdbxProofsStorage`] instance with the given path.
-    pub fn new(path: &Path) -> Result<Self, OpProofsStorageError> {
+    pub fn new(path: &Path, cursor_backend: CursorBackend, reth_provider_tx: Tx<RO>) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, Tables>(path, DatabaseArguments::default())
             .map_err(|e| DatabaseError::Other(format!("Failed to open database: {e}")))?;
-        Ok(Self { env })
+        Ok(Self { env, cursor_backend, reth_provider_tx })
     }
 
     fn inner_get_latest_block_number_hash(
@@ -426,7 +438,16 @@ impl OpProofsStore for MdbxProofsStorage {
     where
         Self: 'tx;
     type AccountHashedCursor<'tx>
-        = MdbxAccountCursor<Dup<'tx, HashedAccountHistory>>
+        = HybridAccountHashedCursor<
+        MdbxAccountCursor<Dup<'tx, HashedAccountHistory>>,
+        RethAccountCursor<
+            Cur<'tx, AddressLookup>,
+            RethAccountProvider<
+                Cur<'tx, reth_db::AccountsHistory>,
+                Dup<'tx, reth_db::AccountChangeSets>,
+            >,
+        >,
+    >
     where
         Self: 'tx;
 
@@ -580,9 +601,22 @@ impl OpProofsStore for MdbxProofsStorage {
         max_block_number: u64,
     ) -> OpProofsStorageResult<Self::AccountHashedCursor<'tx>> {
         let tx = self.env.tx()?;
-        let cursor = tx.cursor_dup_read::<HashedAccountHistory>()?;
-
-        Ok(MdbxAccountCursor::new(cursor, max_block_number))
+        match self.cursor_backend {
+            CursorBackend::OpProofsStorage => {
+                let cursor = tx.cursor_dup_read::<HashedAccountHistory>()?;
+                Ok(HybridAccountHashedCursor::ProofStorage(MdbxAccountCursor::new(
+                    cursor,
+                    max_block_number,
+                )))
+            }
+            CursorBackend::Reth => {
+                let history = self.reth_provider_tx.cursor_read::<reth_db::AccountsHistory>()?;
+                let change_sets = self.reth_provider_tx.cursor_dup_read::<reth_db::AccountChangeSets>()?;
+                let address_lookup = tx.cursor_read::<AddressLookup>()?;
+                let reth_account_provider = RethAccountProvider::new(history, change_sets);
+               Ok( HybridAccountHashedCursor::Reth(RethAccountCursor::new(max_block_number, address_lookup, reth_account_provider)))
+            }
+        }
     }
 
     async fn store_trie_updates(
