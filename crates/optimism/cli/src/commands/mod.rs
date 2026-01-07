@@ -62,8 +62,8 @@ pub enum Commands<Spec: ChainSpecParser = OpChainSpecParser, Ext: clap::Args + f
     /// Re-execute blocks in parallel to verify historical sync correctness.
     #[command(name = "re-execute")]
     ReExecute(re_execute::Command<Spec>),
-    /// Main command for op-proofs related subcommands
-    #[command(name = "op-proofs")]
+    /// Manage storage of historical proofs in expanded trie_db in fault proof window.
+    #[command(name = "proofs")]
     OpProofs(op_proofs::Command<Spec>),
 }
 
