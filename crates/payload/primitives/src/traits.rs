@@ -12,7 +12,7 @@ use core::fmt;
 use either::Either;
 use reth_chain_state::ComputedTrieData;
 use reth_execution_types::BlockExecutionOutput;
-use reth_primitives_traits::{NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader};
+use reth_primitives_traits::{BlockTy, NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader};
 use reth_trie_common::{
     updates::{TrieUpdates, TrieUpdatesSorted},
     HashedPostState, HashedPostStateSorted,
@@ -78,7 +78,7 @@ pub trait BuiltPayload: Send + Sync + fmt::Debug {
     type Primitives: NodePrimitives;
 
     /// Returns the built block in its sealed (hash-verified) form.
-    fn block(&self) -> &SealedBlock<<Self::Primitives as NodePrimitives>::Block>;
+    fn block(&self) -> &SealedBlock<BlockTy<Self::Primitives>>;
 
     /// Returns the total fees collected from all transactions in this block.
     fn fees(&self) -> U256;

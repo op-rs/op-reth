@@ -10,7 +10,7 @@ use reth_db_api::{tables, transaction::DbTxMut, DatabaseError};
 use reth_etl::Collector;
 use reth_execution_errors::StateRootError;
 use reth_primitives_traits::{
-    Account, Bytecode, GotExpected, NodePrimitives, SealedHeader, StorageEntry,
+    Account, Bytecode, GotExpected, HeaderTy, NodePrimitives, SealedHeader, StorageEntry,
 };
 use reth_provider::{
     errors::provider::ProviderResult, providers::StaticFileWriter, BlockHashReader, BlockNumReader,
@@ -102,7 +102,7 @@ where
         + MetadataWriter
         + ChainSpecProvider
         + AsRef<PF::ProviderRW>,
-    PF::ChainSpec: EthChainSpec<Header = <PF::Primitives as NodePrimitives>::BlockHeader>,
+    PF::ChainSpec: EthChainSpec<Header = HeaderTy<PF::Primitives>>,
 {
     #[cfg(feature = "edge")]
     {
@@ -136,7 +136,7 @@ where
         + MetadataWriter
         + ChainSpecProvider
         + AsRef<PF::ProviderRW>,
-    PF::ChainSpec: EthChainSpec<Header = <PF::Primitives as NodePrimitives>::BlockHeader>,
+    PF::ChainSpec: EthChainSpec<Header = HeaderTy<PF::Primitives>>,
 {
     let chain = factory.chain_spec();
 
@@ -416,7 +416,7 @@ pub fn insert_genesis_header<Provider, Spec>(
 where
     Provider: StaticFileProviderFactory<Primitives: NodePrimitives<BlockHeader: Compact>>
         + DBProvider<Tx: DbTxMut>,
-    Spec: EthChainSpec<Header = <Provider::Primitives as NodePrimitives>::BlockHeader>,
+    Spec: EthChainSpec<Header = HeaderTy<Provider::Primitives>>,
 {
     let (header, block_hash) = (chain.genesis_header(), chain.genesis_hash());
     let static_file_provider = provider.static_file_provider();

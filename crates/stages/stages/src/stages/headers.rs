@@ -14,9 +14,7 @@ use reth_network_p2p::headers::{
     downloader::{HeaderDownloader, HeaderSyncGap, SyncTarget},
     error::HeadersDownloaderError,
 };
-use reth_primitives_traits::{
-    serde_bincode_compat, FullBlockHeader, HeaderTy, NodePrimitives, SealedHeader,
-};
+use reth_primitives_traits::{serde_bincode_compat, FullBlockHeader, HeaderTy, SealedHeader};
 use reth_provider::{
     providers::StaticFileWriter, BlockHashReader, DBProvider, HeaderSyncGapProvider,
     StaticFileProviderFactory,
@@ -93,8 +91,8 @@ where
     fn write_headers<P>(&mut self, provider: &P) -> Result<BlockNumber, StageError>
     where
         P: DBProvider<Tx: DbTxMut> + StaticFileProviderFactory,
-        Downloader: HeaderDownloader<Header = <P::Primitives as NodePrimitives>::BlockHeader>,
-        <P::Primitives as NodePrimitives>::BlockHeader: Value + FullBlockHeader,
+        Downloader: HeaderDownloader<Header = HeaderTy<P::Primitives>>,
+        HeaderTy<P::Primitives>: Value + FullBlockHeader,
     {
         let total_headers = self.header_collector.len();
 
@@ -180,9 +178,9 @@ where
 impl<Provider, P, D> Stage<Provider> for HeaderStage<P, D>
 where
     Provider: DBProvider<Tx: DbTxMut> + StaticFileProviderFactory,
-    P: HeaderSyncGapProvider<Header = <Provider::Primitives as NodePrimitives>::BlockHeader>,
-    D: HeaderDownloader<Header = <Provider::Primitives as NodePrimitives>::BlockHeader>,
-    <Provider::Primitives as NodePrimitives>::BlockHeader: FullBlockHeader + Value,
+    P: HeaderSyncGapProvider<Header = HeaderTy<Provider::Primitives>>,
+    D: HeaderDownloader<Header = HeaderTy<Provider::Primitives>>,
+    HeaderTy<Provider::Primitives>: FullBlockHeader + Value,
 {
     /// Return the id of the stage
     fn id(&self) -> StageId {

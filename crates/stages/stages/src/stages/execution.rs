@@ -8,7 +8,9 @@ use reth_db::{static_file::HeaderMask, tables};
 use reth_evm::{execute::Executor, metrics::ExecutorMetrics, ConfigureEvm};
 use reth_execution_types::Chain;
 use reth_exex::{ExExManagerHandle, ExExNotification, ExExNotificationSource};
-use reth_primitives_traits::{format_gas_throughput, BlockBody, NodePrimitives};
+use reth_primitives_traits::{
+    format_gas_throughput, BlockBody, BlockTy, HeaderTy, NodePrimitives, ReceiptTy,
+};
 use reth_provider::{
     providers::{StaticFileProvider, StaticFileWriter},
     BlockHashReader, BlockReader, DBProvider, EitherWriter, ExecutionOutcome, HeaderProvider,
@@ -259,14 +261,12 @@ impl<E, Provider> Stage<Provider> for ExecutionStage<E>
 where
     E: ConfigureEvm,
     Provider: DBProvider
-        + BlockReader<
-            Block = <E::Primitives as NodePrimitives>::Block,
-            Header = <E::Primitives as NodePrimitives>::BlockHeader,
-        > + StaticFileProviderFactory<
+        + BlockReader<Block = BlockTy<E::Primitives>, Header = HeaderTy<E::Primitives>>
+        + StaticFileProviderFactory<
             Primitives: NodePrimitives<BlockHeader: reth_db_api::table::Value>,
         > + StatsReader
         + BlockHashReader
-        + StateWriter<Receipt = <E::Primitives as NodePrimitives>::Receipt>
+        + StateWriter<Receipt = ReceiptTy<E::Primitives>>
         + StorageSettingsCache,
 {
     /// Return the id of the stage

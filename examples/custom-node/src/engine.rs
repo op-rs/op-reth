@@ -178,7 +178,7 @@ pub struct CustomBuiltPayload(pub OpBuiltPayload<CustomNodePrimitives>);
 impl BuiltPayload for CustomBuiltPayload {
     type Primitives = CustomNodePrimitives;
 
-    fn block(&self) -> &SealedBlock<<Self::Primitives as NodePrimitives>::Block> {
+    fn block(&self) -> &SealedBlock<BlockTy<Self::Primitives>> {
         self.0.block()
     }
 
@@ -210,9 +210,7 @@ impl PayloadTypes for CustomPayloadTypes {
     type PayloadBuilderAttributes = CustomPayloadBuilderAttributes;
 
     fn block_to_payload(
-        block: SealedBlock<
-            <<Self::BuiltPayload as BuiltPayload>::Primitives as NodePrimitives>::Block,
-        >,
+        block: SealedBlock<BlockTy<<Self::BuiltPayload as BuiltPayload>::Primitives>>,
     ) -> Self::ExecutionData {
         let extension = block.header().extension;
         let block_hash = block.hash();

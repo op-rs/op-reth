@@ -29,8 +29,8 @@ use reth_metrics::{
 };
 use reth_node_api::{NewPayloadError, PayloadTypes};
 use reth_primitives_traits::{
-    constants::GAS_LIMIT_BOUND_DIVISOR, BlockBody, GotExpected, NodePrimitives, RecoveredBlock,
-    SealedBlock, SealedHeaderFor,
+    constants::GAS_LIMIT_BOUND_DIVISOR, BlockBody, BlockTy, GotExpected, HeaderTy, ReceiptTy,
+    RecoveredBlock, SealedBlock, SealedHeaderFor,
 };
 use reth_revm::{cached::CachedReads, database::StateProviderDatabase};
 use reth_rpc_api::BlockSubmissionValidationApiServer;
@@ -63,9 +63,7 @@ where
         evm_config: E,
         config: ValidationApiConfig,
         task_spawner: Box<dyn TaskSpawner>,
-        payload_validator: Arc<
-            dyn PayloadValidator<T, Block = <E::Primitives as NodePrimitives>::Block>,
-        >,
+        payload_validator: Arc<dyn PayloadValidator<T, Block = BlockTy<E::Primitives>>>,
     ) -> Self {
         let ValidationApiConfig { disallow, validation_window } = config;
 
@@ -113,7 +111,7 @@ where
 
 impl<Provider, E, T> ValidationApi<Provider, E, T>
 where
-    Provider: BlockReaderIdExt<Header = <E::Primitives as NodePrimitives>::BlockHeader>
+    Provider: BlockReaderIdExt<Header = HeaderTy<E::Primitives>>
         + ChainSpecProvider<ChainSpec: EthereumHardforks>
         + StateProviderFactory
         + 'static,
@@ -123,7 +121,7 @@ where
     /// Validates the given block and a [`BidTrace`] against it.
     pub async fn validate_message_against_block(
         &self,
-        block: RecoveredBlock<<E::Primitives as NodePrimitives>::Block>,
+        block: RecoveredBlock<BlockTy<E::Primitives>>,
         message: BidTrace,
         registered_gas_limit: u64,
     ) -> Result<(), ValidationApiError> {
@@ -283,8 +281,8 @@ where
     /// to checking the latest block transaction.
     fn ensure_payment(
         &self,
-        block: &SealedBlock<<E::Primitives as NodePrimitives>::Block>,
-        output: &BlockExecutionOutput<<E::Primitives as NodePrimitives>::Receipt>,
+        block: &SealedBlock<BlockTy<E::Primitives>>,
+        output: &BlockExecutionOutput<ReceiptTy<E::Primitives>>,
         message: &BidTrace,
     ) -> Result<(), ValidationApiError> {
         let (mut balance_before, balance_after) = if let Some(acc) =
@@ -478,7 +476,7 @@ where
 #[async_trait]
 impl<Provider, E, T> BlockSubmissionValidationApiServer for ValidationApi<Provider, E, T>
 where
-    Provider: BlockReaderIdExt<Header = <E::Primitives as NodePrimitives>::BlockHeader>
+    Provider: BlockReaderIdExt<Header = HeaderTy<E::Primitives>>
         + ChainSpecProvider<ChainSpec: EthereumHardforks>
         + StateProviderFactory
         + Clone
@@ -563,8 +561,7 @@ pub struct ValidationApiInner<Provider, E: ConfigureEvm, T: PayloadTypes> {
     /// Consensus implementation.
     consensus: Arc<dyn FullConsensus<E::Primitives>>,
     /// Execution payload validator.
-    payload_validator:
-        Arc<dyn PayloadValidator<T, Block = <E::Primitives as NodePrimitives>::Block>>,
+    payload_validator: Arc<dyn PayloadValidator<T, Block = BlockTy<E::Primitives>>>,
     /// Block executor factory.
     evm_config: E,
     /// Set of disallowed addresses

@@ -154,8 +154,8 @@ impl PayloadTypes for CustomEngineTypes {
 
     fn block_to_payload(
         block: SealedBlock<
-                <<Self::BuiltPayload as reth_ethereum::node::api::BuiltPayload>::Primitives as reth_ethereum::node::api::NodePrimitives>::Block,
-            >,
+            BlockTy<<Self::BuiltPayload as reth_ethereum::node::api::BuiltPayload>::Primitives>,
+        >,
     ) -> ExecutionData {
         let (payload, sidecar) =
             ExecutionPayload::from_block_unchecked(block.hash(), &block.into_block());
