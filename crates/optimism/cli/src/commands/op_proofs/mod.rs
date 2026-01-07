@@ -19,10 +19,12 @@ pub struct Command<C: ChainSpecParser> {
 
 impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> Command<C> {
     /// Execute `op-proofs` command
-    pub async fn execute<N: reth_cli_commands::common::CliNodeTypes<
-        ChainSpec = C::ChainSpec,
-        Primitives = OpPrimitives,
-    >>(
+    pub async fn execute<
+        N: reth_cli_commands::common::CliNodeTypes<
+            ChainSpec = C::ChainSpec,
+            Primitives = OpPrimitives,
+        >,
+    >(
         self,
     ) -> eyre::Result<()> {
         match self.command {
@@ -35,7 +37,7 @@ impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> Command<C> {
 
 impl<C: ChainSpecParser> Command<C> {
     /// Returns the underlying chain being used to run this command
-    pub fn chain_spec(&self) -> Option<&Arc<C::ChainSpec>> {
+    pub const fn chain_spec(&self) -> Option<&Arc<C::ChainSpec>> {
         match &self.command {
             Subcommands::Init(cmd) => cmd.chain_spec(),
             Subcommands::Prune(cmd) => cmd.chain_spec(),

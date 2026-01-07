@@ -25,11 +25,7 @@ pub struct InitCommand<C: ChainSpecParser> {
     ///
     /// This should match the path used when starting the node with
     /// `--storage-path`.
-    #[arg(
-        long = "storage-path",
-        value_name = "PROOFS_HISTORY_STORAGE_PATH",
-        required = true
-    )]
+    #[arg(long = "storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH", required = true)]
     pub storage_path: PathBuf,
 }
 
