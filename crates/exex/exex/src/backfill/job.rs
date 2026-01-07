@@ -11,7 +11,7 @@ use alloy_primitives::BlockNumber;
 use reth_ethereum_primitives::Receipt;
 use reth_evm::execute::{BlockExecutionError, BlockExecutionOutput, Executor};
 use reth_node_api::{Block as _, BlockBody as _, NodePrimitives};
-use reth_primitives_traits::{format_gas_throughput, RecoveredBlock, SignedTransaction};
+use reth_primitives_traits::{format_gas_throughput, ReceiptTy, RecoveredBlock, SignedTransaction};
 use reth_provider::{
     BlockReader, Chain, ExecutionOutcome, HeaderProvider, ProviderError, StateProviderFactory,
     TransactionVariant,
@@ -173,7 +173,7 @@ where
 {
     type Item = BackfillJobResult<(
         RecoveredBlock<P::Block>,
-        BlockExecutionOutput<<E::Primitives as NodePrimitives>::Receipt>,
+        BlockExecutionOutput<ReceiptTy<E::Primitives>>,
     )>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -201,10 +201,8 @@ where
     pub(crate) fn execute_block(
         &self,
         block_number: u64,
-    ) -> BackfillJobResult<(
-        RecoveredBlock<P::Block>,
-        BlockExecutionOutput<<E::Primitives as NodePrimitives>::Receipt>,
-    )> {
+    ) -> BackfillJobResult<(RecoveredBlock<P::Block>, BlockExecutionOutput<ReceiptTy<E::Primitives>>)>
+    {
         // Fetch the block with senders for execution.
         let block_with_senders = self
             .provider

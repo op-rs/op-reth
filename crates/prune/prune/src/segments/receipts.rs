@@ -9,7 +9,7 @@ use crate::{
     PrunerError,
 };
 use reth_db_api::{table::Value, tables, transaction::DbTxMut};
-use reth_primitives_traits::NodePrimitives;
+use reth_primitives_traits::{NodePrimitives, ReceiptTy};
 use reth_provider::{
     errors::provider::ProviderResult, BlockReader, DBProvider, EitherWriter,
     NodePrimitivesProvider, PruneCheckpointWriter, StaticFileProviderFactory, StorageSettingsCache,
@@ -50,14 +50,14 @@ where
     let mut limiter = input.limiter;
 
     let mut last_pruned_transaction = tx_range_end;
-    let (pruned, done) = provider.tx_ref().prune_table_with_range::<tables::Receipts<
-        <Provider::Primitives as NodePrimitives>::Receipt,
-    >>(
-        tx_range,
-        &mut limiter,
-        |_| false,
-        |row| last_pruned_transaction = row.0,
-    )?;
+    let (pruned, done) = provider
+        .tx_ref()
+        .prune_table_with_range::<tables::Receipts<ReceiptTy<Provider::Primitives>>>(
+            tx_range,
+            &mut limiter,
+            |_| false,
+            |row| last_pruned_transaction = row.0,
+        )?;
     trace!(target: "pruner", %pruned, %done, "Pruned receipts");
 
     let last_pruned_block = provider

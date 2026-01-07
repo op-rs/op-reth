@@ -20,9 +20,12 @@ use reth_ethereum::{
     trie::{KeccakKeyHasher, KeyHasher},
 };
 use reth_node_builder::{rpc::PayloadValidatorBuilder, InvalidPayloadAttributesError};
-use reth_op::node::{
-    engine::OpEngineValidator, payload::OpAttributes, OpBuiltPayload, OpEngineTypes,
-    OpPayloadAttributes, OpPayloadBuilderAttributes,
+use reth_op::{
+    node::{
+        engine::OpEngineValidator, payload::OpAttributes, OpBuiltPayload, OpEngineTypes,
+        OpPayloadAttributes, OpPayloadBuilderAttributes,
+    },
+    primitives::{BlockTy, TxTy},
 };
 use revm_primitives::U256;
 use serde::{Deserialize, Serialize};

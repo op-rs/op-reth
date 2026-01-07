@@ -5,7 +5,7 @@ use crate::{
 };
 use alloy_consensus::TxReceipt;
 use reth_db_api::{table::Value, tables, transaction::DbTxMut};
-use reth_primitives_traits::NodePrimitives;
+use reth_primitives_traits::{NodePrimitives, ReceiptTy};
 use reth_provider::{
     BlockReader, DBProvider, NodePrimitivesProvider, PruneCheckpointWriter, TransactionsProvider,
 };
@@ -149,24 +149,24 @@ where
             // Delete receipts, except the ones in the inclusion list
             let mut last_skipped_transaction = 0;
             let deleted;
-            (deleted, done) = provider.tx_ref().prune_table_with_range::<tables::Receipts<
-                <Provider::Primitives as NodePrimitives>::Receipt,
-            >>(
-                tx_range,
-                &mut limiter,
-                |(tx_num, receipt)| {
-                    let skip = num_addresses > 0 &&
-                        receipt.logs().iter().any(|log| {
-                            filtered_addresses[..num_addresses].contains(&&log.address)
-                        });
+            (deleted, done) = provider
+                .tx_ref()
+                .prune_table_with_range::<tables::Receipts<ReceiptTy<Provider::Primitives>>>(
+                    tx_range,
+                    &mut limiter,
+                    |(tx_num, receipt)| {
+                        let skip = num_addresses > 0 &&
+                            receipt.logs().iter().any(|log| {
+                                filtered_addresses[..num_addresses].contains(&&log.address)
+                            });
 
-                    if skip {
-                        last_skipped_transaction = *tx_num;
-                    }
-                    skip
-                },
-                |row| last_pruned_transaction = Some(row.0),
-            )?;
+                        if skip {
+                            last_skipped_transaction = *tx_num;
+                        }
+                        skip
+                    },
+                    |row| last_pruned_transaction = Some(row.0),
+                )?;
 
             trace!(target: "pruner", %deleted, %done, ?block_range, "Pruned receipts");
 
