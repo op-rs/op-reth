@@ -126,7 +126,7 @@ impl MdbxProofsStorage {
     ///   - `false` (Prune): Removes tombstones, writes non-tombstones to block 0
     ///
     /// The cost of pruning is the cost of (append + deleting tombstones + deleting old block 0).
-    /// Uses [`crate::reth_db::implementation::mdbx::cursor::upsert`] for upsert operation.
+    /// Uses [`reth_db::mdbx::cursor::Cursor::upsert`] for upsert operation.
     fn persist_history_batch<T, I, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
