@@ -29,7 +29,7 @@ use tracing::{debug, info};
 
 // Safety threshold for maximum blocks to prune automatically on startup.
 // If the required prune exceeds this, the node will error out and require manual pruning.
-const MAX_PRUNE_BLOCKS_STARTUP : u64 = 1000;
+const MAX_PRUNE_BLOCKS_STARTUP: u64 = 1000;
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
 ///
@@ -167,7 +167,8 @@ where
         };
 
         // Check if we have accumulated too much history for the configured window.
-        // If the gap between what we have and what we want to keep is too large, the auto-pruner will stall the node.
+        // If the gap between what we have and what we want to keep is too large, the auto-pruner
+        // will stall the node.
         let target_earliest = latest_block_number.saturating_sub(self.proofs_history_window);
         if target_earliest > earliest_block_number {
             let blocks_to_prune = target_earliest - earliest_block_number;
