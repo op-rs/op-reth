@@ -27,7 +27,7 @@ pub enum OpConsensusError {
     },
     /// L1 [`ConsensusError`], that also occurs on L2.
     #[error(transparent)]
-    Eth(#[from] ConsensusError),
+    Eth(ConsensusError),
 }
 
 impl From<OpConsensusError> for ConsensusError {
@@ -36,6 +36,17 @@ impl From<OpConsensusError> for ConsensusError {
             OpConsensusError::Eth(err) => err,
             _ => Self::Custom(Arc::new(error)),
         }
+    }
+}
+
+impl From<ConsensusError> for OpConsensusError {
+    fn from(error: ConsensusError) -> Self {
+        if let ConsensusError::Custom(ref err) = error &&
+            let Some(op_err) = err.downcast_ref::<Self>()
+        {
+            return op_err.clone()
+        }
+        Self::Eth(error)
     }
 }
 
@@ -52,7 +63,6 @@ mod tests {
 
         let op_specific_err = OpConsensusError::WithdrawalsNonEmpty;
         let converted: ConsensusError = op_specific_err.into();
-
         assert!(matches!(converted, ConsensusError::Custom(_)));
     }
 
@@ -60,7 +70,6 @@ mod tests {
     fn op_consensus_error_from_consensus_error() {
         let consensus_err = ConsensusError::BaseFeeMissing;
         let op_err: OpConsensusError = consensus_err.into();
-
         assert!(matches!(op_err, OpConsensusError::Eth(_)));
 
         let original = OpConsensusError::WithdrawalsNonEmpty;
