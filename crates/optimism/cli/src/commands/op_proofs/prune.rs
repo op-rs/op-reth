@@ -14,13 +14,13 @@ use tracing::info;
 
 /// Prunes the proofs storage by removing old proof history and state updates.
 #[derive(Debug, Parser)]
-pub struct PruneOpProofsCommand<C: ChainSpecParser> {
+pub struct PruneCommand<C: ChainSpecParser> {
     #[command(flatten)]
     env: EnvironmentArgs<C>,
 
     /// The path to the storage DB for proofs history.
     #[arg(
-        long = "proofs-history.storage-path",
+        long = "storage-path",
         value_name = "PROOFS_HISTORY_STORAGE_PATH",
         required = true
     )]
@@ -30,7 +30,7 @@ pub struct PruneOpProofsCommand<C: ChainSpecParser> {
     /// Default is 1 month of blocks based on 2 seconds block time.
     /// 30 * 24 * 60 * 60 / 2 = `1_296_000`
     #[arg(
-        long = "proofs-history.window",
+        long = "window",
         default_value_t = 1_296_000,
         value_name = "PROOFS_HISTORY_WINDOW"
     )]
@@ -38,15 +38,15 @@ pub struct PruneOpProofsCommand<C: ChainSpecParser> {
 
     /// The batch size for pruning operations.
     #[arg(
-        long = "proofs-history.prune-batch-size",
+        long = "prune-batch-size",
         default_value_t = 1000,
         value_name = "PROOFS_HISTORY_PRUNE_BATCH_SIZE"
     )]
     pub proofs_history_prune_batch_size: u64,
 }
 
-impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> PruneOpProofsCommand<C> {
-    /// Execute [`PruneOpProofsCommand`].
+impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> PruneCommand<C> {
+    /// Execute [`PruneCommand`].
     pub async fn execute<N: CliNodeTypes<ChainSpec = C::ChainSpec, Primitives = OpPrimitives>>(
         self,
     ) -> eyre::Result<()> {
@@ -82,7 +82,7 @@ impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> PruneOpProofsCommand<C> {
     }
 }
 
-impl<C: ChainSpecParser> PruneOpProofsCommand<C> {
+impl<C: ChainSpecParser> PruneCommand<C> {
     /// Returns the underlying chain being used to run this command
     pub const fn chain_spec(&self) -> Option<&Arc<C::ChainSpec>> {
         Some(&self.env.chain)
