@@ -726,7 +726,10 @@ impl OpProofsStore for MdbxProofsStorage {
 
         self.env.update(|tx| {
             // Update the initial state (block zero)
+            let start = std::time::Instant::now();
             let change_set = self.store_trie_updates_for_block(tx, 0, diff, false)?;
+            let stu_elapsed = start.elapsed();
+            info!("prune::Store trie updates for block 0 took: {:?}", stu_elapsed);
             write_counts += WriteCounts::new(
                 change_set.account_trie_keys.len() as u64,
                 change_set.storage_trie_keys.len() as u64,
@@ -734,11 +737,14 @@ impl OpProofsStore for MdbxProofsStorage {
                 change_set.hashed_storage_keys.len() as u64,
             );
 
+            let start = std::time::Instant::now();
             // Delete the old entries for the block range excluding block 0
             let delete_counts = self.delete_history_ranged(
                 tx,
                 max(old_earliest_block_number, 1)..=new_earliest_block_number,
             )?;
+            let delete_elapsed = start.elapsed();
+            info!("prune::Deleting history took: {:?}", delete_elapsed);
             write_counts += delete_counts;
 
             // Set the earliest block number to the new value
