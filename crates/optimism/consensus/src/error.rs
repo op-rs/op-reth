@@ -1,9 +1,9 @@
 //! Optimism consensus errors
 
+use alloc::sync::Arc;
 use alloy_primitives::B256;
 use reth_consensus::ConsensusError;
 use reth_storage_errors::provider::ProviderError;
-use alloc::sync::Arc;
 
 /// Optimism consensus error.
 #[derive(Debug, Clone, thiserror::Error)]
