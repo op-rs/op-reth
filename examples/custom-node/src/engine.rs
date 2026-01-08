@@ -12,8 +12,8 @@ use reth_ethereum::{
     node::api::{
         validate_version_specific_fields, AddOnsContext, BuiltPayload, BuiltPayloadExecutedBlock,
         EngineApiMessageVersion, EngineObjectValidationError, ExecutionPayload, FullNodeComponents,
-        NewPayloadError, NodePrimitives, PayloadAttributes, PayloadBuilderAttributes,
-        PayloadOrAttributes, PayloadTypes, PayloadValidator,
+        NewPayloadError, PayloadAttributes, PayloadBuilderAttributes, PayloadOrAttributes,
+        PayloadTypes, PayloadValidator,
     },
     primitives::SealedBlock,
     storage::StateProviderFactory,
