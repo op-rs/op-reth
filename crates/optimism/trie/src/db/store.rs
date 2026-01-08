@@ -150,27 +150,34 @@ impl MdbxProofsStorage {
             }
             return Ok(keys);
         }
-        // We need hard deletions at the time of pruning where we need to perform these steps:
-        // - Hard delete all the tombstones
-        // - Update new state to block zero (not append)
-        let (to_delete, to_append): (Vec<_>, Vec<_>) =
-            pairs.into_iter().partition(|(_, vv)| vv.value.0.is_none());
 
-        for (k, vv) in to_append {
-            // For block 0, we need to update the existing entries.
+        // Drop current cursor to start clean for Phase 1
+        drop(cur);
 
-            // Dupsort upsert doesn't delete the old entry - We need to manually remove the existing
-            // entries.
-            let val = cur.seek_by_key_subkey(k.clone(), 0)?;
-            if val.is_some() && val.unwrap().block_number == 0 {
-                cur.delete_current()?;
+        // Phase 1: Batch Delete (Sequential)
+        // Remove all existing state at Block 0 for these keys.
+        {
+            let mut del_cur = tx.cursor_dup_write::<T>()?;
+            for (k, _) in &pairs {
+                // Seek to (Key, Block 0)
+                if let Some(vv) = del_cur.seek_by_key_subkey(k.clone(), 0)? {
+                    if vv.block_number == 0 {
+                        del_cur.delete_current()?;
+                    }
+                }
             }
-            cur.upsert(k, &vv)?;
         }
 
-        // Deletion must be called after the update otherwise deleted entries will be overwritten by
-        // the update.
-        self.delete_dup_sorted::<T, _, V>(tx, block_number, to_delete.into_iter().map(|(k, _)| k))?;
+        // Phase 2: Batch Write (Sequential)
+        // Write new values (skipping tombstones).
+        {
+            let mut write_cur = tx.cursor_dup_write::<T>()?;
+            for (k, vv) in pairs {
+                if vv.value.0.is_some() {
+                    write_cur.upsert(k, &vv)?;
+                }
+            }
+        }
 
         Ok(keys)
     }
