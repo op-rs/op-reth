@@ -24,8 +24,8 @@ pub struct InitCommand<C: ChainSpecParser> {
     /// The path to the storage DB for proofs history.
     ///
     /// This should match the path used when starting the node with
-    /// `--storage-path`.
-    #[arg(long = "storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH", required = true)]
+    /// `--proofs-history.storage-path`.
+    #[arg(long = "proofs-history.storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH", required = true)]
     pub storage_path: PathBuf,
 }
 
