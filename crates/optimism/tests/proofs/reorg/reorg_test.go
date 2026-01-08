@@ -174,7 +174,7 @@ func TestReorgUsingAccountProof(gt *testing.T) {
 		if err != nil {
 			// this could happen if the validator is still syncing after reorg
 			l.Warn("Error fetching block reference from validator", "error", err)
-			return false, err
+			return false, nil
 		}
 		return blockRef.Hash == latestBlock.Hash, nil
 	})
