@@ -19,7 +19,7 @@ use alloy_primitives::{map::HashMap, Address, B256, U256};
 use metrics::{gauge, Label};
 use reth_db::{
     cursor::{DbCursorRO, DbCursorRW, DbDupCursorRO, DbDupCursorRW},
-    mdbx::{init_db_for, DatabaseArguments},
+    mdbx::{init_db_for, tx::Tx, DatabaseArguments, RO},
     table::{DupSort, Table},
     transaction::{DbTx, DbTxMut},
     Database, DatabaseEnv, DatabaseError,
@@ -33,9 +33,6 @@ use reth_trie::{
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
 use tracing::info;
-use reth_db::mdbx::RO;
-use reth_db::mdbx::tx::Tx;
-use reth_provider::{DatabaseProviderFactory, ProviderFactory};
 
 #[derive(Clone, Copy, Debug)]
 pub enum CursorBackend {
@@ -48,7 +45,7 @@ pub enum CursorBackend {
 pub struct MdbxProofsStorage {
     env: DatabaseEnv,
     cursor_backend: CursorBackend,
-    reth_provider_tx: Tx<RO>
+    reth_provider_tx: Tx<RO>,
 }
 
 struct ProofWindowValue {
@@ -58,7 +55,11 @@ struct ProofWindowValue {
 
 impl MdbxProofsStorage {
     /// Creates a new [`MdbxProofsStorage`] instance with the given path.
-    pub fn new(path: &Path, cursor_backend: CursorBackend, reth_provider_tx: Tx<RO>) -> Result<Self, OpProofsStorageError> {
+    pub fn new(
+        path: &Path,
+        cursor_backend: CursorBackend,
+        reth_provider_tx: Tx<RO>,
+    ) -> Result<Self, OpProofsStorageError> {
         let env = init_db_for::<_, Tables>(path, DatabaseArguments::default())
             .map_err(|e| DatabaseError::Other(format!("Failed to open database: {e}")))?;
         Ok(Self { env, cursor_backend, reth_provider_tx })
@@ -611,10 +612,15 @@ impl OpProofsStore for MdbxProofsStorage {
             }
             CursorBackend::Reth => {
                 let history = self.reth_provider_tx.cursor_read::<reth_db::AccountsHistory>()?;
-                let change_sets = self.reth_provider_tx.cursor_dup_read::<reth_db::AccountChangeSets>()?;
+                let change_sets =
+                    self.reth_provider_tx.cursor_dup_read::<reth_db::AccountChangeSets>()?;
                 let address_lookup = tx.cursor_read::<AddressLookup>()?;
                 let reth_account_provider = RethAccountProvider::new(history, change_sets);
-               Ok( HybridAccountHashedCursor::Reth(RethAccountCursor::new(max_block_number, address_lookup, reth_account_provider)))
+                Ok(HybridAccountHashedCursor::Reth(RethAccountCursor::new(
+                    max_block_number,
+                    address_lookup,
+                    reth_account_provider,
+                )))
             }
         }
     }

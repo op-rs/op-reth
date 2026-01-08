@@ -16,8 +16,8 @@ pub trait RethHistoryProvider {
     /// Latest value for `key` at or before `block`.
     fn latest_value_at(
         &mut self,
-        key: Self::Key,
-        block: u64,
+        _key: Self::Key,
+        _block: u64,
     ) -> Result<Option<(Self::Key, Self::Value)>, DatabaseError> {
         Ok(None)
     }
@@ -25,7 +25,7 @@ pub trait RethHistoryProvider {
     /// Next latest value at or before `block`.
     fn next_latest_value_at(
         &mut self,
-        block: u64,
+        _block: u64,
     ) -> Result<Option<(Self::Key, Self::Value)>, DatabaseError> {
         Ok(None)
     }
