@@ -6,7 +6,7 @@ Unwind the proofs storage to a specific block
 $ op-reth proofs unwind --help
 ```
 ```txt
-Usage: op-reth proofs unwind [OPTIONS] --storage-path <PROOFS_HISTORY_STORAGE_PATH> --target <TARGET_BLOCK>
+Usage: op-reth proofs unwind [OPTIONS] --proofs-history.storage-path <PROOFS_HISTORY_STORAGE_PATH> --target <TARGET_BLOCK>
 
 Options:
   -h, --help
@@ -116,7 +116,7 @@ Static Files:
 
           Note: This setting can only be configured at genesis initialization. Once the node has been initialized, changing this flag requires re-syncing from scratch.
 
-      --storage-path <PROOFS_HISTORY_STORAGE_PATH>
+      --proofs-history.storage-path <PROOFS_HISTORY_STORAGE_PATH>
           The path to the storage DB for proofs history
 
       --target <TARGET_BLOCK>

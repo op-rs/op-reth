@@ -6,7 +6,7 @@ Initialize the proofs storage with the current state of the chain
 $ op-reth proofs init --help
 ```
 ```txt
-Usage: op-reth proofs init [OPTIONS] --storage-path <PROOFS_HISTORY_STORAGE_PATH>
+Usage: op-reth proofs init [OPTIONS] --proofs-history.storage-path <PROOFS_HISTORY_STORAGE_PATH>
 
 Options:
   -h, --help
@@ -116,10 +116,10 @@ Static Files:
 
           Note: This setting can only be configured at genesis initialization. Once the node has been initialized, changing this flag requires re-syncing from scratch.
 
-      --storage-path <PROOFS_HISTORY_STORAGE_PATH>
+      --proofs-history.storage-path <PROOFS_HISTORY_STORAGE_PATH>
           The path to the storage DB for proofs history.
 
-          This should match the path used when starting the node with `--storage-path`.
+          This should match the path used when starting the node with `--proofs-history.storage-path`.
 
 Logging:
       --log.stdout.format <FORMAT>

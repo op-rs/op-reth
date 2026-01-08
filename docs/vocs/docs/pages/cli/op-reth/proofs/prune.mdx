@@ -6,7 +6,7 @@ Prune old proof history to reclaim space
 $ op-reth proofs prune --help
 ```
 ```txt
-Usage: op-reth proofs prune [OPTIONS] --storage-path <PROOFS_HISTORY_STORAGE_PATH>
+Usage: op-reth proofs prune [OPTIONS] --proofs-history.storage-path <PROOFS_HISTORY_STORAGE_PATH>
 
 Options:
   -h, --help
@@ -116,15 +116,15 @@ Static Files:
 
           Note: This setting can only be configured at genesis initialization. Once the node has been initialized, changing this flag requires re-syncing from scratch.
 
-      --storage-path <PROOFS_HISTORY_STORAGE_PATH>
+      --proofs-history.storage-path <PROOFS_HISTORY_STORAGE_PATH>
           The path to the storage DB for proofs history
 
-      --window <PROOFS_HISTORY_WINDOW>
+      --proofs-history.window <PROOFS_HISTORY_WINDOW>
           The window to span blocks for proofs history. Value is the number of blocks. Default is 1 month of blocks based on 2 seconds block time. 30 * 24 * 60 * 60 / 2 = `1_296_000`
 
           [default: 1296000]
 
-      --prune-batch-size <PROOFS_HISTORY_PRUNE_BATCH_SIZE>
+      --proofs-history.prune-batch-size <PROOFS_HISTORY_PRUNE_BATCH_SIZE>
           The batch size for pruning operations
 
           [default: 1000]
