@@ -20,7 +20,11 @@ pub struct UnwindCommand<C: ChainSpecParser> {
     env: EnvironmentArgs<C>,
 
     /// The path to the storage DB for proofs history.
-    #[arg(long = "proofs-history.storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH", required = true)]
+    #[arg(
+        long = "proofs-history.storage-path",
+        value_name = "PROOFS_HISTORY_STORAGE_PATH",
+        required = true
+    )]
     pub storage_path: PathBuf,
 
     /// The target block number to unwind to.

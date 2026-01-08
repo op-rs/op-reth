@@ -19,13 +19,21 @@ pub struct PruneCommand<C: ChainSpecParser> {
     env: EnvironmentArgs<C>,
 
     /// The path to the storage DB for proofs history.
-    #[arg(long = "proofs-history.storage-path", value_name = "PROOFS_HISTORY_STORAGE_PATH", required = true)]
+    #[arg(
+        long = "proofs-history.storage-path",
+        value_name = "PROOFS_HISTORY_STORAGE_PATH",
+        required = true
+    )]
     pub storage_path: PathBuf,
 
     /// The window to span blocks for proofs history. Value is the number of blocks.
     /// Default is 1 month of blocks based on 2 seconds block time.
     /// 30 * 24 * 60 * 60 / 2 = `1_296_000`
-    #[arg(long = "proofs-history.window", default_value_t = 1_296_000, value_name = "PROOFS_HISTORY_WINDOW")]
+    #[arg(
+        long = "proofs-history.window",
+        default_value_t = 1_296_000,
+        value_name = "PROOFS_HISTORY_WINDOW"
+    )]
     pub proofs_history_window: u64,
 
     /// The batch size for pruning operations.
