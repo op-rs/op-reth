@@ -170,13 +170,13 @@ func TestReorgUsingAccountProof(gt *testing.T) {
 
 	// verify that the L2A validator has reorged and reached the latest block
 	err := wait.For(t.Ctx(), 2*time.Second, func() (bool, error) {
-		block_ref, err := sys.L2ELValidatorNode().Escape().EthClient().BlockRefByNumber(ctx, latestBlock.Number)
+		blockRef, err := sys.L2ELValidatorNode().Escape().EthClient().BlockRefByNumber(ctx, latestBlock.Number)
 		if err != nil {
 			// this could happen if the validator is still syncing after reorg
 			l.Warn("Error fetching block reference from validator", "error", err)
 			return false, err
 		}
-		return block_ref.Hash == latestBlock.Hash, nil
+		return blockRef.Hash == latestBlock.Hash, nil
 	})
 	require.NoError(t, err, "Expected block hash to match latest block hash on validator")
 
