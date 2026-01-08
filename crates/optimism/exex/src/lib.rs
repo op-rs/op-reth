@@ -176,7 +176,7 @@ where
                 return Err(eyre::eyre!(
                     "Configuration requires pruning {} blocks, which exceeds the safety threshold of {}. \
                      Huge prune operations can stall the node. \
-                     Please run 'op-reth prune-op-proofs' manually before starting the node.",
+                     Please run 'op-reth proofs prune' manually before starting the node.",
                         blocks_to_prune,
                         MAX_PRUNE_BLOCKS_STARTUP
                 ));
