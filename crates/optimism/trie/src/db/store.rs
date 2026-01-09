@@ -182,8 +182,7 @@ impl MdbxProofsStorage {
             cur.upsert(k, &vv)?;
         }
 
-        // Deletion must be called after the update otherwise deleted entries will be overwritten by
-        // the update.
+        // Delete tombstones after updates to avoid overwrites
         self.delete_dup_sorted::<T, _, V>(
             tx,
             to_delete.into_iter().map(|(k, _)| (k, block_number)),
