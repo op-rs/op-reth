@@ -441,19 +441,19 @@ impl MdbxProofsStorage {
 
 impl OpProofsStore for MdbxProofsStorage {
     type StorageTrieCursor<'tx>
-    = MdbxTrieCursor<StorageTrieHistory, Dup<'tx, StorageTrieHistory>>
+        = MdbxTrieCursor<StorageTrieHistory, Dup<'tx, StorageTrieHistory>>
     where
         Self: 'tx;
     type AccountTrieCursor<'tx>
-    = MdbxTrieCursor<AccountTrieHistory, Dup<'tx, AccountTrieHistory>>
+        = MdbxTrieCursor<AccountTrieHistory, Dup<'tx, AccountTrieHistory>>
     where
         Self: 'tx;
     type StorageCursor<'tx>
-    = MdbxStorageCursor<Dup<'tx, HashedStorageHistory>>
+        = MdbxStorageCursor<Dup<'tx, HashedStorageHistory>>
     where
         Self: 'tx;
     type AccountHashedCursor<'tx>
-    = MdbxAccountCursor<Dup<'tx, HashedAccountHistory>>
+        = MdbxAccountCursor<Dup<'tx, HashedAccountHistory>>
     where
         Self: 'tx;
 
@@ -1740,7 +1740,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
@@ -1774,7 +1774,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
@@ -1804,7 +1804,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
@@ -1842,7 +1842,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
@@ -1869,7 +1869,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
@@ -1901,7 +1901,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
@@ -1931,7 +1931,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
@@ -1966,7 +1966,7 @@ mod tests {
                     ..Default::default()
                 },
             )
-                .unwrap();
+            .unwrap();
             tx.commit().unwrap();
         }
 
