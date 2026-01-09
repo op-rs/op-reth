@@ -160,10 +160,10 @@ impl MdbxProofsStorage {
             let mut del_cur = tx.cursor_dup_write::<T>()?;
             for (k, _) in &pairs {
                 // Seek to (Key, Block 0)
-                if let Some(vv) = del_cur.seek_by_key_subkey(k.clone(), 0)? {
-                    if vv.block_number == 0 {
-                        del_cur.delete_current()?;
-                    }
+                if let Some(vv) = del_cur.seek_by_key_subkey(k.clone(), 0)? &&
+                    vv.block_number == 0
+                {
+                    del_cur.delete_current()?;
                 }
             }
         }
@@ -720,6 +720,7 @@ impl OpProofsStore for MdbxProofsStorage {
         new_earliest_block_ref: BlockWithParent,
         diff: BlockStateDiff,
     ) -> OpProofsStorageResult<WriteCounts> {
+        let start = std::time::Instant::now();
         let mut write_counts = WriteCounts::default();
 
         let new_earliest_block_number = new_earliest_block_ref.block.number;
@@ -733,10 +734,8 @@ impl OpProofsStore for MdbxProofsStorage {
 
         self.env.update(|tx| {
             // Update the initial state (block zero)
-            let start = std::time::Instant::now();
             let change_set = self.store_trie_updates_for_block(tx, 0, diff, false)?;
             let stu_elapsed = start.elapsed();
-            info!("prune::Store trie updates for block 0 took: {:?}", stu_elapsed);
             write_counts += WriteCounts::new(
                 change_set.account_trie_keys.len() as u64,
                 change_set.storage_trie_keys.len() as u64,
@@ -744,14 +743,12 @@ impl OpProofsStore for MdbxProofsStorage {
                 change_set.hashed_storage_keys.len() as u64,
             );
 
-            let start = std::time::Instant::now();
             // Delete the old entries for the block range excluding block 0
             let delete_counts = self.delete_history_ranged(
                 tx,
                 max(old_earliest_block_number, 1)..=new_earliest_block_number,
             )?;
-            let delete_elapsed = start.elapsed();
-            info!("prune::Deleting history took: {:?}", delete_elapsed);
+            let delete_elapsed = start.elapsed() - stu_elapsed;
             write_counts += delete_counts;
 
             // Set the earliest block number to the new value
@@ -760,6 +757,15 @@ impl OpProofsStore for MdbxProofsStorage {
                 new_earliest_block_number,
                 new_earliest_block_ref.block.hash,
             )?;
+            let set_earliest_elapsed = start.elapsed() - delete_elapsed - stu_elapsed;
+            info!(
+                "prune:: prune_earliest_state: total: {:?} STU time: {:?}, Delete time: {:?}, SetEarliest time: {:?}",
+                start.elapsed(),
+                stu_elapsed,
+                delete_elapsed,
+                set_earliest_elapsed
+            );
+
             Ok(write_counts)
         })?
     }
@@ -3594,41 +3600,50 @@ mod tests {
         }
 
         let block_zero = BlockWithParent::new(B256::ZERO, NumHash::new(0, B256::ZERO));
-        
-        let seed_start = Instant::now();
-        store.store_trie_updates(block_zero, BlockStateDiff {
-            sorted_post_state: seed_diff.clone().into_sorted(),
-            ..Default::default()
-        }).await.expect("seed");
-        println!("Seeding took: {:?}", seed_start.elapsed());
 
+        let seed_start = Instant::now();
+        store
+            .store_trie_updates(
+                block_zero,
+                BlockStateDiff {
+                    sorted_post_state: seed_diff.clone().into_sorted(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("seed");
+        println!("Seeding took: {:?}", seed_start.elapsed());
 
         // 2. Prepare Update Diff (All values changed)
         let mut update_diff = HashedPostState::default();
         let new_account = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
-        
+
         for addr in &addresses {
             update_diff.accounts.insert(*addr, Some(new_account));
         }
 
-        let diff_struct = BlockStateDiff {
-            sorted_post_state: update_diff.into_sorted(),
-            ..Default::default()
-        };
+        let diff_struct =
+            BlockStateDiff { sorted_post_state: update_diff.into_sorted(), ..Default::default() };
 
         // 3. Execute Rewrite using internal helper via transaction
         let start = Instant::now();
-        let _ = store.env.update(|tx| {
-             // soft_delete = false triggers the hard DELETE + UPSERT logic
-             let _ = store.store_trie_updates_for_block(tx, 0, diff_struct, false)?;
-             Ok::<(), DatabaseError>(())
-        }).expect("rewrite");
-        
+        let _ = store
+            .env
+            .update(|tx| {
+                // soft_delete = false triggers the hard DELETE + UPSERT logic
+                let _ = store.store_trie_updates_for_block(tx, 0, diff_struct, false)?;
+                Ok::<(), DatabaseError>(())
+            })
+            .expect("rewrite");
+
         let duration = start.elapsed();
 
         println!("---------------------------------------------------");
         println!("Rewrite Duration: {:?}", duration);
-        println!("Throughput:       {:.2} entries/sec", num_entries as f64 / duration.as_secs_f64());
+        println!(
+            "Throughput:       {:.2} entries/sec",
+            num_entries as f64 / duration.as_secs_f64()
+        );
         println!("---------------------------------------------------");
     }
 }
