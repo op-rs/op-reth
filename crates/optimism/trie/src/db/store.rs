@@ -150,27 +150,34 @@ impl MdbxProofsStorage {
             }
             return Ok(keys);
         }
-        // We need hard deletions at the time of pruning where we need to perform these steps:
-        // - Hard delete all the tombstones
-        // - Update new state to block zero (not append)
-        let (to_delete, to_append): (Vec<_>, Vec<_>) =
-            pairs.into_iter().partition(|(_, vv)| vv.value.0.is_none());
 
-        for (k, vv) in to_append {
-            // For block 0, we need to update the existing entries.
+        // Drop current cursor to start clean for Phase 1
+        drop(cur);
 
-            // Dupsort upsert doesn't delete the old entry - We need to manually remove the existing
-            // entries.
-            let val = cur.seek_by_key_subkey(k.clone(), 0)?;
-            if val.is_some() && val.unwrap().block_number == 0 {
-                cur.delete_current()?;
+        // Phase 1: Batch Delete (Sequential)
+        // Remove all existing state at Block 0 for these keys.
+        {
+            let mut del_cur = tx.cursor_dup_write::<T>()?;
+            for (k, _) in &pairs {
+                // Seek to (Key, Block 0)
+                if let Some(vv) = del_cur.seek_by_key_subkey(k.clone(), 0)? {
+                    if vv.block_number == 0 {
+                        del_cur.delete_current()?;
+                    }
+                }
             }
-            cur.upsert(k, &vv)?;
         }
 
-        // Deletion must be called after the update otherwise deleted entries will be overwritten by
-        // the update.
-        self.delete_dup_sorted::<T, _, V>(tx, block_number, to_delete.into_iter().map(|(k, _)| k))?;
+        // Phase 2: Batch Write (Sequential)
+        // Write new values (skipping tombstones).
+        {
+            let mut write_cur = tx.cursor_dup_write::<T>()?;
+            for (k, vv) in pairs {
+                if vv.value.0.is_some() {
+                    write_cur.upsert(k, &vv)?;
+                }
+            }
+        }
 
         Ok(keys)
     }
@@ -3564,5 +3571,64 @@ mod tests {
             .expect("latest exists");
         assert_eq!(latest.1.number(), b3.block.number);
         assert_eq!(*latest.1.hash(), b3.block.hash);
+    }
+
+    #[tokio::test]
+    async fn bench_store_trie_updates_rewrite_initial_state() {
+        use std::time::Instant;
+
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        let num_entries = 50_000;
+        println!("--- Benchmarking Initial State Rewrite (N={}) ---", num_entries);
+
+        // 1. Seed Initial State at Block 0
+        let mut seed_diff = HashedPostState::default();
+        let addresses: Vec<B256> = (0..num_entries).map(|_| B256::random()).collect();
+        let base_account = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
+
+        for addr in &addresses {
+            seed_diff.accounts.insert(*addr, Some(base_account));
+        }
+
+        let block_zero = BlockWithParent::new(B256::ZERO, NumHash::new(0, B256::ZERO));
+        
+        let seed_start = Instant::now();
+        store.store_trie_updates(block_zero, BlockStateDiff {
+            sorted_post_state: seed_diff.clone().into_sorted(),
+            ..Default::default()
+        }).await.expect("seed");
+        println!("Seeding took: {:?}", seed_start.elapsed());
+
+
+        // 2. Prepare Update Diff (All values changed)
+        let mut update_diff = HashedPostState::default();
+        let new_account = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
+        
+        for addr in &addresses {
+            update_diff.accounts.insert(*addr, Some(new_account));
+        }
+
+        let diff_struct = BlockStateDiff {
+            sorted_post_state: update_diff.into_sorted(),
+            ..Default::default()
+        };
+
+        // 3. Execute Rewrite using internal helper via transaction
+        let start = Instant::now();
+        let _ = store.env.update(|tx| {
+             // soft_delete = false triggers the hard DELETE + UPSERT logic
+             let _ = store.store_trie_updates_for_block(tx, 0, diff_struct, false)?;
+             Ok::<(), DatabaseError>(())
+        }).expect("rewrite");
+        
+        let duration = start.elapsed();
+
+        println!("---------------------------------------------------");
+        println!("Rewrite Duration: {:?}", duration);
+        println!("Throughput:       {:.2} entries/sec", num_entries as f64 / duration.as_secs_f64());
+        println!("---------------------------------------------------");
     }
 }
