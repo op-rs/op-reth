@@ -128,7 +128,6 @@ where
             })?;
             batch_diff.extend_ref(&diff);
         }
-        let fetch_duration = batch_start_time.elapsed();
 
         // Fetch block hashes for the new earliest block of this batch
         let new_earliest_block_hash = self
@@ -157,6 +156,8 @@ where
                 )
             })?
             .ok_or(PrunerError::BlockNotFound(parent_block_num))?;
+
+        let fetch_duration = batch_start_time.elapsed();
 
         let block_with_parent = BlockWithParent {
             parent: parent_block_hash,

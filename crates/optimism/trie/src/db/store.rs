@@ -160,10 +160,10 @@ impl MdbxProofsStorage {
             let mut del_cur = tx.cursor_dup_write::<T>()?;
             for (k, _) in &pairs {
                 // Seek to (Key, Block 0)
-                if let Some(vv) = del_cur.seek_by_key_subkey(k.clone(), 0)? {
-                    if vv.block_number == 0 {
-                        del_cur.delete_current()?;
-                    }
+                if let Some(vv) = del_cur.seek_by_key_subkey(k.clone(), 0)? &&
+                    vv.block_number == 0
+                {
+                    del_cur.delete_current()?;
                 }
             }
         }
@@ -3588,41 +3588,50 @@ mod tests {
         }
 
         let block_zero = BlockWithParent::new(B256::ZERO, NumHash::new(0, B256::ZERO));
-        
-        let seed_start = Instant::now();
-        store.store_trie_updates(block_zero, BlockStateDiff {
-            sorted_post_state: seed_diff.clone().into_sorted(),
-            ..Default::default()
-        }).await.expect("seed");
-        println!("Seeding took: {:?}", seed_start.elapsed());
 
+        let seed_start = Instant::now();
+        store
+            .store_trie_updates(
+                block_zero,
+                BlockStateDiff {
+                    sorted_post_state: seed_diff.clone().into_sorted(),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("seed");
+        println!("Seeding took: {:?}", seed_start.elapsed());
 
         // 2. Prepare Update Diff (All values changed)
         let mut update_diff = HashedPostState::default();
         let new_account = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
-        
+
         for addr in &addresses {
             update_diff.accounts.insert(*addr, Some(new_account));
         }
 
-        let diff_struct = BlockStateDiff {
-            sorted_post_state: update_diff.into_sorted(),
-            ..Default::default()
-        };
+        let diff_struct =
+            BlockStateDiff { sorted_post_state: update_diff.into_sorted(), ..Default::default() };
 
         // 3. Execute Rewrite using internal helper via transaction
         let start = Instant::now();
-        let _ = store.env.update(|tx| {
-             // soft_delete = false triggers the hard DELETE + UPSERT logic
-             let _ = store.store_trie_updates_for_block(tx, 0, diff_struct, false)?;
-             Ok::<(), DatabaseError>(())
-        }).expect("rewrite");
-        
+        let _ = store
+            .env
+            .update(|tx| {
+                // soft_delete = false triggers the hard DELETE + UPSERT logic
+                let _ = store.store_trie_updates_for_block(tx, 0, diff_struct, false)?;
+                Ok::<(), DatabaseError>(())
+            })
+            .expect("rewrite");
+
         let duration = start.elapsed();
 
         println!("---------------------------------------------------");
         println!("Rewrite Duration: {:?}", duration);
-        println!("Throughput:       {:.2} entries/sec", num_entries as f64 / duration.as_secs_f64());
+        println!(
+            "Throughput:       {:.2} entries/sec",
+            num_entries as f64 / duration.as_secs_f64()
+        );
         println!("---------------------------------------------------");
     }
 }
