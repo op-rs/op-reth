@@ -116,15 +116,25 @@ impl MdbxProofsStorage {
         Ok(())
     }
 
-    /// Write a batch into a dup-sorted history at `block_number`.
-    /// If `soft_delete`: append all (incl. tombstones).
-    /// Else: hard-delete tombstone entries at this block, then append non-tombstones.
-    fn append_or_delete_dup_sorted<T, I, V>(
+    /// Persist a batch of versioned history entries to a dup-sorted table.
+    ///
+    /// # Parameters
+    /// - `block_number`: Target block number for versioning entries
+    /// - `items`: **Must be sorted** - iterator of entries to persist
+    /// - `append_mode`: Mode selector for write strategy:
+    ///   - `true` (Append): Appends all entries including tombstones for forward progress
+    ///   - `false` (Prune): Removes tombstones, writes non-tombstones to block 0
+    ///
+    /// The cost of pruning is the cost of (append + deleting tombstones + deleting old block 0).
+    /// The tombstones deletion is expensive as it requires a seek for each (key + subkey).
+    ///
+    /// Uses [`reth_db::mdbx::cursor::Cursor::upsert`] for upsert operation.
+    fn persist_history_batch<T, I, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
         block_number: T::SubKey,
         items: I,
-        soft_delete: bool,
+        append_mode: bool,
     ) -> OpProofsStorageResult<Vec<T::Key>>
     where
         T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
@@ -135,7 +145,7 @@ impl MdbxProofsStorage {
         let mut cur = tx.cursor_dup_write::<T>()?;
         let mut keys = Vec::<T::Key>::new();
 
-        // Materialize once to avoid recomputing into_kv and to allow partitioning.
+        // Materialize iterator to enable partitioning and collect keys
         let mut pairs: Vec<(T::Key, T::Value)> = Vec::new();
         for it in items {
             let (k, vv) = it.into_kv(block_number);
@@ -143,8 +153,8 @@ impl MdbxProofsStorage {
             keys.push(k)
         }
 
-        if soft_delete {
-            // Fast path: append everything (including tombstones).
+        if append_mode {
+            // Append all entries (including tombstones) to preserve full history
             for (k, vv) in pairs {
                 cur.append_dup(k.clone(), vv)?;
             }
@@ -294,30 +304,30 @@ impl MdbxProofsStorage {
         tx: &<DatabaseEnv as Database>::TXMut,
         block_number: u64,
         block_state_diff: BlockStateDiff,
-        soft_delete: bool,
+        append_mode: bool,
     ) -> OpProofsStorageResult<ChangeSet> {
         let BlockStateDiff { sorted_trie_updates, sorted_post_state } = block_state_diff;
 
         let storage_trie_len = sorted_trie_updates.storage_tries.len();
         let hashed_storage_len = sorted_post_state.storages.len();
 
-        let account_trie_keys = self.append_or_delete_dup_sorted(
+        let account_trie_keys = self.persist_history_batch(
             tx,
             block_number,
             sorted_trie_updates.account_nodes.into_iter(),
-            soft_delete,
+            append_mode,
         )?;
-        let hashed_account_keys = self.append_or_delete_dup_sorted(
+        let hashed_account_keys = self.persist_history_batch(
             tx,
             block_number,
             sorted_post_state.accounts.iter().copied(),
-            soft_delete,
+            append_mode,
         )?;
 
         let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
         for (hashed_address, nodes) in sorted_trie_updates.storage_tries {
             // Handle wiped - mark all storage trie as deleted at the current block number
-            if nodes.is_deleted && soft_delete {
+            if nodes.is_deleted && append_mode {
                 // Yet to have any update for the current block number - So just using up to
                 // previous block number
                 let mut ro = self.storage_trie_cursor(hashed_address, block_number - 1)?;
@@ -330,11 +340,11 @@ impl MdbxProofsStorage {
                 continue;
             }
 
-            let keys = self.append_or_delete_dup_sorted(
+            let keys = self.persist_history_batch(
                 tx,
                 block_number,
                 nodes.storage_nodes.into_iter().map(|(path, node)| (hashed_address, path, node)),
-                soft_delete,
+                append_mode,
             )?;
             storage_trie_keys.extend(keys);
         }
@@ -342,7 +352,7 @@ impl MdbxProofsStorage {
         let mut hashed_storage_keys = Vec::<HashedStorageKey>::with_capacity(hashed_storage_len);
         for (hashed_address, storage) in sorted_post_state.storages {
             // Handle wiped - mark all storage slots as deleted at the current block number
-            if soft_delete && storage.is_wiped() {
+            if append_mode && storage.is_wiped() {
                 // Yet to have any update for the current block number - So just using up to
                 // previous block number
                 let mut ro = self.storage_hashed_cursor(hashed_address, block_number - 1)?;
@@ -352,14 +362,14 @@ impl MdbxProofsStorage {
                 // Skip any further processing for this hashed_address
                 continue;
             }
-            let keys = self.append_or_delete_dup_sorted(
+            let keys = self.persist_history_batch(
                 tx,
                 block_number,
                 storage
                     .storage_slots_ref()
                     .iter()
                     .map(|(key, val)| (hashed_address, *key, Some(StorageValue(*val)))),
-                soft_delete,
+                append_mode,
             )?;
             hashed_storage_keys.extend(keys);
         }
@@ -449,7 +459,7 @@ impl OpProofsStore for MdbxProofsStorage {
         account_nodes.sort_by_key(|(key, _)| *key);
 
         self.env.update(|tx| {
-            self.append_or_delete_dup_sorted(tx, 0, account_nodes.into_iter(), true)?;
+            self.persist_history_batch(tx, 0, account_nodes.into_iter(), true)?;
             Ok(())
         })?
     }
@@ -467,7 +477,7 @@ impl OpProofsStore for MdbxProofsStorage {
         storage_nodes.sort_by_key(|(key, _)| *key);
 
         self.env.update(|tx| {
-            self.append_or_delete_dup_sorted(
+            self.persist_history_batch(
                 tx,
                 0,
                 storage_nodes.into_iter().map(|(path, node)| (hashed_address, path, node)),
@@ -490,7 +500,7 @@ impl OpProofsStore for MdbxProofsStorage {
         accounts.sort_by_key(|(key, _)| *key);
 
         self.env.update(|tx| {
-            self.append_or_delete_dup_sorted(tx, 0, accounts.into_iter(), true)?;
+            self.persist_history_batch(tx, 0, accounts.into_iter(), true)?;
             Ok(())
         })?
     }
@@ -509,7 +519,7 @@ impl OpProofsStore for MdbxProofsStorage {
         storages.sort_by_key(|(key, _)| *key);
 
         self.env.update(|tx| {
-            self.append_or_delete_dup_sorted(
+            self.persist_history_batch(
                 tx,
                 0,
                 storages
