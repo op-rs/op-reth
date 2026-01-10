@@ -197,6 +197,24 @@ async fn backfill<
     Ok(total_entries)
 }
 
+/// Save hashed storages to storage.
+async fn save_hashed_storages<S: OpProofsStore>(
+    storage: &S,
+    entries: Vec<(B256, StorageEntry)>,
+) -> Result<(), OpProofsStorageError> {
+    // Group entries by hashed address
+    let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> = HashMap::default();
+    for (address, entry) in entries {
+        by_address.entry(address).or_default().push((entry.key, entry.value));
+    }
+
+    // Store each address's storage entries
+    for (address, storages) in by_address {
+        storage.store_hashed_storages(address, storages).await?;
+    }
+    Ok(())
+}
+
 impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     /// Create a new backfill job.
     pub const fn new(storage: S, tx: &'a Tx) -> Self {
@@ -239,28 +257,12 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
 
         let source = HashedStoragesIter::new(start_cursor);
         let storage = &self.storage;
-        let save_fn =
-            async |entries: Vec<(B256, StorageEntry)>| -> Result<(), OpProofsStorageError> {
-                // Group entries by hashed address
-                let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> =
-                    HashMap::default();
-                for (address, entry) in entries {
-                    by_address.entry(address).or_default().push((entry.key, entry.value));
-                }
-
-                // Store each address's storage entries
-                for (address, storages) in by_address {
-                    storage.store_hashed_storages(address, storages).await?;
-                }
-                Ok(())
-            };
-
         backfill(
             "hashed storage",
             source,
             BACKFILL_STORAGE_THRESHOLD,
             BACKFILL_LOG_THRESHOLD,
-            save_fn,
+            |entries| save_hashed_storages(storage, entries),
         )
         .await?;
 
