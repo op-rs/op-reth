@@ -197,6 +197,19 @@ async fn backfill<
     Ok(total_entries)
 }
 
+/// Save account branches to storage.
+async fn save_account_branches<S: OpProofsStore>(
+    storage: &S,
+    entries: Vec<(StoredNibbles, BranchNodeCompact)>,
+) -> Result<(), OpProofsStorageError> {
+    storage
+        .store_account_branches(
+            entries.into_iter().map(|(path, branch)| (path.0, Some(branch))).collect(),
+        )
+        .await?;
+    Ok(())
+}
+
 impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     /// Create a new backfill job.
     pub const fn new(storage: S, tx: &'a Tx) -> Self {
@@ -297,21 +310,12 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
 
         let source = AccountsTrieIter::new(start_cursor);
         let storage = &self.storage;
-        let save_fn = async |entries: Vec<(StoredNibbles, BranchNodeCompact)>| -> Result<(), OpProofsStorageError> {
-            storage
-                .store_account_branches(
-                    entries.into_iter().map(|(path, branch)| (path.0, Some(branch))).collect(),
-                )
-                .await?;
-            Ok(())
-        };
-
         backfill(
             "accounts trie",
             source,
             BACKFILL_STORAGE_THRESHOLD,
             BACKFILL_LOG_THRESHOLD,
-            save_fn,
+            |entries| save_account_branches(storage, entries),
         )
         .await?;
 
