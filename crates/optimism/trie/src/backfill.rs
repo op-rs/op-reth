@@ -197,6 +197,15 @@ async fn backfill<
     Ok(total_entries)
 }
 
+/// Save address mappings to storage.
+async fn save_address_mappings<S: OpProofsStore>(
+    storage: &S,
+    entries: Vec<(B256, Address)>,
+) -> Result<(), OpProofsStorageError> {
+    storage.store_address_mappings(entries).await?;
+    Ok(())
+}
+
 impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     /// Create a new backfill job.
     pub const fn new(storage: S, tx: &'a Tx) -> Self {
@@ -274,17 +283,12 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
         let source = AddressLookupIter::new(start_cursor)
             .map(|res| res.map(|(addr, _)| (keccak256(addr), addr)));
         let storage = &self.storage;
-        let save_fn = async |entries: Vec<(B256, Address)>| -> Result<(), OpProofsStorageError> {
-            storage.store_address_mappings(entries).await?;
-            Ok(())
-        };
-
         backfill(
             "address mappings",
             source,
             BACKFILL_STORAGE_THRESHOLD,
             BACKFILL_LOG_THRESHOLD,
-            save_fn,
+            |entries| save_address_mappings(storage, entries),
         )
         .await?;
 
