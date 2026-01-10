@@ -240,6 +240,29 @@ async fn save_hashed_storages<S: OpProofsStore>(
         storage.store_hashed_storages(address, storages).await?;
     }
 
+    Ok(());
+}
+
+/// Save storage branches to storage.
+async fn save_storage_branches<S: OpProofsStore>(
+    storage: &S,
+    entries: Vec<(B256, StorageTrieEntry)>,
+) -> Result<(), OpProofsStorageError> {
+    // Group entries by hashed address
+    let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
+        HashMap::default();
+    for (hashed_address, storage_entry) in entries {
+        by_address
+            .entry(hashed_address)
+            .or_default()
+            .push((storage_entry.nibbles.0, Some(storage_entry.node)));
+    }
+
+    // Store each address's storage trie branches
+    for (address, branches) in by_address {
+        storage.store_storage_branches(address, branches).await?;
+    }
+
     Ok(())
 }
 
@@ -309,31 +332,12 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
 
         let source = StoragesTrieIter::new(start_cursor);
         let storage = &self.storage;
-        let save_fn =
-            async |entries: Vec<(B256, StorageTrieEntry)>| -> Result<(), OpProofsStorageError> {
-                // Group entries by hashed address
-                let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
-                    HashMap::default();
-                for (hashed_address, storage_entry) in entries {
-                    by_address
-                        .entry(hashed_address)
-                        .or_default()
-                        .push((storage_entry.nibbles.0, Some(storage_entry.node)));
-                }
-
-                // Store each address's storage trie branches
-                for (address, branches) in by_address {
-                    storage.store_storage_branches(address, branches).await?;
-                }
-                Ok(())
-            };
-
         backfill(
             "storage trie",
             source,
             BACKFILL_STORAGE_THRESHOLD,
             BACKFILL_LOG_THRESHOLD,
-            save_fn,
+            |entries| save_storage_branches(storage, entries),
         )
         .await?;
 
@@ -346,7 +350,6 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
         self.backfill_hashed_storages().await?;
         self.backfill_storages_trie().await?;
         self.backfill_accounts_trie().await?;
-
         Ok(())
     }
 
