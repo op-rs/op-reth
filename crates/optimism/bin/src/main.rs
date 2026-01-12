@@ -91,7 +91,8 @@ struct Args {
         value_name = "PROOFS_HISTORY_VERIFICATION_INTERVAL",
         default_value_t = 0
     )]
-    pub proofs_history_verification_interval: u64,}
+    pub proofs_history_verification_interval: u64,
+}
 
 /// Single entry that handles:
 /// - no proofs history (plain node),

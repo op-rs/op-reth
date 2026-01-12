@@ -120,7 +120,7 @@ impl<Node, Storage> OpProofsExEx<Node, Storage>
 where
     Node: FullNodeComponents,
 {
-    /// Create a new OpProofsExEx instance.
+    /// Create a new `OpProofsExEx` instance.
     ///
     /// # Arguments
     ///
@@ -128,7 +128,7 @@ where
     ///   - 0: Never verify (always use fast path when available)
     ///   - 1: Always verify (always execute blocks)
     ///   - N: Verify every Nth block (e.g., 100, 1000)
-    pub fn new(
+    pub const fn new(
         ctx: ExExContext<Node>,
         storage: OpProofsStorage<Storage>,
         proofs_history_window: u64,
@@ -305,7 +305,7 @@ where
     ) -> eyre::Result<()> {
         // Check if this block should be verified via full execution
         let should_verify = self.verification_interval > 0 &&
-            block_number % self.verification_interval == 0;
+            block_number.is_multiple_of(self.verification_interval);
 
         // Try to get block data from the chain first
         // 1. Fast Path: Try to use pre-computed state from the notification
