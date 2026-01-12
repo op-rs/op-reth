@@ -28,9 +28,9 @@ use reth_trie::{
     hashed_cursor::HashedCursor,
     trie_cursor::TrieCursor,
     updates::{StorageTrieUpdates, TrieUpdates},
-    BranchNodeCompact, HashedPostState, Nibbles,
+    BranchNodeCompact, HashedPostState, Nibbles, StoredNibbles,
 };
-use std::{cmp::max, ops::RangeBounds, path::Path};
+use std::{ops::RangeBounds, path::Path};
 use tracing::info;
 
 /// MDBX implementation of [`OpProofsStore`].
@@ -42,6 +42,14 @@ pub struct MdbxProofsStorage {
 struct ProofWindowValue {
     earliest: NumHash,
     latest: NumHash,
+}
+
+struct PrunePlan {
+    earliest_block: u64,
+    acc_dels: Vec<(StoredNibbles, u64)>,
+    storage_dels: Vec<(StorageTrieKey, u64)>,
+    hashed_acc_dels: Vec<(B256, u64)>,
+    hashed_storage_dels: Vec<(HashedStorageKey, u64)>,
 }
 
 impl MdbxProofsStorage {
@@ -209,6 +217,182 @@ impl MdbxProofsStorage {
         let mut cur = tx.cursor_dup_write::<T>()?;
         for key in items {
             if let Some(vv) = cur.seek_by_key_subkey(key.clone(), block_number)? {
+                // ensure we didn't land on a >subkey
+                if vv.block_number == block_number {
+                    cur.delete_current()?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Phase 1 of pruning: Calculate what needs to be deleted.
+    /// Scans change sets and history to calculate exactly which entries need deletion.
+    fn calculate_prune_plan(
+        &self,
+        target_block: u64,
+    ) -> OpProofsStorageResult<(Option<PrunePlan>, WriteCounts)> {
+        // We explicitly type the result from view() to ensure the compiler knows T is NOT a Result
+        self.env.view(|tx| {
+            let Some((earliest, _)) =
+                self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock)?
+            else {
+                return Ok((None, WriteCounts::default()));
+            };
+
+            if earliest >= target_block {
+                return Ok((None, WriteCounts::default()));
+            }
+
+            // 1. Gather all keys modified in the range
+            let mut acc_keys = std::collections::BTreeSet::new();
+            let mut storage_keys = std::collections::BTreeSet::new();
+            let mut hashed_acc_keys = std::collections::BTreeSet::new();
+            let mut hashed_storage_keys = std::collections::BTreeSet::new();
+            let mut counts = WriteCounts::default();
+
+            let range = (earliest + 1)..=target_block;
+            let mut cs_cursor = tx.cursor_read::<BlockChangeSet>()?;
+            let mut walker = cs_cursor.walk_range(range)?;
+
+            while let Some(Ok((_block_number, cs))) = walker.next() {
+                counts += WriteCounts::new(
+                    cs.account_trie_keys.len() as u64,
+                    cs.storage_trie_keys.len() as u64,
+                    cs.hashed_account_keys.len() as u64,
+                    cs.hashed_storage_keys.len() as u64,
+                );
+
+                acc_keys.extend(cs.account_trie_keys);
+                storage_keys.extend(cs.storage_trie_keys);
+                hashed_acc_keys.extend(cs.hashed_account_keys);
+                hashed_storage_keys.extend(cs.hashed_storage_keys);
+            }
+
+            // 2. Identify "Sparse Pruning" targets (versions to delete)
+            let acc_dels = self.collect_sparse_pruning_targets::<AccountTrieHistory, _>(
+                tx,
+                &acc_keys,
+                target_block,
+            )?;
+            let storage_dels = self.collect_sparse_pruning_targets::<StorageTrieHistory, _>(
+                tx,
+                &storage_keys,
+                target_block,
+            )?;
+            let hashed_acc_dels = self.collect_sparse_pruning_targets::<HashedAccountHistory, _>(
+                tx,
+                &hashed_acc_keys,
+                target_block,
+            )?;
+            let hashed_storage_dels = self
+                .collect_sparse_pruning_targets::<HashedStorageHistory, _>(
+                    tx,
+                    &hashed_storage_keys,
+                    target_block,
+                )?;
+
+            Ok((
+                Some(PrunePlan {
+                    earliest_block: earliest,
+                    acc_dels,
+                    storage_dels,
+                    hashed_acc_dels,
+                    hashed_storage_dels,
+                }),
+                counts,
+            ))
+        })?
+    }
+
+    /// Helper for "Sparse Pruning" - Read Phase.
+    /// Scans history for the provided keys and collects all versions <= `target_block`
+    /// that are NOT the survivor (latest version).
+    /// Returns a vector of `(Key, BlockNumber)` pairs to be deleted.
+    fn collect_sparse_pruning_targets<T, V>(
+        &self,
+        tx: &impl DbTx,
+        keys: &std::collections::BTreeSet<T::Key>,
+        target_block: u64,
+    ) -> OpProofsStorageResult<Vec<(T::Key, u64)>>
+    where
+        T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
+        T::Key: Clone + Ord,
+        V: PartialEq + Clone,
+    {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut to_delete = Vec::new();
+        let mut cursor = tx.cursor_dup_read::<T>()?;
+
+        for key in keys {
+            // Seek to the start of history (use 0 to find earliest entry)
+            // 'seek_by_key_subkey' returns just the Value (VersionedValue).
+            let mut current_block_entry =
+                if let Some(e) = cursor.seek_by_key_subkey(key.clone(), 0)? {
+                    // If the very first entry is already > target, nothing to prune for this key.
+                    if e.block_number > target_block {
+                        continue;
+                    }
+                    e
+                } else {
+                    continue;
+                };
+
+            // Scan forward to find newer versions.
+            // 'next_dup' returns (Key, Value). We need to destructure it.
+            while let Some((next_key, next_val)) = cursor.next_dup()? {
+                // Should be same key, but good to check or simply ignore next_key if guaranteed by
+                // cursor.
+                if next_key != *key {
+                    break;
+                }
+
+                if next_val.block_number > target_block {
+                    break;
+                } // Future version, stop
+
+                // 'current_block_entry' is superseded by 'next_val'.
+                // So we can delete 'current_block_entry' (it is an old version).
+                to_delete.push((key.clone(), current_block_entry.block_number));
+
+                current_block_entry = next_val;
+            }
+
+            // At loop end, 'current_block_entry' is the "Survivor" (Latest <= Target).
+            // Optimization: If the survivor is actually a Tombstone (Delete), we can delete it too!
+            // This cleans up dead keys completely from the DB.
+            if current_block_entry.value.0.is_none() {
+                to_delete.push((key.clone(), current_block_entry.block_number));
+            }
+        }
+
+        Ok(to_delete)
+    }
+
+    /// Optimized batch deletion helper.
+    /// Sorts (Key, Block) pairs to ensure MDBX cursor moves sequentially, reducing page I/O.
+    fn delete_sorted_batch<T, V>(
+        &self,
+        tx: &(impl DbTxMut + DbTx),
+        mut items: Vec<(T::Key, u64)>,
+    ) -> OpProofsStorageResult<()>
+    where
+        T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
+        T::Key: Clone + Ord,
+    {
+        if items.is_empty() {
+            return Ok(());
+        }
+
+        // Sorting is crucial for sequential write performance in MDBX
+        items.sort_unstable();
+
+        let mut cur = tx.cursor_dup_write::<T>()?;
+        for (key, block_number) in items {
+            if let Some(vv) = cur.seek_by_key_subkey(key, block_number)? {
                 // ensure we didn't land on a >subkey
                 if vv.block_number == block_number {
                     cur.delete_current()?;
@@ -728,43 +912,53 @@ impl OpProofsStore for MdbxProofsStorage {
     async fn prune_earliest_state(
         &self,
         new_earliest_block_ref: BlockWithParent,
-        diff: BlockStateDiff,
+        _diff: BlockStateDiff,
     ) -> OpProofsStorageResult<WriteCounts> {
-        let mut write_counts = WriteCounts::default();
+        let target_block = new_earliest_block_ref.block.number;
+        let start = std::time::Instant::now();
 
-        let new_earliest_block_number = new_earliest_block_ref.block.number;
-        let Some((old_earliest_block_number, _)) = self.get_earliest_block_number().await? else {
-            return Ok(write_counts); // Nothing to prune
+        // --- PHASE 1: READ (Calculate Deletions) ---
+        // We use a read transaction here to avoid holding the write lock during the expensive
+        // history scan.
+        let (plan, counts) = self.calculate_prune_plan(target_block)?;
+        let Some(plan) = plan else {
+            return Ok(WriteCounts::default());
         };
+        let fetch_duration = start.elapsed();
 
-        if old_earliest_block_number >= new_earliest_block_number {
-            return Ok(write_counts); // Nothing to prune
-        }
-
+        // --- PHASE 2: WRITE (Execute Deletions) ---
+        // Quick burst of batch deletions.
         self.env.update(|tx| {
-            // Update the initial state (block zero)
-            let change_set = self.store_trie_updates_for_block(tx, 0, diff, false)?;
-            write_counts += WriteCounts::new(
-                change_set.account_trie_keys.len() as u64,
-                change_set.storage_trie_keys.len() as u64,
-                change_set.hashed_account_keys.len() as u64,
-                change_set.hashed_storage_keys.len() as u64,
-            );
+            // 1. Execute Sparse Deletions
+            self.delete_sorted_batch::<AccountTrieHistory, _>(tx, plan.acc_dels)?;
+            self.delete_sorted_batch::<StorageTrieHistory, _>(tx, plan.storage_dels)?;
+            self.delete_sorted_batch::<HashedAccountHistory, _>(tx, plan.hashed_acc_dels)?;
+            self.delete_sorted_batch::<HashedStorageHistory, _>(tx, plan.hashed_storage_dels)?;
 
-            // Delete the old entries for the block range excluding block 0
-            let delete_counts = self.delete_history_ranged(
-                tx,
-                max(old_earliest_block_number, 1)..=new_earliest_block_number,
-            )?;
-            write_counts += delete_counts;
+            // 2. Delete ChangeSets
+            let range = (plan.earliest_block + 1)..=target_block;
+            let mut cs_cursor = tx.cursor_write::<BlockChangeSet>()?;
+            let mut walker = cs_cursor.walk_range(range)?;
+            while walker.next().is_some() {
+                walker.delete_current()?;
+            }
 
-            // Set the earliest block number to the new value
+            // 3. Update Earliest Pointer
             Self::inner_set_earliest_block_number(
                 tx,
-                new_earliest_block_number,
+                target_block,
                 new_earliest_block_ref.block.hash,
             )?;
-            Ok(write_counts)
+
+            let write_duration = start.elapsed() - fetch_duration;
+            info!(
+                %target_block, 
+                ?fetch_duration, 
+                ?write_duration,
+                "Prune:: Pruned Proofs Storage history up to new earliest block"
+            );
+
+            Ok(counts)
         })?
     }
 
@@ -3575,5 +3769,89 @@ mod tests {
             .expect("latest exists");
         assert_eq!(latest.1.number(), b3.block.number);
         assert_eq!(*latest.1.hash(), b3.block.hash);
+    }
+
+    #[tokio::test]
+    async fn bench_prune_earliest_state() {
+        use std::time::Instant;
+
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        let start_block = 0;
+        let end_block = 100;
+        let accounts_per_block = 10000;
+
+        store.set_earliest_block_number(start_block, B256::ZERO).await.unwrap();
+
+        println!("--- Seeding {} Blocks ({} updates/block) ---", end_block, accounts_per_block);
+        let seed_start = Instant::now();
+
+        let mut parent_hash = B256::ZERO;
+        let addresses: Vec<B256> = (0..accounts_per_block).map(|_| B256::random()).collect();
+
+        // Seed blocks 1 to 100
+        for i in (start_block + 1)..=end_block {
+            let block_hash = B256::random();
+            let block = BlockWithParent::new(parent_hash, NumHash::new(i, block_hash));
+            parent_hash = block_hash;
+
+            let mut post_state = HashedPostState::default();
+            for (j, addr) in addresses.iter().enumerate() {
+                // Change nonce every block to ensure a new version is created
+                let acc = Account {
+                    nonce: (i * 1000 + j as u64),
+                    balance: U256::from(i),
+                    ..Default::default()
+                };
+                post_state.accounts.insert(*addr, Some(acc));
+            }
+
+            let diff = BlockStateDiff {
+                sorted_post_state: post_state.into_sorted(),
+                ..Default::default()
+            };
+            store.store_trie_updates(block, diff).await.expect("store");
+        }
+
+        println!("Seeding took: {:?}", seed_start.elapsed());
+
+        // --- Benchmark Pruning ---
+        // Prune everything up to block 90.
+        // This forces consolidation of history for blocks 1..=90 into Initial State (Block 90)
+        // or deletions depending on the strategy.
+        let prune_target = 90;
+        let target_block =
+            BlockWithParent::new(B256::random(), NumHash::new(prune_target, B256::random()));
+
+        // Note: In sparse pruning, `diff` is ignored, but for current legacy implementation it
+        // might be used. To be safe for benchmarking legacy code, we provide a valid diff
+        // representing the state at block 90.
+        let mut final_post_state = HashedPostState::default();
+        for (j, addr) in addresses.iter().enumerate() {
+            let acc = Account {
+                nonce: (prune_target * 1000 + j as u64),
+                balance: U256::from(prune_target),
+                ..Default::default()
+            };
+            final_post_state.accounts.insert(*addr, Some(acc));
+        }
+        let prune_diff = BlockStateDiff {
+            sorted_post_state: final_post_state.into_sorted(),
+            ..Default::default()
+        };
+
+        println!("--- Pruning to Block {} ---", prune_target);
+        let prune_start = Instant::now();
+
+        let counts = store.prune_earliest_state(target_block, prune_diff).await.expect("prune");
+
+        let duration = prune_start.elapsed();
+
+        println!("---------------------------------------------------");
+        println!("Prune Duration: {:?}", duration);
+        println!("Blocks Pruned:  {}", prune_target);
+        println!("Write Counts:   {:?}", counts);
+        println!("---------------------------------------------------");
     }
 }
