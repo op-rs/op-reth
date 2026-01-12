@@ -929,11 +929,13 @@ impl OpProofsStore for MdbxProofsStorage {
         // --- PHASE 2: WRITE (Execute Deletions) ---
         // Quick burst of batch deletions.
         self.env.update(|tx| {
+            let wr_start = std::time::Instant::now();
             // 1. Execute Sparse Deletions
             self.delete_sorted_batch::<AccountTrieHistory, _>(tx, plan.acc_dels)?;
             self.delete_sorted_batch::<StorageTrieHistory, _>(tx, plan.storage_dels)?;
             self.delete_sorted_batch::<HashedAccountHistory, _>(tx, plan.hashed_acc_dels)?;
             self.delete_sorted_batch::<HashedStorageHistory, _>(tx, plan.hashed_storage_dels)?;
+            let del_batch_duration = wr_start.elapsed();
 
             // 2. Delete ChangeSets
             let range = (plan.earliest_block + 1)..=target_block;
@@ -942,6 +944,7 @@ impl OpProofsStore for MdbxProofsStorage {
             while walker.next().is_some() {
                 walker.delete_current()?;
             }
+            let del_cs_duration = wr_start.elapsed() - del_batch_duration;
 
             // 3. Update Earliest Pointer
             Self::inner_set_earliest_block_number(
@@ -955,7 +958,18 @@ impl OpProofsStore for MdbxProofsStorage {
                 %target_block, 
                 ?fetch_duration, 
                 ?write_duration,
+                ?del_batch_duration,
+                ?del_cs_duration,
                 "Prune:: Pruned Proofs Storage history up to new earliest block"
+            );
+            println!(
+                "Prune:: Pruned Proofs Storage history up to new earliest block {}. \
+                Fetch Duration: {:?}, Write Duration: {:?} (Batch Deletion: {:?}, ChangeSet Deletion: {:?})",
+                target_block,
+                fetch_duration,
+                write_duration,
+                del_batch_duration,
+                del_cs_duration,
             );
 
             Ok(counts)
