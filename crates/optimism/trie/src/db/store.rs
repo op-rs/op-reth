@@ -950,7 +950,10 @@ impl OpProofsStore for MdbxProofsStorage {
             while walker.next().is_some() {
                 walker.delete_current()?;
             }
-            let del_cs_duration = wr_start.elapsed() - del_batch_duration;
+            let del_cs_duration = wr_start.elapsed() - hs_batch_duration
+                - ha_del_batch_duration
+                - st_del_batch_duration
+                - at_del_batch_duration;
 
             // 3. Update Earliest Pointer
             Self::inner_set_earliest_block_number(
@@ -968,6 +971,7 @@ impl OpProofsStore for MdbxProofsStorage {
                 storage_trie_deletion_duration = ?st_del_batch_duration,
                 hashed_account_deletion_duration = ?ha_del_batch_duration,
                 hashed_storage_deletion_duration = ?hs_batch_duration,
+                change_set_deletion_duration = ?del_cs_duration,
                 "Prune:: Pruned Proofs Storage history up to new earliest block"
             );
 
