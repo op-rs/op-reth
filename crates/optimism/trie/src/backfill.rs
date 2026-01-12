@@ -1,7 +1,7 @@
 //! Backfill job for proofs storage. Handles storing the existing state into the proofs storage.
 
-use crate::OpProofsStore;
-use alloy_primitives::{keccak256, Address, B256};
+use crate::{OpProofsStorageError, OpProofsStore};
+use alloy_primitives::B256;
 use reth_db::{
     cursor::{DbCursorRO, DbDupCursorRO},
     tables,
@@ -82,7 +82,6 @@ macro_rules! define_dup_cursor_iter {
 
 // Generate iterators for all 4 table types
 define_simple_cursor_iter!(HashedAccountsIter, tables::HashedAccounts, B256, Account);
-define_simple_cursor_iter!(AddressLookupIter, tables::PlainAccountState, Address, Account);
 define_dup_cursor_iter!(HashedStoragesIter, tables::HashedStorages, B256, StorageEntry);
 define_simple_cursor_iter!(
     AccountsTrieIter,
@@ -126,7 +125,7 @@ impl CompletionEstimatable for StoredNibbles {
 /// Backfill a table from a source iterator to a storage function. Handles batching and logging.
 async fn backfill<
     S: Iterator<Item = Result<(Key, Value), DatabaseError>>,
-    F: Future<Output = eyre::Result<()>> + Send,
+    F: Future<Output = Result<(), OpProofsStorageError>> + Send,
     Key: CompletionEstimatable + Clone + 'static,
     Value: Clone + 'static,
 >(
@@ -135,7 +134,7 @@ async fn backfill<
     storage_threshold: usize,
     log_threshold: usize,
     save_fn: impl Fn(Vec<(Key, Value)>) -> F,
-) -> eyre::Result<u64> {
+) -> Result<u64, OpProofsStorageError> {
     let mut entries = Vec::new();
 
     let mut total_entries: u64 = 0;
@@ -204,12 +203,12 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     }
 
     /// Backfill hashed accounts data
-    async fn backfill_hashed_accounts(&self) -> eyre::Result<()> {
+    async fn backfill_hashed_accounts(&self) -> Result<(), OpProofsStorageError> {
         let start_cursor = self.tx.cursor_read::<tables::HashedAccounts>()?;
 
         let source = HashedAccountsIter::new(start_cursor);
         let storage = &self.storage;
-        let save_fn = async |entries: Vec<(B256, Account)>| -> eyre::Result<()> {
+        let save_fn = async |entries: Vec<(B256, Account)>| -> Result<(), OpProofsStorageError> {
             storage
                 .store_hashed_accounts(
                     entries
@@ -234,25 +233,26 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     }
 
     /// Backfill hashed storage data
-    async fn backfill_hashed_storages(&self) -> eyre::Result<()> {
+    async fn backfill_hashed_storages(&self) -> Result<(), OpProofsStorageError> {
         let start_cursor = self.tx.cursor_dup_read::<tables::HashedStorages>()?;
 
         let source = HashedStoragesIter::new(start_cursor);
         let storage = &self.storage;
-        let save_fn = async |entries: Vec<(B256, StorageEntry)>| -> eyre::Result<()> {
-            // Group entries by hashed address
-            let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> =
-                HashMap::default();
-            for (address, entry) in entries {
-                by_address.entry(address).or_default().push((entry.key, entry.value));
-            }
+        let save_fn =
+            async |entries: Vec<(B256, StorageEntry)>| -> Result<(), OpProofsStorageError> {
+                // Group entries by hashed address
+                let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> =
+                    HashMap::default();
+                for (address, entry) in entries {
+                    by_address.entry(address).or_default().push((entry.key, entry.value));
+                }
 
-            // Store each address's storage entries
-            for (address, storages) in by_address {
-                storage.store_hashed_storages(address, storages).await?;
-            }
-            Ok(())
-        };
+                // Store each address's storage entries
+                for (address, storages) in by_address {
+                    storage.store_hashed_storages(address, storages).await?;
+                }
+                Ok(())
+            };
 
         backfill(
             "hashed storage",
@@ -266,37 +266,13 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
         Ok(())
     }
 
-    /// Backfill address mappings data
-    async fn backfill_address_mappings(&self) -> eyre::Result<()> {
-        let start_cursor = self.tx.cursor_read::<tables::PlainAccountState>()?;
-
-        let source = AddressLookupIter::new(start_cursor)
-            .map(|res| res.map(|(addr, _)| (keccak256(addr), addr)));
-        let storage = &self.storage;
-        let save_fn = async |entries: Vec<(B256, Address)>| -> eyre::Result<()> {
-            storage.store_address_mappings(entries).await?;
-            Ok(())
-        };
-
-        backfill(
-            "address mappings",
-            source,
-            BACKFILL_STORAGE_THRESHOLD,
-            BACKFILL_LOG_THRESHOLD,
-            save_fn,
-        )
-        .await?;
-
-        Ok(())
-    }
-
     /// Backfill accounts trie data
-    async fn backfill_accounts_trie(&self) -> eyre::Result<()> {
+    async fn backfill_accounts_trie(&self) -> Result<(), OpProofsStorageError> {
         let start_cursor = self.tx.cursor_read::<tables::AccountsTrie>()?;
 
         let source = AccountsTrieIter::new(start_cursor);
         let storage = &self.storage;
-        let save_fn = async |entries: Vec<(StoredNibbles, BranchNodeCompact)>| -> eyre::Result<()> {
+        let save_fn = async |entries: Vec<(StoredNibbles, BranchNodeCompact)>| -> Result<(), OpProofsStorageError> {
             storage
                 .store_account_branches(
                     entries.into_iter().map(|(path, branch)| (path.0, Some(branch))).collect(),
@@ -318,28 +294,29 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     }
 
     /// Backfill storage trie data
-    async fn backfill_storages_trie(&self) -> eyre::Result<()> {
+    async fn backfill_storages_trie(&self) -> Result<(), OpProofsStorageError> {
         let start_cursor = self.tx.cursor_dup_read::<tables::StoragesTrie>()?;
 
         let source = StoragesTrieIter::new(start_cursor);
         let storage = &self.storage;
-        let save_fn = async |entries: Vec<(B256, StorageTrieEntry)>| -> eyre::Result<()> {
-            // Group entries by hashed address
-            let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
-                HashMap::default();
-            for (hashed_address, storage_entry) in entries {
-                by_address
-                    .entry(hashed_address)
-                    .or_default()
-                    .push((storage_entry.nibbles.0, Some(storage_entry.node)));
-            }
+        let save_fn =
+            async |entries: Vec<(B256, StorageTrieEntry)>| -> Result<(), OpProofsStorageError> {
+                // Group entries by hashed address
+                let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
+                    HashMap::default();
+                for (hashed_address, storage_entry) in entries {
+                    by_address
+                        .entry(hashed_address)
+                        .or_default()
+                        .push((storage_entry.nibbles.0, Some(storage_entry.node)));
+                }
 
-            // Store each address's storage trie branches
-            for (address, branches) in by_address {
-                storage.store_storage_branches(address, branches).await?;
-            }
-            Ok(())
-        };
+                // Store each address's storage trie branches
+                for (address, branches) in by_address {
+                    storage.store_storage_branches(address, branches).await?;
+                }
+                Ok(())
+            };
 
         backfill(
             "storage trie",
@@ -354,10 +331,9 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     }
 
     /// Run complete backfill of all preimage data
-    async fn backfill_trie(&self) -> eyre::Result<()> {
+    async fn backfill_trie(&self) -> Result<(), OpProofsStorageError> {
         self.backfill_hashed_accounts().await?;
         self.backfill_hashed_storages().await?;
-        self.backfill_address_mappings().await?;
         self.backfill_storages_trie().await?;
         self.backfill_accounts_trie().await?;
 
@@ -365,7 +341,7 @@ impl<'a, Tx: DbTx, S: OpProofsStore + Send> BackfillJob<'a, Tx, S> {
     }
 
     /// Run the backfill job.
-    pub async fn run(&self, best_number: u64, best_hash: B256) -> eyre::Result<()> {
+    pub async fn run(&self, best_number: u64, best_hash: B256) -> Result<(), OpProofsStorageError> {
         if self.storage.get_earliest_block_number().await?.is_none() {
             self.backfill_trie().await?;
 
@@ -548,34 +524,6 @@ mod tests {
             count += 1;
         }
         assert_eq!(count, 3);
-    }
-
-    #[tokio::test]
-    async fn test_backfill_address_mappings() {
-        let db = create_test_rw_db();
-        let storage = InMemoryProofsStorage::new();
-
-        // Insert test address mappings into database
-        let tx = db.tx_mut().unwrap();
-        let mut cursor = tx.cursor_write::<tables::PlainAccountState>().unwrap();
-
-        let accounts = vec![
-            (Address::repeat_byte(0x01), Account { nonce: 1, ..Default::default() }),
-            (Address::repeat_byte(0x02), Account { nonce: 2, ..Default::default() }),
-        ];
-
-        for (addr, account) in &accounts {
-            cursor.append(*addr, account).unwrap();
-        }
-        drop(cursor);
-        tx.commit().unwrap();
-
-        // Run backfill
-        let tx = db.tx().unwrap();
-        let job = BackfillJob::new(storage.clone(), &tx);
-        job.backfill_address_mappings().await.unwrap();
-
-        // Todo: Verify data was stored
     }
 
     #[tokio::test]
