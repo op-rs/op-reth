@@ -373,25 +373,37 @@ impl MdbxProofsStorage {
     }
 
     /// Optimized batch deletion helper.
-    /// Sorts (Key, Block) pairs to ensure MDBX cursor moves sequentially, reducing page I/O.
     fn delete_sorted_batch<T, V>(
         &self,
         tx: &(impl DbTxMut + DbTx),
-        mut items: Vec<(T::Key, u64)>,
+        sorted_items: Vec<(T::Key, u64)>, // Removed `mut`
     ) -> OpProofsStorageResult<()>
     where
         T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
         T::Key: Clone + Ord,
     {
-        if items.is_empty() {
+        if sorted_items.is_empty() {
             return Ok(());
         }
 
-        // Sorting is crucial for sequential write performance in MDBX
-        items.sort_unstable();
-
         let mut cur = tx.cursor_dup_write::<T>()?;
-        for (key, block_number) in items {
+        for (key, block_number) in sorted_items {
+            // OPTIMIZATION: Check if cursor is already at the target.
+            // When `delete_current` is called, MDBX usually advances the cursor to the immediate
+            // next item. Since we are deleting history sequentially (e.g., Block 10, then Block 11),
+            // we are often already positioned exactly where we need to be.
+            // This turns an O(log N) seek into an O(1) check.
+            let is_at_target = if let Ok(Some((k, v))) = cur.current() {
+                k == key && v.block_number == block_number
+            } else {
+                false
+            };
+
+            if is_at_target {
+                cur.delete_current()?;
+                continue;
+            }
+
             if let Some(vv) = cur.seek_by_key_subkey(key, block_number)? {
                 // ensure we didn't land on a >subkey
                 if vv.block_number == block_number {
