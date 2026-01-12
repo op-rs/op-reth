@@ -540,7 +540,7 @@ impl OpProofsStore for MdbxProofsStorage {
             Ok(())
         })?
     }
-    
+
     async fn get_earliest_block_number(&self) -> OpProofsStorageResult<Option<(u64, B256)>> {
         self.env.view(|tx| self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock))?
     }
