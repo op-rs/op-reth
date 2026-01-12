@@ -932,10 +932,16 @@ impl OpProofsStore for MdbxProofsStorage {
             let wr_start = std::time::Instant::now();
             // 1. Execute Sparse Deletions
             self.delete_sorted_batch::<AccountTrieHistory, _>(tx, plan.acc_dels)?;
+            let at_del_batch_duration = wr_start.elapsed();
             self.delete_sorted_batch::<StorageTrieHistory, _>(tx, plan.storage_dels)?;
+            let st_del_batch_duration = wr_start.elapsed() - at_del_batch_duration;
             self.delete_sorted_batch::<HashedAccountHistory, _>(tx, plan.hashed_acc_dels)?;
+            let ha_del_batch_duration = wr_start.elapsed() - st_del_batch_duration - at_del_batch_duration;
             self.delete_sorted_batch::<HashedStorageHistory, _>(tx, plan.hashed_storage_dels)?;
-            let del_batch_duration = wr_start.elapsed();
+            let hs_batch_duration = wr_start.elapsed()
+                - ha_del_batch_duration
+                - st_del_batch_duration
+                - at_del_batch_duration;
 
             // 2. Delete ChangeSets
             let range = (plan.earliest_block + 1)..=target_block;
@@ -958,18 +964,11 @@ impl OpProofsStore for MdbxProofsStorage {
                 %target_block, 
                 ?fetch_duration, 
                 ?write_duration,
-                ?del_batch_duration,
-                ?del_cs_duration,
+                account_trie_deletion_duration = ?at_del_batch_duration,
+                storage_trie_deletion_duration = ?st_del_batch_duration,
+                hashed_account_deletion_duration = ?ha_del_batch_duration,
+                hashed_storage_deletion_duration = ?hs_batch_duration,
                 "Prune:: Pruned Proofs Storage history up to new earliest block"
-            );
-            println!(
-                "Prune:: Pruned Proofs Storage history up to new earliest block {}. \
-                Fetch Duration: {:?}, Write Duration: {:?} (Batch Deletion: {:?}, ChangeSet Deletion: {:?})",
-                target_block,
-                fetch_duration,
-                write_duration,
-                del_batch_duration,
-                del_cs_duration,
             );
 
             Ok(counts)
