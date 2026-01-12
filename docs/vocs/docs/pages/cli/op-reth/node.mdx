@@ -1077,7 +1077,7 @@ Rollup:
           [default: 1296000]
 
       --proofs-history.prune-interval <PROOFS_HISTORY_PRUNE_INTERVAL>
-          Interval between proof-storage prune runs. Accepts human-friendly durations like "100s", "5m", "1h". Defaults to 1h.
+          Interval between proof-storage prune runs. Accepts human-friendly durations like "100s", "5m", "1h". Defaults to 15s.
 
           - Shorter intervals prune smaller batches more often, so each prune run tends to be faster and the blocking pause for writes is shorter, at the cost of more frequent pauses. - Longer intervals prune larger batches less often, which reduces how often pruning runs, but each run can take longer and block writes for longer.
 
@@ -1085,7 +1085,16 @@ Rollup:
 
           CLI: `--proofs-history.prune-interval 10m`
 
-          [default: 1h]
+          [default: 15s]
+
+      --proofs-history.verification-interval <PROOFS_HISTORY_VERIFICATION_INTERVAL>
+          Verification interval: perform full block execution every N blocks for data integrity. - 0: Disabled (always use fast path with pre-computed data from notifications) - 1: Always verify (always execute blocks, slowest) - N: Verify every Nth block (e.g., 100 = every 100 blocks)
+
+          Periodic verification helps catch data corruption or consensus bugs while maintaining good performance. Recommended values: 100-1000 for production.
+
+          CLI: `--proofs-history.verification-interval 100`
+
+          [default: 0]
 
 Logging:
       --log.stdout.format <FORMAT>
