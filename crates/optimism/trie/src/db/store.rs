@@ -740,7 +740,7 @@ impl OpProofsStore for MdbxProofsStorage {
     async fn prune_earliest_state(
         &self,
         new_earliest_block_ref: BlockWithParent,
-        diff: BlockStateDiff,
+        _diff: BlockStateDiff,
     ) -> OpProofsStorageResult<WriteCounts> {
         let mut write_counts = WriteCounts::default();
 
