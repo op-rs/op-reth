@@ -114,20 +114,7 @@ where
         end_block: u64,
     ) -> Result<PrunerOutput, PrunerError> {
         let batch_start_time = Instant::now();
-        let mut batch_diff = BlockStateDiff::default();
-
-        // Fetch all diffs from (start_block + 1) to end_block (inclusive)
-        for i in (start_block + 1)..=end_block {
-            let diff = self.provider.fetch_trie_updates(i).await.inspect_err(|err| {
-                error!(
-                    target: "trie::pruner",
-                    block = i,
-                    ?err,
-                    "Failed to fetch trie updates for block during pruning"
-                )
-            })?;
-            batch_diff.extend_ref(&diff);
-        }
+        let batch_diff = BlockStateDiff::default();
 
         // Fetch block hashes for the new earliest block of this batch
         let new_earliest_block_hash = self
