@@ -206,7 +206,7 @@ async fn save_hashed_accounts<S: OpProofsStore>(
             entries.into_iter().map(|(address, account)| (address, Some(account))).collect(),
         )
         .await?;
-    
+
     Ok(())
 }
 
