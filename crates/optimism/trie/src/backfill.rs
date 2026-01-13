@@ -240,7 +240,7 @@ async fn save_hashed_storages<S: OpProofsStore>(
         storage.store_hashed_storages(address, storages).await?;
     }
 
-    Ok(());
+    Ok(())
 }
 
 /// Save storage branches to storage.
