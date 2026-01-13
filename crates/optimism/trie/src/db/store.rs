@@ -929,12 +929,6 @@ impl OpProofsStore for MdbxProofsStorage {
                 change_set_deletion_duration = ?del_cs_duration,
                 "Prune:: Pruned Proofs Storage history up to new earliest block"
             );
-            println!(
-                "Prune:: Pruned Proofs Storage history up to new earliest block {}: fetch_duration={:?}, write_duration={:?}",
-                target_block,
-                fetch_duration,
-                write_duration,
-            );
 
             Ok(counts)
         })?
