@@ -121,13 +121,6 @@ where
     Node: FullNodeComponents,
 {
     /// Create a new `OpProofsExEx` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `verification_interval` - Perform full block execution every N blocks for data integrity.
-    ///   - 0: Never verify (always use fast path when available)
-    ///   - 1: Always verify (always execute blocks)
-    ///   - N: Verify every Nth block (e.g., 100, 1000)
     pub const fn new(
         ctx: ExExContext<Node>,
         storage: OpProofsStorage<Storage>,

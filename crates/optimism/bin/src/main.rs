@@ -78,12 +78,12 @@ struct Args {
     )]
     pub proofs_history_prune_interval: Duration,
     /// Verification interval: perform full block execution every N blocks for data integrity.
-    /// - 0: Disabled (always use fast path with pre-computed data from notifications)
+    /// - 0: Disabled (Default) (always use fast path with pre-computed data from notifications)
     /// - 1: Always verify (always execute blocks, slowest)
     /// - N: Verify every Nth block (e.g., 100 = every 100 blocks)
     ///
     /// Periodic verification helps catch data corruption or consensus bugs while maintaining
-    /// good performance. Recommended values: 100-1000 for production.
+    /// good performance.
     ///
     /// CLI: `--proofs-history.verification-interval 100`
     #[arg(
