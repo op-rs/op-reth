@@ -21,13 +21,13 @@ jobs:
 
       - name: Install llvm
         run: |
-          sudo apt-get update 
+          sudo apt-get update
           sudo apt-get install -y llvm
           cargo install cargo-llvm-cov
 
       - name: Coverage
         run: |
-          cargo llvm-cov --package reth-optimism-exex --package reth-optimism-trie --lcov --output-path unit.lcov
+          cargo llvm-cov --package reth-optimism-exex --package reth-optimism-trie --package reth-optimism-rpc --lcov --output-path unit.lcov
 
       - name: Upload coverage to codecov.io
         uses: codecov/codecov-action@v5
