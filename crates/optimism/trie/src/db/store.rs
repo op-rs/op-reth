@@ -31,6 +31,9 @@ use reth_trie::{
     BranchNodeCompact, HashedPostState, Nibbles,
 };
 use std::{cmp::max, ops::RangeBounds, path::Path};
+use std::time::Instant;
+use tokio::time;
+use tracing::info;
 
 /// Preprocessed delete work for a prune range
 #[derive(Debug, Default, Clone)]
@@ -50,6 +53,26 @@ pub struct MdbxProofsStorage {
 struct ProofWindowValue {
     earliest: NumHash,
     latest: NumHash,
+}
+
+fn drop_last_per_key<K: PartialEq + Clone>(v: &mut Vec<(K, u64)>) {
+    if v.is_empty() {
+        return;
+    }
+
+    let mut result = Vec::with_capacity(v.len());
+
+    for i in 0..v.len() {
+        let (k, b) = &v[i];
+
+        // If next exists and has same key → keep
+        if i + 1 < v.len() && v[i + 1].0 == *k {
+            result.push((k.clone(), *b));
+        }
+        // else: this is the last subkey → skip
+    }
+
+    *v = result;
 }
 
 impl MdbxProofsStorage {
@@ -732,19 +755,18 @@ impl OpProofsStore for MdbxProofsStorage {
 
         // collect history for deletion
         let history_range = max(old_earliest_block_number, 1)..=new_earliest_block_number;
-        let history_to_delete =
+        let mut history_to_delete =
             self.env.view(|tx| self.collect_history_ranged(tx, history_range.clone()))??;
 
-        self.env.update(|tx| {
-            // Update the initial state (block zero)
-            let change_set = self.store_trie_updates_for_block(tx, 0, diff, false)?;
-            write_counts += WriteCounts::new(
-                change_set.account_trie_keys.len() as u64,
-                change_set.storage_trie_keys.len() as u64,
-                change_set.hashed_account_keys.len() as u64,
-                change_set.hashed_storage_keys.len() as u64,
-            );
+        drop_last_per_key(&mut history_to_delete.account_trie);
+        drop_last_per_key(&mut history_to_delete.storage_trie);
+        drop_last_per_key(&mut history_to_delete.hashed_account);
+        drop_last_per_key(&mut history_to_delete.hashed_storage);
 
+
+        // measure ONLY the write txn
+        let t0 = Instant::now();
+        let res = self.env.update(|tx| {
             // Delete the old entries for the block range excluding block 0
             let delete_counts = self.delete_history_ranged(tx, history_range, history_to_delete)?;
             write_counts += delete_counts;
@@ -755,8 +777,17 @@ impl OpProofsStore for MdbxProofsStorage {
                 new_earliest_block_number,
                 new_earliest_block_ref.block.hash,
             )?;
-            Ok(write_counts)
-        })?
+
+            Ok::<WriteCounts, DatabaseError>(write_counts)
+        });
+        let elapsed = t0.elapsed();
+
+        // handle result + log elapsed
+        let write_counts = res??;
+
+        eprintln!("[prune-earliest-write] elapsed={:?}", elapsed);
+
+        Ok(write_counts)
     }
 
     /// Unwind the historical state to `unwind_upto_block` (inclusive), deleting all history
@@ -937,7 +968,7 @@ mod tests {
         StorageTrieKey,
     };
     use alloy_eips::NumHash;
-    use alloy_primitives::B256;
+    use alloy_primitives::{keccak256, B256};
     use reth_db::{
         cursor::DbDupCursorRO,
         transaction::{DbTx, DbTxMut},
@@ -3413,5 +3444,158 @@ mod tests {
             .expect("latest exists");
         assert_eq!(latest.1.number(), b3.block.number);
         assert_eq!(*latest.1.hash(), b3.block.hash);
+    }
+
+    // In #[cfg(test)] mod tests { ... }
+
+    // deterministic address & slot helpers
+    fn addr(i: u64) -> B256 {
+        keccak256(i.to_be_bytes())
+    }
+    fn slot(i: u64) -> B256 {
+        keccak256((i.wrapping_mul(9)).to_be_bytes())
+    }
+
+    use std::time::Instant;
+
+    #[tokio::test]
+    async fn delete_history_ranged_load_test() {
+        // ---- config (tune these) ----
+        let max_block: u64 = 1000;
+        let prune_to: u64 = 50;
+
+        // Initial state size (block 0)
+        let initial_accounts: u64 = 10_000;
+        let initial_slots_per_account: u64 = 10;
+
+        // Update pattern (blocks start_update_block..=max_block)
+        let start_update_block: u64 = 1; // can be 1, 100, 1000...
+        let updates_per_block_accounts: u64 = 1_00; // how many accounts touched per block
+        let updated_slots_per_account: u64 = 2;     // how many slots changed per updated account
+
+        assert!(prune_to <= max_block);
+        assert!(start_update_block <= max_block);
+        assert!(updated_slots_per_account <= initial_slots_per_account);
+        assert!(updates_per_block_accounts <= initial_accounts);
+
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // Helper: deterministic account selection per block with wrap-around.
+        // This produces a moving window over accounts to create repeated updates.
+        let pick_account_index = |block: u64, j: u64| -> u64 {
+            // offset changes with block so each block updates a different slice
+            let offset = ((block - start_update_block) * updates_per_block_accounts) % initial_accounts;
+            (offset + j) % initial_accounts
+        };
+
+        // 1) Block 0: full initial state
+        let mut parent = B256::ZERO;
+        {
+            let block_number = 0u64;
+            let hash = keccak256((block_number ^ 0xDEADBEEF).to_be_bytes());
+            let block_ref = BlockWithParent::new(parent, NumHash::new(block_number, hash));
+            parent = hash;
+
+            let mut post = HashedPostState::default();
+
+            for i in 0..initial_accounts {
+                let a = addr(i);
+
+                // initial account
+                let account = Account {
+                    nonce: 0,
+                    balance: U256::from(i),
+                    ..Default::default()
+                };
+                post.accounts.insert(a, Some(account));
+
+                // initial storage: fill all slots
+                let mut st = HashedStorage::default();
+                for s in 0..initial_slots_per_account {
+                    let k = slot(s);
+                    // stable deterministic initial value
+                    let v = U256::from(i) * U256::from(1_000_000u64) + U256::from(s);
+                    st.storage.insert(k, v);
+                }
+                post.storages.insert(a, st);
+            }
+
+            let diff = BlockStateDiff {
+                sorted_trie_updates: TrieUpdatesSorted::default(),
+                sorted_post_state: post.into_sorted(),
+            };
+
+            store.store_trie_updates(block_ref, diff).await.expect("store genesis");
+        }
+
+        // 2) Blocks with gradual updates: only touch a subset of accounts and a few slots each
+        for block_number in 1..=max_block {
+            // Skip blocks before start_update_block (no-op blocks)
+            if block_number < start_update_block {
+                continue;
+            }
+            let hash = keccak256((block_number ^ 0xDEADBEEF).to_be_bytes());
+            let block_ref = BlockWithParent::new(parent, NumHash::new(block_number, hash));
+            parent = hash;
+
+            let mut post = HashedPostState::default();
+
+            for j in 0..updates_per_block_accounts {
+                let i = pick_account_index(block_number, j);
+                let a = addr(i);
+
+                // account update
+                let account = Account {
+                    nonce: block_number,
+                    balance: U256::from(block_number) + U256::from(i),
+                    ..Default::default()
+                };
+                post.accounts.insert(a, Some(account));
+
+                // storage update: change only first `updated_slots_per_account` slots
+                let mut st = HashedStorage::default();
+                for s in 0..updated_slots_per_account {
+                    let k = slot(s);
+                    // deterministic "changed" value
+                    let v =
+                        U256::from(block_number) * U256::from(10_000u64) +
+                            U256::from(i) * U256::from(10u64) +
+                            U256::from(s);
+                    st.storage.insert(k, v);
+                }
+                post.storages.insert(a, st);
+            }
+
+            let diff = BlockStateDiff {
+                sorted_trie_updates: TrieUpdatesSorted::default(),
+                sorted_post_state: post.into_sorted(),
+            };
+
+            store.store_trie_updates(block_ref, diff).await.expect("store updates");
+        }
+        store.set_earliest_block_number(1, B256::random()).await.expect("set earliest");
+        let start = Instant::now();
+        // establish earliest = 1 (no-op prune but sets marker)
+        // now prune up to prune_to
+        store
+            .prune_earliest_state(
+                BlockWithParent::new(B256::random(), NumHash::new(prune_to, B256::random())),
+                BlockStateDiff::default(),
+            )
+            .await
+            .expect("prune earliest state");
+        let elapsed = start.elapsed();
+        eprintln!(
+            "[load-test] prune=0..={} elapsed={:?}",
+            prune_to, elapsed
+        );
+
+        // Optional: quick sanity (cheap) that pruned changesets are gone
+        let ro = store.env.tx().expect("ro tx");
+        let mut cs = ro.cursor_read::<BlockChangeSet>().expect("cs cursor");
+        assert!(cs.seek_exact(1).expect("seek").is_none());
+        assert!(cs.seek_exact(prune_to).expect("seek").is_none());
+        assert!(cs.seek_exact(prune_to + 1).expect("seek").is_some());
     }
 }
