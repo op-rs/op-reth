@@ -169,3 +169,9 @@ The test script iterates through the block range, spawning 10 concurrent workers
 Visual Proof:
 - [Grafana Snapshot: Proof Metrics](https://snapshots.raintank.io/dashboard/snapshot/bzYXscOCugsxO6C2bzFB1XbskxG0KFdo)
 - [Grafana Snapshot: Reth Metrics](https://snapshots.raintank.io/dashboard/snapshot/hxZaChzsrez3Q3w52IHj0Wab3H1wndUg)
+
+## Limitations
+
+- **High Storage Footprint**: The versioned state model trades storage space for instant computation. Storing versioned Merkle Trie nodes (hashes and branch paths) for every block modification is significantly more storage-intensive than the flat state diffs used by the main node.
+- **Forward-Only Availability**: The sidecar implements a "record-forward" strategy. It cannot generate proofs for blocks prior to the sidecar's initialization; it does not backfill history.
+- **Pruning & IOPS**: Pruning old history is a random-write intensive operation. High-performance NVMe storage is required to ensure the pruner can keep pace with the chain's growth on high-throughput networks.
