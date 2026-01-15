@@ -15,7 +15,7 @@ use reth_provider::{
     StateReader, StateRootProvider, TransactionVariant,
 };
 use reth_revm::database::StateProviderDatabase;
-use reth_trie::{updates::TrieUpdatesSorted, HashedPostStateSorted, SortedTrieData};
+use reth_trie::{updates::TrieUpdatesSorted, HashedPostStateSorted};
 use std::{
     sync::{Arc, Mutex},
     time::Instant,
@@ -65,11 +65,7 @@ impl<Primitives: NodePrimitives> PendingNotification<Primitives> {
     /// - `Any + (ChainReorged | ChainReverted)` → Replace completely
     pub fn apply_notification(&mut self, notification: CollectorNotification<Primitives>) {
         match notification {
-            CollectorNotification::ChainCommitted {
-                chain,
-                latest_stored,
-                verification_interval,
-            } => {
+            CollectorNotification::ChainCommitted { chain, latest_stored, verification_interval } => {
                 let to_block = chain.tip().block_with_parent();
                 let accumulated = Self::extract_accumulated_updates(&chain, latest_stored);
 
@@ -244,7 +240,11 @@ where
                         // Nothing to do, wait for next notification
                         break;
                     }
-                    ProcessingStep::ProcessBlock { block_number, chain, verification_interval } => {
+                    ProcessingStep::ProcessBlock {
+                        block_number,
+                        chain,
+                        verification_interval,
+                    } => {
                         // Process one block
                         if let Err(e) =
                             self.process_block(block_number, &chain, verification_interval).await
@@ -335,7 +335,9 @@ where
                     updates_count = accumulated.updates.len(),
                     "Processing reorg atomically"
                 );
-                ProcessingStep::ProcessReorg { block_updates: accumulated.updates.clone() }
+                ProcessingStep::ProcessReorg {
+                    block_updates: accumulated.updates.clone(),
+                }
             }
             PendingNotification::ChainReverted { to_block, .. } => {
                 // Reverts are processed atomically for consistency
@@ -692,11 +694,11 @@ mod tests {
         //
         // This is the most common case - first notification received
         let mut pending = TestPendingNotification::None;
-
+        
         // Simulate a ChainCommitted notification (would normally come with a real chain)
         // For testing, we'll check the pattern match works correctly
         let block = block_with_parent(100, 1, 0);
-
+        
         // After applying, we should have a ChainCommitted state
         // (In real code, this would be called via apply_notification with a real chain)
         pending = TestPendingNotification::ChainCommitted {
@@ -723,7 +725,7 @@ mod tests {
         // This represents catching up - we skip intermediate blocks and jump to the latest
         let block_100 = block_with_parent(100, 1, 0);
         let block_150 = block_with_parent(150, 2, 1);
-
+        
         let mut pending = TestPendingNotification::ChainCommitted {
             to_block: block_100,
             accumulated: empty_accumulated(),
@@ -758,7 +760,7 @@ mod tests {
         let from_block = block_with_parent(50, 10, 9);
         let to_block_100 = block_with_parent(100, 1, 0);
         let to_block_150 = block_with_parent(150, 2, 1);
-
+        
         let mut pending = TestPendingNotification::ChainReorged {
             from_block,
             to_block: to_block_100,
@@ -793,9 +795,11 @@ mod tests {
         // This handles recovery from a revert - we're now building on top of the reverted state
         let revert_block = block_with_parent(50, 10, 9);
         let new_tip = block_with_parent(100, 1, 0);
-
-        let mut pending =
-            TestPendingNotification::ChainReverted { to_block: revert_block, latest_stored: 99 };
+        
+        let mut pending = TestPendingNotification::ChainReverted {
+            to_block: revert_block,
+            latest_stored: 99,
+        };
 
         // Simulate receiving ChainCommitted - convert to reorg
         pending = TestPendingNotification::ChainReorged {
@@ -833,7 +837,7 @@ mod tests {
 
         let from_block = block_with_parent(50, 10, 9);
         let to_block = block_with_parent(80, 11, 10);
-
+        
         // Apply reorg - should replace
         pending = TestPendingNotification::ChainReorged {
             from_block,
@@ -858,7 +862,7 @@ mod tests {
         // Expected: Replace completely with ChainReverted
         //
         // Reverts have highest priority - they represent the chain being reverted
-
+        
         let block = block_with_parent(100, 1, 0);
         let mut pending = TestPendingNotification::ChainCommitted {
             to_block: block,
@@ -868,9 +872,12 @@ mod tests {
         };
 
         let revert_to = block_with_parent(50, 10, 9);
-
+        
         // Apply revert - should replace
-        pending = TestPendingNotification::ChainReverted { to_block: revert_to, latest_stored: 99 };
+        pending = TestPendingNotification::ChainReverted {
+            to_block: revert_to,
+            latest_stored: 99,
+        };
 
         match pending {
             TestPendingNotification::ChainReverted { to_block, .. } => {
@@ -887,9 +894,9 @@ mod tests {
         // 2. ChainCommitted - coalesces with existing state
         //
         // Scenario: Multiple notifications arrive in sequence
-
+        
         let mut pending = TestPendingNotification::None;
-
+        
         // Step 1: Commit to block 100
         let block_100 = block_with_parent(100, 1, 0);
         pending = TestPendingNotification::ChainCommitted {
@@ -898,7 +905,7 @@ mod tests {
             latest_stored: 99,
             verification_interval: 100,
         };
-
+        
         // Step 2: Commit to block 150 (should replace)
         let block_150 = block_with_parent(150, 2, 1);
         pending = TestPendingNotification::ChainCommitted {
@@ -907,14 +914,14 @@ mod tests {
             latest_stored: 99,
             verification_interval: 100,
         };
-
+        
         match &pending {
             TestPendingNotification::ChainCommitted { to_block, .. } => {
                 assert_eq!(to_block.block.number, 150);
             }
             _ => panic!("Expected ChainCommitted"),
         }
-
+        
         // Step 3: Reorg arrives (should completely replace)
         let from_block = block_with_parent(50, 10, 9);
         let to_block = block_with_parent(80, 11, 10);
@@ -924,7 +931,7 @@ mod tests {
             accumulated: empty_accumulated(),
             latest_stored: 79,
         };
-
+        
         match pending {
             TestPendingNotification::ChainReorged { from_block, .. } => {
                 assert_eq!(from_block.block.number, 50, "Reorg replaces everything");
