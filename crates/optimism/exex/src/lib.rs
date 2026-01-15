@@ -16,12 +16,13 @@ use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::{FullNodeComponents, NodePrimitives};
 use reth_node_types::NodeTypes;
 use reth_optimism_trie::{
-    live::LiveTrieCollector, OpProofStoragePrunerTask, OpProofsStorage, OpProofsStore,
+    live::{CollectorNotification, LiveTrieCollector, NotificationState},
+    OpProofStoragePrunerTask, OpProofsStorage, OpProofsStore,
 };
 use reth_provider::{BlockReader, TransactionVariant};
 use reth_trie::{updates::TrieUpdatesSorted, HashedPostStateSorted, SortedTrieData};
 use std::{sync::Arc, time::Duration};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 // Safety threshold for maximum blocks to prune automatically on startup.
 // If the required prune exceeds this, the node will error out and require manual pruning.
@@ -158,14 +159,27 @@ where
             .task_executor()
             .spawn_with_graceful_shutdown_signal(|signal| Box::pin(prune_task.run(signal)));
 
-        let collector = LiveTrieCollector::new(
+        // Create collector and get the notification state
+        let (collector, notification_state) = LiveTrieCollector::new(
             self.ctx.evm_config().clone(),
             self.ctx.provider().clone(),
             &self.storage,
         );
 
+        // Start collector in a separate task to process notifications asynchronously
+        self.ctx.task_executor().spawn(Box::pin(async move {
+            if let Err(e) = collector.run().await {
+                error!(
+                    target: "optimism::exex",
+                    error = ?e,
+                    "Collector task failed"
+                );
+            }
+        }));
+
+        // Process notifications by submitting them to the collector with coalescing
         while let Some(notification) = self.ctx.notifications.try_next().await? {
-            self.handle_notification(notification, &collector).await?;
+            self.handle_notification(notification, &notification_state).await?;
         }
 
         Ok(())
@@ -224,10 +238,11 @@ where
         Ok(())
     }
 
+    /// Handle notifications by submitting them to the collector with coalescing
     async fn handle_notification(
         &self,
         notification: ExExNotification<Primitives>,
-        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+        notification_state: &Arc<NotificationState<Primitives>>,
     ) -> eyre::Result<()> {
         let latest_stored = match self.storage.get_latest_block_number().await? {
             Some((n, _)) => n,
@@ -236,19 +251,38 @@ where
             }
         };
 
+        // Submit notification to collector for async processing with coalescing
         match &notification {
             ExExNotification::ChainCommitted { new } => {
-                self.handle_chain_committed(new.clone(), latest_stored, collector).await?
+                LiveTrieCollector::<Node::Evm, Node::Provider, Storage>::submit_notification(
+                    notification_state,
+                    CollectorNotification::ChainCommitted {
+                        chain: new.clone(),
+                        latest_stored,
+                        verification_interval: self.verification_interval,
+                    },
+                );
             }
             ExExNotification::ChainReorged { old, new } => {
-                self.handle_chain_reorged(old.clone(), new.clone(), latest_stored, collector)
-                    .await?
+                LiveTrieCollector::<Node::Evm, Node::Provider, Storage>::submit_notification(
+                    notification_state,
+                    CollectorNotification::ChainReorged {
+                        old: old.clone(),
+                        new: new.clone(),
+                        latest_stored,
+                    },
+                );
             }
             ExExNotification::ChainReverted { old } => {
-                self.handle_chain_reverted(old.clone(), latest_stored, collector).await?
+                LiveTrieCollector::<Node::Evm, Node::Provider, Storage>::submit_notification(
+                    notification_state,
+                    CollectorNotification::ChainReverted { old: old.clone(), latest_stored },
+                );
             }
         }
 
+        // Signal that we've finished processing this notification
+        // (the actual processing happens async in the collector with coalescing)
         if let Some(committed_chain) = notification.committed_chain() {
             self.ctx.events.send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
         }

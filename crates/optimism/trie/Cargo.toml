@@ -16,6 +16,8 @@ workspace = true
 reth-db = { workspace = true, features = ["mdbx"] }
 reth-evm.workspace = true
 reth-execution-errors.workspace = true
+reth-execution-types.workspace = true
+reth-node-api.workspace = true
 reth-primitives-traits.workspace = true
 reth-provider.workspace = true
 reth-revm.workspace = true

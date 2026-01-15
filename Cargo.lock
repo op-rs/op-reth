@@ -10194,6 +10194,7 @@ dependencies = [
  "reth-evm",
  "reth-evm-ethereum",
  "reth-execution-errors",
+ "reth-execution-types",
  "reth-metrics",
  "reth-node-api",
  "reth-primitives-traits",
