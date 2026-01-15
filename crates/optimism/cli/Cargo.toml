@@ -109,7 +109,10 @@ jemalloc-symbols = [
 
 tracy = ["reth-tracing/tracy", "reth-node-core/tracy"]
 
-dev = ["dep:proptest", "reth-cli-commands/arbitrary"]
+dev = [
+    "dep:proptest",
+    "reth-cli-commands/arbitrary",
+]
 
 serde = [
     "alloy-consensus/serde",
