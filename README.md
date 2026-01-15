@@ -70,6 +70,17 @@ The module injects custom handlers to intercept specific RPC calls:
 *   **`debug_executionWitness`**: Allows debugging and tracing against historical states.
 *   **`debug_executePayload`**: Executes a payload against the historical state to generate an execution witness. 
 
+## Hardware Requirements
+
+Recommended specifications:
+
+- **CPU**: 8-Core processor with good single-core performance
+- **RAM**: Minimum 16 GB (32 GB recommended)
+- **Storage**: NVMe SSD with adequate capacity for chain data plus snapshots
+  - Calculate: `(2 × current_chain_size) + snapshot_size + 20% buffer`
+  - *Note*: Storing 4 weeks of full proof history on a network like Base Testnet consumes approximately **~1 TB** of additional storage.
+- **Network**: Stable internet connection with good bandwidth
+
 ## Usage
 
 ### 1. Initialization
@@ -158,3 +169,9 @@ The test script iterates through the block range, spawning 10 concurrent workers
 Visual Proof:
 - [Grafana Snapshot: Proof Metrics](https://snapshots.raintank.io/dashboard/snapshot/bzYXscOCugsxO6C2bzFB1XbskxG0KFdo)
 - [Grafana Snapshot: Reth Metrics](https://snapshots.raintank.io/dashboard/snapshot/hxZaChzsrez3Q3w52IHj0Wab3H1wndUg)
+
+## Limitations
+
+- **High Storage Footprint**: The versioned state model trades storage space for instant computation. Storing versioned Merkle Trie nodes (hashes and branch paths) for every block modification is significantly more storage-intensive than the flat state diffs used by the main node.
+- **Forward-Only Availability**: The sidecar implements a "record-forward" strategy. It cannot generate proofs for blocks prior to the sidecar's initialization; it does not backfill history.
+- **Pruning & IOPS**: Pruning old history is a random-write intensive operation. High-performance NVMe storage is required to ensure the pruner can keep pace with the chain's growth on high-throughput networks.
