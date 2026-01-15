@@ -569,7 +569,7 @@ mod tests {
         );
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain commited 1..5
+        // Notification: chain committed 1..5
         let new_chain = Arc::new(mk_chain_with_updates(1, 5, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
@@ -600,7 +600,7 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain commited 1..5
+        // Notification: chain committed 1..5
         let new_chain = Arc::new(mk_chain_with_updates(1, 5, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
@@ -639,7 +639,7 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain commited 1..10
+        // Notification: chain committed 1..10
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
@@ -682,7 +682,7 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain commited 1..10
+        // Notification: chain committed 1..10
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
@@ -725,7 +725,7 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain commited 1..10
+        // Notification: chain committed 1..10
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
@@ -767,7 +767,7 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain commited 1..10
+        // Notification: chain committed 1..10
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
