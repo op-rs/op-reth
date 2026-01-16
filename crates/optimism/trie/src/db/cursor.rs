@@ -1363,11 +1363,11 @@ mod tests {
         assert_eq!(got2, k2);
     }
 
-    /// Regression test: MdbxStorageCursor next() should work without explicit seek()
+    /// Regression test: `MdbxStorageCursor` `next()` should work without explicit `seek()`
     /// when cursor is constructed for a non-first key.
     ///
     /// Bug: When a storage cursor is created for a specific address (e.g., 0x02),
-    /// calling next() without first calling seek() returns None instead of the first
+    /// calling `next()` without first calling `seek()` returns None instead of the first
     /// slot for that address. This only manifests when the address is not the first
     /// in the table.
     #[test]
@@ -1393,10 +1393,7 @@ mod tests {
         // Test with addr1 (first address) - this typically works
         let mut cur1 = storage_cursor(&tx, 100, addr1);
         let result1 = cur1.next().expect("ok");
-        assert!(
-            result1.is_some(),
-            "next() should return data for first address without seek()"
-        );
+        assert!(result1.is_some(), "next() should return data for first address without seek()");
         if let Some((key, val)) = result1 {
             assert_eq!(key, slot1);
             assert_eq!(val, U256::from(100));
@@ -1418,10 +1415,7 @@ mod tests {
         // Verify that seek() works correctly
         let mut cur3 = storage_cursor(&tx, 100, addr2);
         let result3_with_seek = cur3.seek(slot2).expect("ok");
-        assert!(
-            result3_with_seek.is_some(),
-            "seek() should find the slot for addr2"
-        );
+        assert!(result3_with_seek.is_some(), "seek() should find the slot for addr2");
         if let Some((key, val)) = result3_with_seek {
             assert_eq!(key, slot2);
             assert_eq!(val, U256::from(200));
