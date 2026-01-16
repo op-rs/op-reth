@@ -43,6 +43,11 @@ where
         Self { _table: PhantomData, cursor, max_block_number }
     }
 
+    /// Check if the cursor is currently positioned at a valid row.
+    fn is_positioned(&mut self) -> OpProofsStorageResult<bool> {
+        Ok(self.cursor.current()?.is_some())
+    }
+
     /// Resolve the latest version for `key` with `block_number` <= `max_block_number`.
     /// Strategy:
     /// - `seek_by_key_subkey(key, max)` gives first dup >= max.
@@ -308,6 +313,15 @@ where
     }
 
     fn next(&mut self) -> Result<Option<(B256, Self::Value)>, DatabaseError> {
+        // If the cursor is not positioned, we need to seek to the first key for our bound address
+        // to ensure we start iterating from the correct position in the table.
+        // This is necessary because BlockNumberVersionedCursor::next() would otherwise start
+        // from T::Key::default() (the beginning of the entire table), which would cause us
+        // to miss entries for non-first addresses.
+        if !self.inner.is_positioned()? {
+            return self.seek(B256::ZERO);
+        }
+
         loop {
             let result = self.inner.next().map(|opt| {
                 opt.and_then(|(k, v)| {
@@ -1347,5 +1361,70 @@ mod tests {
 
         let (got2, _) = cur.next().expect("ok").expect("some");
         assert_eq!(got2, k2);
+    }
+
+    /// Regression test: MdbxStorageCursor next() should work without explicit seek()
+    /// when cursor is constructed for a non-first key.
+    ///
+    /// Bug: When a storage cursor is created for a specific address (e.g., 0x02),
+    /// calling next() without first calling seek() returns None instead of the first
+    /// slot for that address. This only manifests when the address is not the first
+    /// in the table.
+    #[test]
+    fn storage_cursor_next_without_seek_for_non_first_address() {
+        let db = setup_db();
+        let addr1 = B256::from([0x01; 32]); // First address
+        let addr2 = B256::from([0x02; 32]); // Second address (non-first)
+        let slot1 = B256::from([0x11; 32]);
+        let slot2 = B256::from([0x12; 32]);
+
+        {
+            let wtx = db.tx_mut().expect("rw");
+            // Add storage for first address
+            append_hashed_storage(&wtx, addr1, slot1, 10, Some(U256::from(100)));
+
+            // Add storage for second address
+            append_hashed_storage(&wtx, addr2, slot2, 10, Some(U256::from(200)));
+            wtx.commit().expect("commit");
+        }
+
+        let tx = db.tx().expect("ro");
+
+        // Test with addr1 (first address) - this typically works
+        let mut cur1 = storage_cursor(&tx, 100, addr1);
+        let result1 = cur1.next().expect("ok");
+        assert!(
+            result1.is_some(),
+            "next() should return data for first address without seek()"
+        );
+        if let Some((key, val)) = result1 {
+            assert_eq!(key, slot1);
+            assert_eq!(val, U256::from(100));
+        }
+
+        // Test with addr2 (non-first address) - this demonstrates the bug
+        let mut cur2 = storage_cursor(&tx, 100, addr2);
+        let result2_without_seek = cur2.next().expect("ok");
+
+        // BUG: This returns None even though addr2 has data
+        // Expected: Should return (slot2, 200)
+        // Actual: Returns None
+        assert!(
+            result2_without_seek.is_some(),
+            "BUG: next() returns None for non-first address without seek(). \
+             Expected to return the first slot for addr2."
+        );
+
+        // Verify that seek() works correctly
+        let mut cur3 = storage_cursor(&tx, 100, addr2);
+        let result3_with_seek = cur3.seek(slot2).expect("ok");
+        assert!(
+            result3_with_seek.is_some(),
+            "seek() should find the slot for addr2"
+        );
+        if let Some((key, val)) = result3_with_seek {
+            assert_eq!(key, slot2);
+            assert_eq!(val, U256::from(200));
+        }
     }
 }
