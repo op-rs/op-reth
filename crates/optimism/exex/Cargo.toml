@@ -52,6 +52,8 @@ test-utils = [
     "reth-node-builder/test-utils",
     "reth-optimism-node/test-utils",
     "reth-provider/test-utils",
+    "reth-ethereum-primitives/test-utils",
+    "reth-primitives-traits/test-utils",
 ]
 metrics = ["reth-optimism-trie/metrics"]
 
