@@ -238,6 +238,15 @@ where
 
     fn next(&mut self) -> Result<Option<(Nibbles, BranchNodeCompact)>, DatabaseError> {
         if let Some(address) = self.hashed_address {
+            // If the cursor is not positioned, we need to seek to the first key for our bound
+            // address to ensure we start iterating from the correct position in the
+            // table. This is necessary because BlockNumberVersionedCursor::next() would
+            // otherwise start from T::Key::default() (the beginning of the entire
+            // table), which would cause us to miss entries for non-first addresses.
+            if !self.inner.is_positioned()? {
+                return self.seek(Nibbles::default());
+            }
+
             return Ok(self.inner.next().map(|opt| {
                 opt.and_then(|(k, node)| (k.hashed_address == address).then_some((k.path.0, node)))
             })?)
@@ -1399,18 +1408,18 @@ mod tests {
             assert_eq!(val, U256::from(100));
         }
 
-        // Test with addr2 (non-first address) - this demonstrates the bug
+        // Test with addr2 (non-first address) - this demonstrates the bug fix
         let mut cur2 = storage_cursor(&tx, 100, addr2);
         let result2_without_seek = cur2.next().expect("ok");
 
-        // BUG: This returns None even though addr2 has data
-        // Expected: Should return (slot2, 200)
-        // Actual: Returns None
         assert!(
             result2_without_seek.is_some(),
-            "BUG: next() returns None for non-first address without seek(). \
-             Expected to return the first slot for addr2."
+            "next() should return data for non-first address without seek()"
         );
+        if let Some((key, val)) = result2_without_seek {
+            assert_eq!(key, slot2);
+            assert_eq!(val, U256::from(200));
+        }
 
         // Verify that seek() works correctly
         let mut cur3 = storage_cursor(&tx, 100, addr2);
@@ -1420,5 +1429,37 @@ mod tests {
             assert_eq!(key, slot2);
             assert_eq!(val, U256::from(200));
         }
+    }
+
+    /// Regression test: `MdbxTrieCursor`<StorageTrieHistory> `next()` should work without `seek()`
+    /// for non-first addresses.
+    #[test]
+    fn storage_trie_cursor_next_without_seek_for_non_first_address() {
+        let db = setup_db();
+        let addr1 = B256::from([0x01; 32]);
+        let addr2 = B256::from([0x02; 32]);
+        let path1 = Nibbles::from_nibbles([0x0A]);
+        let path2 = Nibbles::from_nibbles([0x0B]);
+
+        {
+            let wtx = db.tx_mut().expect("rw");
+            append_storage_trie(&wtx, addr1, path1, 10, Some(node()));
+            append_storage_trie(&wtx, addr2, path2, 10, Some(node()));
+            wtx.commit().expect("commit");
+        }
+
+        let tx = db.tx().expect("ro");
+
+        // Test addr1 (first) - works
+        let mut cur1 = storage_trie_cursor(&tx, 100, addr1);
+        let result1 = TrieCursor::next(&mut cur1).expect("ok");
+        assert!(result1.is_some());
+        assert_eq!(result1.unwrap().0, path1);
+
+        // Test addr2 (non-first) - should also work now
+        let mut cur2 = storage_trie_cursor(&tx, 100, addr2);
+        let result2 = TrieCursor::next(&mut cur2).expect("ok");
+        assert!(result2.is_some(), "next() should work for non-first address without seek()");
+        assert_eq!(result2.unwrap().0, path2);
     }
 }
