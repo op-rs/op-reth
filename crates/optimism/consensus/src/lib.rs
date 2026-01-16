@@ -81,7 +81,12 @@ where
         result: &BlockExecutionResult<N::Receipt>,
         receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
-        validate_block_post_execution(block.header(), &self.chain_spec, result, receipt_root_bloom)
+        Ok(validate_block_post_execution(
+            block.header(),
+            &self.chain_spec,
+            result,
+            receipt_root_bloom,
+        )?)
     }
 }
 
