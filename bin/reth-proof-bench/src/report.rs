@@ -31,38 +31,21 @@ impl BenchMetrics {
         let max_ms = *latencies.last().unwrap_or(&0.0);
         let p95_ms = calculate_percentile(&latencies, 0.95);
 
-        let throughput = if duration_secs > 0.0 {
-            samples.len() as f64 / duration_secs
-        } else {
-            0.0
-        };
+        let throughput =
+            if duration_secs > 0.0 { samples.len() as f64 / duration_secs } else { 0.0 };
 
-        Self {
-            block,
-            p95_ms,
-            min_ms,
-            max_ms,
-            errors,
-            throughput,
-        }
+        Self { block, p95_ms, min_ms, max_ms, errors, throughput }
     }
 
     fn empty(block: u64) -> Self {
-        Self {
-            block,
-            p95_ms: 0.0,
-            min_ms: 0.0,
-            max_ms: 0.0,
-            errors: 0,
-            throughput: 0.0,
-        }
+        Self { block, p95_ms: 0.0, min_ms: 0.0, max_ms: 0.0, errors: 0, throughput: 0.0 }
     }
 }
 
 // --- Global Accumulator ---
 
 pub struct BenchSummary {
-    pub hist: Histogram<u64>, 
+    pub hist: Histogram<u64>,
     pub total_errors: usize,
     pub total_requests: usize,
     pub min_ms: f64,
@@ -72,7 +55,7 @@ pub struct BenchSummary {
 impl BenchSummary {
     pub fn new() -> Self {
         Self {
-            hist: Histogram::<u64>::new_with_bounds(1, 3_600_000, 3).unwrap(), 
+            hist: Histogram::<u64>::new_with_bounds(1, 3_600_000, 3).unwrap(),
             total_errors: 0,
             total_requests: 0,
             min_ms: f64::MAX,
@@ -82,19 +65,23 @@ impl BenchSummary {
 
     pub fn add(&mut self, sample: &Sample) {
         self.total_requests += 1;
-        
+
         if !sample.success {
             self.total_errors += 1;
         }
 
         let lat = sample.latency_ms;
-        
-        if lat < self.min_ms { self.min_ms = lat; }
-        if lat > self.max_ms { self.max_ms = lat; }
+
+        if lat < self.min_ms {
+            self.min_ms = lat;
+        }
+        if lat > self.max_ms {
+            self.max_ms = lat;
+        }
 
         // Update Histogram (saturating cast to avoid crashes on bad data)
         let val = (lat as u64).max(1);
-        self.hist.record(val).ok(); 
+        self.hist.record(val).ok();
     }
 }
 
@@ -103,14 +90,15 @@ impl BenchSummary {
 pub struct Reporter;
 
 impl Reporter {
-    const SEP: &'static str = "---------------------------------------------------------------------------";
+    const SEP: &'static str =
+        "---------------------------------------------------------------------------";
 
     pub fn print_header() {
         let header = format!(
             "{:<10} | {:<10} | {:<10} | {:<10} | {:<10} | {:<10}",
             "Block", "Req/s", "Min(ms)", "P95(ms)", "Max(ms)", "Errors"
         );
-        
+
         let stdout = io::stdout();
         let mut handle = stdout.lock();
         writeln!(handle, "{}", header).unwrap();
@@ -140,7 +128,7 @@ impl Reporter {
         }
 
         let throughput = summary.total_requests as f64 / total_duration;
-        
+
         // Histogram percentiles
         let p50 = summary.hist.value_at_quantile(0.50);
         let p95 = summary.hist.value_at_quantile(0.95);

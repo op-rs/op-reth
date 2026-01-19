@@ -1,24 +1,26 @@
 mod args;
+mod report;
 mod rpc;
-mod utils;
-mod report; // Register the new module
+mod utils; // Register the new module
 
 use anyhow::Result;
 use clap::Parser;
 use futures::stream::{self, StreamExt};
 use std::time::Instant;
 
-use crate::args::Args;
-use crate::report::{BenchMetrics, BenchSummary, Reporter};
-use crate::rpc::run_proof;
-use crate::utils::get_addresses;
+use crate::{
+    args::Args,
+    report::{BenchMetrics, BenchSummary, Reporter},
+    rpc::run_proof,
+    utils::get_addresses,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
     if args.from > args.to {
-         anyhow::bail!("--from must be less than or equal to --to");
+        anyhow::bail!("--from must be less than or equal to --to");
     }
 
     let client = reqwest::Client::new();
@@ -34,8 +36,8 @@ async fn main() -> Result<()> {
     let mut summary = BenchSummary::new();
 
     while current_block <= args.to {
-        let block_start = Instant::now(); 
-        
+        let block_start = Instant::now();
+
         let target_block = current_block;
 
         let work_items = (0..args.reqs).map(|i| {
@@ -49,11 +51,11 @@ async fn main() -> Result<()> {
             .map(|(attempt, addr, client, url, block)| async move {
                 run_proof(client, url, block, attempt, addr).await
             })
-            .buffer_unordered(args.workers); 
+            .buffer_unordered(args.workers);
 
         let mut samples = Vec::with_capacity(args.reqs);
         while let Some(sample) = stream.next().await {
-            summary.add(&sample); 
+            summary.add(&sample);
             samples.push(sample);
         }
 

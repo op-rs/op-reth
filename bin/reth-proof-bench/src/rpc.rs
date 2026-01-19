@@ -1,8 +1,8 @@
+use crate::utils::{balance_of_slot, CONTRACT};
 use alloy_primitives::Address;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Instant;
-use crate::utils::{balance_of_slot, CONTRACT};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RpcResponse {
@@ -32,13 +32,9 @@ pub async fn run_proof(
 ) -> Sample {
     let start = Instant::now();
     let slot = balance_of_slot(addr);
-    
+
     // Format hash with 0x used by alloy B256 debug/display
-    let params = json!([
-        CONTRACT,
-        [format!("{}", slot)], 
-        format!("0x{:x}", block)
-    ]);
+    let params = json!([CONTRACT, [format!("{}", slot)], format!("0x{:x}", block)]);
 
     let body = json!({
         "jsonrpc": "2.0",
@@ -52,12 +48,10 @@ pub async fn run_proof(
     let latency = start.elapsed().as_secs_f64() * 1000.0;
 
     let success = match resp {
-        Ok(res) => {
-            match res.json::<RpcResponse>().await {
-                Ok(rpc_resp) => rpc_resp.error.is_none() && rpc_resp.result.is_some(),
-                Err(_) => false,
-            }
-        }
+        Ok(res) => match res.json::<RpcResponse>().await {
+            Ok(rpc_resp) => rpc_resp.error.is_none() && rpc_resp.result.is_some(),
+            Err(_) => false,
+        },
         Err(_) => false,
     };
 

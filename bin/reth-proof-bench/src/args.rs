@@ -7,10 +7,10 @@ pub struct Args {
     pub rpc: String,
 
     #[arg(long)]
-    pub from: u64, 
+    pub from: u64,
 
     #[arg(long)]
-    pub to: u64, 
+    pub to: u64,
 
     #[arg(long, default_value_t = 10000)]
     pub step: u64,
