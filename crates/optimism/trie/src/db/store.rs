@@ -28,18 +28,10 @@ use reth_trie::{
     hashed_cursor::HashedCursor,
     trie_cursor::TrieCursor,
     updates::{StorageTrieUpdates, TrieUpdates},
-    BranchNodeCompact, HashedPostState, Nibbles,
+    BranchNodeCompact, HashedPostState, Nibbles, StoredNibbles,
 };
-use std::{cmp::max, ops::RangeBounds, path::Path};
-
-/// Preprocessed delete work for a prune range
-#[derive(Debug, Default, Clone)]
-struct HistoryDeleteBatch {
-    account_trie: Vec<(<AccountTrieHistory as Table>::Key, u64)>,
-    storage_trie: Vec<(<StorageTrieHistory as Table>::Key, u64)>,
-    hashed_account: Vec<(<HashedAccountHistory as Table>::Key, u64)>,
-    hashed_storage: Vec<(<HashedStorageHistory as Table>::Key, u64)>,
-}
+use std::{ops::RangeBounds, path::Path};
+use tracing::info;
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
@@ -50,6 +42,23 @@ pub struct MdbxProofsStorage {
 struct ProofWindowValue {
     earliest: NumHash,
     latest: NumHash,
+}
+
+struct PrunePlan {
+    earliest_block: u64,
+    acc_survivors: Vec<(StoredNibbles, u64)>,
+    storage_survivors: Vec<(StorageTrieKey, u64)>,
+    hashed_acc_survivors: Vec<(B256, u64)>,
+    hashed_storage_survivors: Vec<(HashedStorageKey, u64)>,
+}
+
+/// Preprocessed delete work for a prune range
+#[derive(Debug, Default, Clone)]
+struct HistoryDeleteBatch {
+    account_trie: Vec<(<AccountTrieHistory as Table>::Key, u64)>,
+    storage_trie: Vec<(<StorageTrieHistory as Table>::Key, u64)>,
+    hashed_account: Vec<(<HashedAccountHistory as Table>::Key, u64)>,
+    hashed_storage: Vec<(<HashedStorageHistory as Table>::Key, u64)>,
 }
 
 impl MdbxProofsStorage {
@@ -223,6 +232,125 @@ impl MdbxProofsStorage {
             }
         }
         Ok(())
+    }
+
+    /// Phase 1 of pruning: Calculate survivors.
+    /// Scans change sets to find the LATEST update for every key in the range.
+    fn calculate_prune_plan(&self, target_block: u64) -> OpProofsStorageResult<Option<PrunePlan>> {
+        self.env.view(|tx| {
+            let Some((earliest, _)) =
+                self.inner_get_block_number_hash(tx, ProofWindowKey::EarliestBlock)?
+            else {
+                return Ok(None);
+            };
+
+            if earliest >= target_block {
+                return Ok(None);
+            }
+
+            // 1. Accumulate latest block per key using HashMap for O(1) deduplication
+            // This is memory-efficient for high-churn scenarios (many updates to same keys).
+            let mut acc_candidates: HashMap<StoredNibbles, u64> = HashMap::default();
+            let mut storage_candidates: HashMap<StorageTrieKey, u64> = HashMap::default();
+            let mut hashed_acc_candidates: HashMap<B256, u64> = HashMap::default();
+            let mut hashed_storage_candidates: HashMap<HashedStorageKey, u64> = HashMap::default();
+
+            let range = (earliest + 1)..=target_block;
+            let mut cs_cursor = tx.cursor_read::<BlockChangeSet>()?;
+            let mut walker = cs_cursor.walk_range(range)?;
+
+            while let Some(Ok((block_number, cs))) = walker.next() {
+                for k in cs.account_trie_keys {
+                    acc_candidates
+                        .entry(k)
+                        .and_modify(|curr| *curr = (*curr).max(block_number))
+                        .or_insert(block_number);
+                }
+                for k in cs.storage_trie_keys {
+                    storage_candidates
+                        .entry(k)
+                        .and_modify(|curr| *curr = (*curr).max(block_number))
+                        .or_insert(block_number);
+                }
+                for k in cs.hashed_account_keys {
+                    hashed_acc_candidates
+                        .entry(k)
+                        .and_modify(|curr| *curr = (*curr).max(block_number))
+                        .or_insert(block_number);
+                }
+                for k in cs.hashed_storage_keys {
+                    hashed_storage_candidates
+                        .entry(k)
+                        .and_modify(|curr| *curr = (*curr).max(block_number))
+                        .or_insert(block_number);
+                }
+            }
+
+            // 2. Convert map to sorted survivors list for efficient sequential db write
+            Ok(Some(PrunePlan {
+                earliest_block: earliest,
+                acc_survivors: Self::flatten_and_sort(acc_candidates),
+                storage_survivors: Self::flatten_and_sort(storage_candidates),
+                hashed_acc_survivors: Self::flatten_and_sort(hashed_acc_candidates),
+                hashed_storage_survivors: Self::flatten_and_sort(hashed_storage_candidates),
+            }))
+        })?
+    }
+
+    /// Helper to flatten `HashMap` into a sorted Vector of survivors.
+    /// Sorting is required to ensure optimal sequential seek performance in MDBX.
+    fn flatten_and_sort<K: Ord>(map: HashMap<K, u64>) -> Vec<(K, u64)> {
+        let mut v: Vec<_> = map.into_iter().collect();
+        v.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        v
+    }
+
+    /// Delete history versions for `items` that are strictly older than the provided block number.
+    /// `items` is a list of (Key, `SurvivorBlock`). Everything strictly older than `SurvivorBlock`
+    /// is deleted. Returns the number of entries deleted.
+    fn prune_history_preceding<T, V>(
+        &self,
+        tx: &(impl DbTxMut + DbTx),
+        cutoff_items: Vec<(T::Key, u64)>,
+    ) -> OpProofsStorageResult<u64>
+    where
+        T: Table<Value = VersionedValue<V>> + DupSort<SubKey = u64>,
+        T::Key: Clone + Ord,
+    {
+        if cutoff_items.is_empty() {
+            return Ok(0);
+        }
+
+        let mut deleted_count = 0;
+        let mut cur = tx.cursor_dup_write::<T>()?;
+        for (key, survivor_block) in cutoff_items {
+            // Seek to the start of history for this key (Block 0)
+            if let Some(mut entry) = cur.seek_by_key_subkey(key.clone(), 0)? {
+                loop {
+                    if entry.block_number >= survivor_block {
+                        // Reached the survivor version (or newer). Stop deleting for this key.
+                        break;
+                    }
+
+                    // Entry is strictly older than survivor. Delete it.
+                    cur.delete_current()?;
+                    deleted_count += 1;
+
+                    // MDBX delete_current() automatically advances the cursor to the next item.
+                    // We check if the next item is still the same key.
+                    match cur.current() {
+                        Ok(Some((k, v))) => {
+                            if k != key {
+                                break; // Moved past the key
+                            }
+                            entry = v;
+                        }
+                        _ => break, // End of table or error
+                    }
+                }
+            }
+        }
+        Ok(deleted_count)
     }
 
     /// Append deletion tombstones for all existing storage items of `hashed_address` at
@@ -726,45 +854,89 @@ impl OpProofsStore for MdbxProofsStorage {
     async fn prune_earliest_state(
         &self,
         new_earliest_block_ref: BlockWithParent,
-        diff: BlockStateDiff,
+        _diff: BlockStateDiff,
     ) -> OpProofsStorageResult<WriteCounts> {
-        let mut write_counts = WriteCounts::default();
+        let target_block = new_earliest_block_ref.block.number;
+        let start = std::time::Instant::now();
 
-        let new_earliest_block_number = new_earliest_block_ref.block.number;
-        let Some((old_earliest_block_number, _)) = self.get_earliest_block_number().await? else {
-            return Ok(write_counts); // Nothing to prune
+        // --- PHASE 1: READ (Calculate Deletions) ---
+        let plan = self.calculate_prune_plan(target_block)?;
+        let Some(plan) = plan else {
+            return Ok(WriteCounts::default());
         };
+        let fetch_duration = start.elapsed();
 
-        if old_earliest_block_number >= new_earliest_block_number {
-            return Ok(write_counts); // Nothing to prune
-        }
-
-        // collect history for deletion
-        let history_range = max(old_earliest_block_number, 1)..=new_earliest_block_number;
-        let history_to_delete =
-            self.env.view(|tx| self.collect_history_ranged(tx, history_range.clone()))??;
-
+        // --- PHASE 2: WRITE (Execute Deletions) ---
         self.env.update(|tx| {
-            // Update the initial state (block zero)
-            let change_set = self.store_trie_updates_for_block(tx, 0, diff, false)?;
-            write_counts += WriteCounts::new(
-                change_set.account_trie_keys.len() as u64,
-                change_set.storage_trie_keys.len() as u64,
-                change_set.hashed_account_keys.len() as u64,
-                change_set.hashed_storage_keys.len() as u64,
-            );
+            let wr_start = std::time::Instant::now();
 
-            // Delete the old entries for the block range excluding block 0
-            let delete_counts = self.delete_history_ranged(tx, history_range, history_to_delete)?;
-            write_counts += delete_counts;
+            // 1. Execute Sparse Deletions and track actual deleted rows
+            let acc_deleted =
+                self.prune_history_preceding::<AccountTrieHistory, _>(tx, plan.acc_survivors)?;
+            let at_del_batch_duration = wr_start.elapsed();
 
-            // Set the earliest block number to the new value
+            let st_deleted =
+                self.prune_history_preceding::<StorageTrieHistory, _>(tx, plan.storage_survivors)?;
+            let st_del_batch_duration = wr_start.elapsed() - at_del_batch_duration;
+
+            let ha_deleted = self.prune_history_preceding::<HashedAccountHistory, _>(
+                tx,
+                plan.hashed_acc_survivors,
+            )?;
+            let ha_del_batch_duration =
+                wr_start.elapsed() - st_del_batch_duration - at_del_batch_duration;
+
+            let hs_deleted = self.prune_history_preceding::<HashedStorageHistory, _>(
+                tx,
+                plan.hashed_storage_survivors,
+            )?;
+            let hs_batch_duration = wr_start.elapsed() -
+                ha_del_batch_duration -
+                st_del_batch_duration -
+                at_del_batch_duration;
+
+            let counts = WriteCounts {
+                account_trie_updates_written_total: acc_deleted,
+                storage_trie_updates_written_total: st_deleted,
+                hashed_accounts_written_total: ha_deleted,
+                hashed_storages_written_total: hs_deleted,
+            };
+
+            // 2. Delete ChangeSets
+            let range = (plan.earliest_block + 1)..=target_block;
+            let mut cs_cursor = tx.cursor_write::<BlockChangeSet>()?;
+            let mut walker = cs_cursor.walk_range(range)?;
+            while walker.next().is_some() {
+                walker.delete_current()?;
+            }
+            let del_cs_duration = wr_start.elapsed() -
+                hs_batch_duration -
+                ha_del_batch_duration -
+                st_del_batch_duration -
+                at_del_batch_duration;
+
+            // 3. Update Earliest Pointer
             Self::inner_set_earliest_block_number(
                 tx,
-                new_earliest_block_number,
+                target_block,
                 new_earliest_block_ref.block.hash,
             )?;
-            Ok(write_counts)
+
+            let write_duration = start.elapsed() - fetch_duration;
+            info!(
+                %target_block,
+                ?fetch_duration,
+                ?write_duration,
+                ?counts,
+                account_trie_deletion_duration = ?at_del_batch_duration,
+                storage_trie_deletion_duration = ?st_del_batch_duration,
+                hashed_account_deletion_duration = ?ha_del_batch_duration,
+                hashed_storage_deletion_duration = ?hs_batch_duration,
+                change_set_deletion_duration = ?del_cs_duration,
+                "Prune:: Pruned Proofs Storage history up to new earliest block"
+            );
+
+            Ok(counts)
         })?
     }
 
