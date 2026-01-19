@@ -1,14 +1,17 @@
 [package]
 name = "reth-proof-bench"
-version = "0.1.0"
-edition = "2021"
-publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [dependencies]
 tokio = { workspace = true, features = ["full"] }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true 
+serde_json.workspace = true
 clap = { workspace = true, features = ["derive"] }
 alloy-primitives = { workspace = true, features = ["serde"] }
 futures.workspace = true

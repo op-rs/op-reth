@@ -10375,7 +10375,7 @@ dependencies = [
 
 [[package]]
 name = "reth-proof-bench"
-version = "0.1.0"
+version = "1.10.0"
 dependencies = [
  "alloy-primitives",
  "anyhow",
