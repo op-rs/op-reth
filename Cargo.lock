@@ -10383,6 +10383,7 @@ dependencies = [
  "futures",
  "hdrhistogram",
  "reqwest",
+ "reth-cli-runner",
  "serde",
  "serde_json",
  "tokio",

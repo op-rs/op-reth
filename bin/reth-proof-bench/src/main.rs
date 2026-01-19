@@ -14,15 +14,21 @@ use crate::{
     rpc::run_proof,
     utils::get_addresses,
 };
+use reth_cli_runner::CliRunner;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+#[allow(missing_docs)]
+fn main() -> Result<()> {
     let args = Args::parse();
 
     if args.from > args.to {
         anyhow::bail!("--from must be less than or equal to --to");
     }
 
+    let runner = CliRunner::try_default_runtime()?;
+    runner.run_command_until_exit(|_| run(args))
+}
+
+async fn run(args: Args) -> Result<()> {
     let client = reqwest::Client::new();
     let addresses = get_addresses();
 
