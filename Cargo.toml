@@ -12,7 +12,7 @@ members = [
     "bin/reth-bench/",
     "bin/reth-bench-compare/",
     "bin/reth/",
-    "bin/reth-proof-bench",
+    "bin/reth-proof-bench/",
     "crates/storage/rpc-provider/",
     "crates/chain-state/",
     "crates/chainspec/",
@@ -346,6 +346,7 @@ reth-storage-rpc-provider = { path = "crates/storage/rpc-provider" }
 reth-basic-payload-builder = { path = "crates/payload/basic" }
 reth-bench = { path = "bin/reth-bench" }
 reth-bench-compare = { path = "bin/reth-bench-compare" }
+reth-proof-bench = { path = "bin/reth-proof-bench" }
 reth-chain-state = { path = "crates/chain-state" }
 reth-chainspec = { path = "crates/chainspec", default-features = false }
 reth-cli = { path = "crates/cli/cli" }
@@ -419,7 +420,6 @@ reth-node-metrics = { path = "crates/node/metrics" }
 reth-optimism-node = { path = "crates/optimism/node" }
 reth-node-types = { path = "crates/node/types" }
 reth-op = { path = "crates/optimism/reth", default-features = false }
-reth-proof-bench = { path = "bin/reth-proof-bench" }
 reth-optimism-chainspec = { path = "crates/optimism/chainspec", default-features = false }
 reth-optimism-cli = { path = "crates/optimism/cli", default-features = false }
 reth-optimism-consensus = { path = "crates/optimism/consensus", default-features = false }

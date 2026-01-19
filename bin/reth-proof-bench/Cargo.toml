@@ -8,13 +8,17 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
+# reth
 reth-cli-runner.workspace = true
+
+# alloy
+alloy-primitives = { workspace = true, features = ["serde"] }
+
 tokio = { workspace = true, features = ["macros"] }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 clap = { workspace = true, features = ["derive"] }
-alloy-primitives = { workspace = true, features = ["serde"] }
 futures.workspace = true
 anyhow.workspace = true
 hdrhistogram = "7.5"
