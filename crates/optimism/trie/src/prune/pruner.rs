@@ -2,7 +2,7 @@
 use crate::prune::metrics::Metrics;
 use crate::{
     prune::error::{OpProofStoragePrunerResult, PrunerError, PrunerOutput},
-    BlockStateDiff, OpProofsStorage, OpProofsStore,
+    OpProofsStorage, OpProofsStore,
 };
 use alloy_eips::{eip1898::BlockWithParent, BlockNumHash};
 use reth_provider::BlockHashReader;
@@ -114,7 +114,6 @@ where
         end_block: u64,
     ) -> Result<PrunerOutput, PrunerError> {
         let batch_start_time = Instant::now();
-        let batch_diff = BlockStateDiff::default();
 
         // Fetch block hashes for the new earliest block of this batch
         let new_earliest_block_hash = self
@@ -152,8 +151,7 @@ where
         };
 
         // Commit this batch
-        let write_counts =
-            self.provider.prune_earliest_state(block_with_parent, batch_diff).await?;
+        let write_counts = self.provider.prune_earliest_state(block_with_parent).await?;
 
         let duration = batch_start_time.elapsed();
         let batch_output = PrunerOutput {
@@ -191,7 +189,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::MdbxProofsStorage;
+    use crate::{db::MdbxProofsStorage, BlockStateDiff};
     use alloy_eips::{BlockHashOrNumber, NumHash};
     use alloy_primitives::{BlockNumber, B256, U256};
     use mockall::mock;

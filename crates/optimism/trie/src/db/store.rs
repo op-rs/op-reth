@@ -31,7 +31,6 @@ use reth_trie::{
     BranchNodeCompact, HashedPostState, Nibbles, StoredNibbles,
 };
 use std::{ops::RangeBounds, path::Path};
-use tracing::info;
 
 /// MDBX implementation of [`OpProofsStore`].
 #[derive(Debug)]
@@ -854,46 +853,33 @@ impl OpProofsStore for MdbxProofsStorage {
     async fn prune_earliest_state(
         &self,
         new_earliest_block_ref: BlockWithParent,
-        _diff: BlockStateDiff,
     ) -> OpProofsStorageResult<WriteCounts> {
         let target_block = new_earliest_block_ref.block.number;
-        let start = std::time::Instant::now();
 
         // --- PHASE 1: READ (Calculate Deletions) ---
         let plan = self.calculate_prune_plan(target_block)?;
         let Some(plan) = plan else {
             return Ok(WriteCounts::default());
         };
-        let fetch_duration = start.elapsed();
 
         // --- PHASE 2: WRITE (Execute Deletions) ---
         self.env.update(|tx| {
-            let wr_start = std::time::Instant::now();
-
             // 1. Execute Sparse Deletions and track actual deleted rows
             let acc_deleted =
                 self.prune_history_preceding::<AccountTrieHistory, _>(tx, plan.acc_survivors)?;
-            let at_del_batch_duration = wr_start.elapsed();
 
             let st_deleted =
                 self.prune_history_preceding::<StorageTrieHistory, _>(tx, plan.storage_survivors)?;
-            let st_del_batch_duration = wr_start.elapsed() - at_del_batch_duration;
 
             let ha_deleted = self.prune_history_preceding::<HashedAccountHistory, _>(
                 tx,
                 plan.hashed_acc_survivors,
             )?;
-            let ha_del_batch_duration =
-                wr_start.elapsed() - st_del_batch_duration - at_del_batch_duration;
 
             let hs_deleted = self.prune_history_preceding::<HashedStorageHistory, _>(
                 tx,
                 plan.hashed_storage_survivors,
             )?;
-            let hs_batch_duration = wr_start.elapsed() -
-                ha_del_batch_duration -
-                st_del_batch_duration -
-                at_del_batch_duration;
 
             let counts = WriteCounts {
                 account_trie_updates_written_total: acc_deleted,
@@ -909,11 +895,6 @@ impl OpProofsStore for MdbxProofsStorage {
             while walker.next().is_some() {
                 walker.delete_current()?;
             }
-            let del_cs_duration = wr_start.elapsed() -
-                hs_batch_duration -
-                ha_del_batch_duration -
-                st_del_batch_duration -
-                at_del_batch_duration;
 
             // 3. Update Earliest Pointer
             Self::inner_set_earliest_block_number(
@@ -921,20 +902,6 @@ impl OpProofsStore for MdbxProofsStorage {
                 target_block,
                 new_earliest_block_ref.block.hash,
             )?;
-
-            let write_duration = start.elapsed() - fetch_duration;
-            info!(
-                %target_block,
-                ?fetch_duration,
-                ?write_duration,
-                ?counts,
-                account_trie_deletion_duration = ?at_del_batch_duration,
-                storage_trie_deletion_duration = ?st_del_batch_duration,
-                hashed_account_deletion_duration = ?ha_del_batch_duration,
-                hashed_storage_deletion_duration = ?hs_batch_duration,
-                change_set_deletion_duration = ?del_cs_duration,
-                "Prune:: Pruned Proofs Storage history up to new earliest block"
-            );
 
             Ok(counts)
         })?
@@ -2197,8 +2164,7 @@ mod tests {
 
         // Prune the entry - pass empty diff since we're just removing data
         let next_block = BlockWithParent::new(block.block.hash, NumHash::new(2, B256::random()));
-        let diff = BlockStateDiff::default();
-        store.prune_earliest_state(next_block, diff).await.unwrap();
+        store.prune_earliest_state(next_block).await.unwrap();
 
         // Verify the entry was pruned
         let tx = store.env.tx().unwrap();
@@ -2233,8 +2199,7 @@ mod tests {
 
         // Prune the entries
         let next_block = BlockWithParent::new(block.block.hash, NumHash::new(2, B256::random()));
-        let diff = BlockStateDiff::default();
-        store.prune_earliest_state(next_block, diff).await.unwrap();
+        store.prune_earliest_state(next_block).await.unwrap();
 
         // Verify the entries were pruned
         let tx = store.env.tx().unwrap();
@@ -2274,8 +2239,7 @@ mod tests {
         store.store_trie_updates(block_2, state_diff2).await.unwrap();
 
         // Prune up to block 3 (should remove blocks 1 and 2)
-        let diff = BlockStateDiff::default();
-        store.prune_earliest_state(block_3, diff).await.unwrap();
+        store.prune_earliest_state(block_3).await.unwrap();
 
         // Verify the entries were pruned
         let tx = store.env.tx().unwrap();
@@ -2291,14 +2255,13 @@ mod tests {
     async fn test_prune_earliest_state_no_op() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
-        let diff = BlockStateDiff::default();
         store.set_earliest_block_number(1, B256::random()).await.unwrap();
 
         // Attempt to prune with a new earliest block that is not newer
         let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
         let block_0 = BlockWithParent::new(B256::ZERO, NumHash::new(0, B256::random()));
-        store.prune_earliest_state(block_1, diff.clone()).await.unwrap();
-        store.prune_earliest_state(block_0, diff).await.unwrap();
+        store.prune_earliest_state(block_1).await.unwrap();
+        store.prune_earliest_state(block_0).await.unwrap();
 
         // Nothing should have been pruned, this call should not panic or error
     }
@@ -2307,12 +2270,11 @@ mod tests {
     async fn test_prune_earliest_state_no_entries_to_prune() {
         let dir = TempDir::new().unwrap();
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
-        let diff = BlockStateDiff::default();
         store.set_earliest_block_number(1, B256::random()).await.unwrap();
 
         // Prune a range where no entries exist
         let block_10 = BlockWithParent::new(B256::ZERO, NumHash::new(10, B256::random()));
-        store.prune_earliest_state(block_10, diff).await.unwrap();
+        store.prune_earliest_state(block_10).await.unwrap();
 
         // Nothing should have been pruned, this call should not panic or error
     }
@@ -2351,17 +2313,9 @@ mod tests {
         let new_initial_account =
             Account { nonce: 10, balance: U256::from(1000), ..Default::default() };
         let new_addr = B256::random();
-        let mut prune_diff_post_state = HashedPostState::default();
-        prune_diff_post_state.accounts.insert(addr1, Some(acc1));
-        prune_diff_post_state.accounts.insert(addr2, Some(acc2));
-        prune_diff_post_state.accounts.insert(new_addr, Some(new_initial_account));
 
         let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
-        let prune_diff = BlockStateDiff {
-            sorted_post_state: prune_diff_post_state.into_sorted(),
-            ..Default::default()
-        };
-        store.prune_earliest_state(block_3, prune_diff).await.unwrap();
+        store.prune_earliest_state(block_3).await.unwrap();
 
         // Verify that blocks 1 and 2 entries were pruned
         let tx = store.env.tx().unwrap();
@@ -2461,14 +2415,7 @@ mod tests {
         // - path1 should be in removed_nodes (it was deleted in block 3)
         // - path2 should be included with its value (it still exists from block 2)
         let block_5 = BlockWithParent::new(B256::random(), NumHash::new(5, B256::random()));
-        let mut prune_diff_trie_updates = TrieUpdates::default();
-        prune_diff_trie_updates.removed_nodes.insert(path1);
-        prune_diff_trie_updates.account_nodes.insert(path2, node2.clone());
-        let prune_diff = BlockStateDiff {
-            sorted_trie_updates: prune_diff_trie_updates.into_sorted(),
-            ..Default::default()
-        };
-        store.prune_earliest_state(block_5, prune_diff).await.unwrap();
+        store.prune_earliest_state(block_5).await.unwrap();
 
         // Verify that all entries for path1 before block 5 were removed
         let tx = store.env.tx().unwrap();
@@ -2537,14 +2484,7 @@ mod tests {
         // - addr1 with its final value (acc2) from block 2
         // - addr2 as a new account
         let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
-        let mut prune_diff_post_state = HashedPostState::default();
-        prune_diff_post_state.accounts.insert(addr1, Some(acc2));
-        prune_diff_post_state.accounts.insert(addr2, Some(new_acc));
-        let prune_diff = BlockStateDiff {
-            sorted_post_state: prune_diff_post_state.into_sorted(),
-            ..Default::default()
-        };
-        store.prune_earliest_state(block_3, prune_diff).await.unwrap();
+        store.prune_earliest_state(block_3).await.unwrap();
 
         // Verify old versions of addr1 were pruned
         let tx = store.env.tx().unwrap();
@@ -2637,29 +2577,7 @@ mod tests {
         let new_storage_node = BranchNodeCompact::new(0b100, 0, 0, vec![], Some(B256::random()));
 
         let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
-
-        let mut prune_diff_trie_updates = TrieUpdates::default();
-        let mut prune_diff_post_state = HashedPostState::default();
-
-        prune_diff_post_state.accounts.insert(addr1, Some(acc2));
-        prune_diff_post_state.accounts.insert(addr2, Some(new_acc));
-        prune_diff_trie_updates.account_nodes.insert(path1, node1.clone());
-        prune_diff_trie_updates.account_nodes.insert(path2, new_node.clone());
-        prune_diff_post_state.storages.insert(addr1, storage1);
-        prune_diff_trie_updates.storage_tries.insert(addr1, storage_updates1);
-
-        let mut new_storage = HashedStorage::default();
-        new_storage.storage.insert(slot2, U256::from(9999));
-        prune_diff_post_state.storages.insert(addr2, new_storage);
-        let mut new_storage_updates = StorageTrieUpdates::default();
-        new_storage_updates.storage_nodes.insert(storage_path2, new_storage_node.clone());
-        prune_diff_trie_updates.storage_tries.insert(addr2, new_storage_updates);
-
-        let prune_diff = BlockStateDiff {
-            sorted_trie_updates: prune_diff_trie_updates.into_sorted(),
-            sorted_post_state: prune_diff_post_state.into_sorted(),
-        };
-        store.prune_earliest_state(block_3, prune_diff).await.unwrap();
+        store.prune_earliest_state(block_3).await.unwrap();
 
         let tx = store.env.tx().unwrap();
 
