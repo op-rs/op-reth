@@ -14,8 +14,6 @@ use crate::{
     rpc::run_proof,
     utils::get_addresses,
 };
-
-#[cfg(not(target_family = "wasm"))]
 use reth_cli_runner::CliRunner;
 
 #[allow(missing_docs)]
@@ -26,17 +24,8 @@ fn main() -> Result<()> {
         anyhow::bail!("--from must be less than or equal to --to");
     }
 
-    #[cfg(not(target_family = "wasm"))]
-    {
-        let runner = CliRunner::try_default_runtime()?;
-        runner.run_command_until_exit(|_| run(args))
-    }
-
-    #[cfg(target_family = "wasm")]
-    {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-        rt.block_on(run(args))
-    }
+    let runner = CliRunner::try_default_runtime()?;
+    runner.run_command_until_exit(|_| run(args))
 }
 
 async fn run(args: Args) -> Result<()> {
