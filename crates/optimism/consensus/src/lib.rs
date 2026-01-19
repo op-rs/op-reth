@@ -491,11 +491,16 @@ mod tests {
         );
 
         // validate blob, it should fail blob gas used validation post execution.
-        assert!(matches!(
-            post_execution.unwrap_err(),
-            ConsensusError::BlobGasUsedDiff(diff)
-                if diff.got == BLOB_GAS_USED + 1 && diff.expected == BLOB_GAS_USED
-        ));
+        let err = post_execution.unwrap_err();
+        match err {
+            ConsensusError::Custom(e) => {
+                let msg = e.to_string();
+                assert!(msg.contains("DA footprint gas mismatch"));
+                assert!(msg.contains("got: 1001"));
+                assert!(msg.contains("expected: 1000"));
+            }
+            _ => panic!("Expected ConsensusError::Custom, got {:?}", err),
+        }
     }
 
     #[test]
