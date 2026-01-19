@@ -43,6 +43,8 @@ struct ProofWindowValue {
     latest: NumHash,
 }
 
+/// Preprocessed prune plan for a target block number
+#[derive(Debug, Clone)]
 struct PrunePlan {
     earliest_block: u64,
     acc_survivors: Vec<(StoredNibbles, u64)>,
