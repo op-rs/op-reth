@@ -503,6 +503,7 @@ where
             }
             break
         }
+        let buffer_full = this.buffer.len() >= this.max_capacity;
 
         // Update capacity
         this.update_capacity();
@@ -535,6 +536,12 @@ where
 
         // Update capacity
         this.update_capacity();
+
+        // If the buffer was full and we made space, we need to wake up to accept new notifications
+        if buffer_full && this.buffer.len() < this.max_capacity {
+            debug!(target: "exex::manager", "Buffer has space again, waking up senders");
+            cx.waker().wake_by_ref();
+        }
 
         // Update watch channel block number
         let finished_height = this.exex_handles.iter_mut().try_fold(u64::MAX, |curr, exex| {
