@@ -1,0 +1,16 @@
+[package]
+name = "reth-proof-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tokio = { version = "1.37", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+alloy-primitives = { version = "0.8", features = ["serde"] }
+futures = "0.3"
+anyhow = "1.0"
+hdrhistogram = "7.5"
