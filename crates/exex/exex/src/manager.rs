@@ -478,6 +478,9 @@ where
             this.finalize_wal(header)?;
         }
 
+        // log buffer and capacity before draining notifications
+        debug!(target: "exex::manager", buffer_size = %this.buffer.len(), current_capacity = %this.current_capacity.load(Ordering::Relaxed), "Draining notifications");
+
         // Drain handle notifications
         while this.buffer.len() < this.max_capacity {
             if let Poll::Ready(Some((source, notification))) = this.handle_rx.poll_recv(cx) {
@@ -536,7 +539,7 @@ where
 
         // Update capacity
         this.update_capacity();
-
+ 
         // If the buffer was full and we made space, we need to wake up to accept new notifications
         if buffer_full && this.buffer.len() < this.max_capacity {
             debug!(target: "exex::manager", "Buffer has space again, waking up senders");
