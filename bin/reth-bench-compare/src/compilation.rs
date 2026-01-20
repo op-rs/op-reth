@@ -112,7 +112,7 @@ impl CompilationManager {
             cmd.arg("--bin")
                 .arg("op-reth")
                 .arg("--manifest-path")
-                .arg("crates/optimism/bin/Cargo.toml");
+                .arg("crates/optimism/bin/op-reth/Cargo.toml");
         }
 
         cmd.current_dir(&self.repo_root);

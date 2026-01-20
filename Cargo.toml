@@ -72,7 +72,7 @@ members = [
     "crates/node/events/",
     "crates/node/metrics",
     "crates/node/types",
-    "crates/optimism/bin",
+    "crates/optimism/bin/op-reth",
     "crates/optimism/chainspec",
     "crates/optimism/cli",
     "crates/optimism/consensus",
@@ -337,7 +337,7 @@ incremental = false
 
 [workspace.dependencies]
 # reth
-op-reth = { path = "crates/optimism/bin" }
+op-reth = { path = "crates/optimism/bin/op-reth" }
 reth = { path = "bin/reth" }
 reth-storage-rpc-provider = { path = "crates/storage/rpc-provider" }
 reth-basic-payload-builder = { path = "crates/payload/basic" }
