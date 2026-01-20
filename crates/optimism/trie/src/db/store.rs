@@ -2171,7 +2171,14 @@ mod tests {
         // Verify the entry was pruned
         let tx = store.env.tx().unwrap();
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
-        assert!(cur.seek_by_key_subkey(addr, block.block.number).unwrap().is_none());
+
+        // The survivor at block 1 should remain
+        let val = cur
+            .seek_by_key_subkey(addr, block.block.number)
+            .unwrap()
+            .expect("Survivor should exist");
+        assert_eq!(val.block_number, 1);
+
         let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
         assert!(pruning_cur.seek_exact(block.block.number).unwrap().is_none());
 
@@ -2206,8 +2213,15 @@ mod tests {
         // Verify the entries were pruned
         let tx = store.env.tx().unwrap();
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
-        assert!(cur.seek_by_key_subkey(addr1, block.block.number).unwrap().is_none());
-        assert!(cur.seek_by_key_subkey(addr2, block.block.number).unwrap().is_none());
+
+        // All entries should survive at block 1
+        let v1 =
+            cur.seek_by_key_subkey(addr1, block.block.number).unwrap().expect("addr1 survivor");
+        assert_eq!(v1.block_number, 1);
+        let v2 =
+            cur.seek_by_key_subkey(addr2, block.block.number).unwrap().expect("addr2 survivor");
+        assert_eq!(v2.block_number, 1);
+
         let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
         assert!(pruning_cur.seek_exact(block.block.number).unwrap().is_none());
     }
@@ -2246,8 +2260,15 @@ mod tests {
         // Verify the entries were pruned
         let tx = store.env.tx().unwrap();
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
-        assert!(cur.seek_by_key_subkey(addr1, 1).unwrap().is_none());
-        assert!(cur.seek_by_key_subkey(addr2, 2).unwrap().is_none());
+
+        // addr1 survivor at block 1 must exist
+        let v1 = cur.seek_by_key_subkey(addr1, 1).unwrap().expect("addr1 survivor");
+        assert_eq!(v1.block_number, 1);
+
+        // addr2 survivor at block 2 must exist
+        let v2 = cur.seek_by_key_subkey(addr2, 2).unwrap().expect("addr2 survivor");
+        assert_eq!(v2.block_number, 2);
+
         let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
         assert!(pruning_cur.seek_exact(1).unwrap().is_none());
         assert!(pruning_cur.seek_exact(2).unwrap().is_none());
@@ -2311,33 +2332,22 @@ mod tests {
         };
         store.store_trie_updates(block_2, state_diff2).await.unwrap();
 
-        // Now prune to block 3, passing a diff that represents the new initial state
-        let new_initial_account =
-            Account { nonce: 10, balance: U256::from(1000), ..Default::default() };
-        let new_addr = B256::random();
-
+        // Now prune to block 3
         let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
         store.prune_earliest_state(block_3).await.unwrap();
 
-        // Verify that blocks 1 and 2 entries were pruned
         let tx = store.env.tx().unwrap();
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
-        assert!(
-            cur.seek_by_key_subkey(addr1, 1).unwrap().is_none(),
-            "Block 1 entry should be pruned"
-        );
-        assert!(
-            cur.seek_by_key_subkey(addr2, 2).unwrap().is_none(),
-            "Block 2 entry should be pruned"
-        );
 
-        // Verify that the new diff was inserted at block 0
-        let vv = cur
-            .seek_by_key_subkey(new_addr, 0)
-            .unwrap()
-            .expect("New initial state should exist at block 0");
-        assert_eq!(vv.block_number, 0);
-        assert_eq!(vv.value.0, Some(new_initial_account));
+        // Verify that blocks 1 and 2 entries were NOT pruned (they are survivors for their
+        // respective keys)
+        let vv1 = cur.seek_by_key_subkey(addr1, 0).unwrap().expect("addr1 should survive");
+        assert_eq!(vv1.block_number, 1);
+        assert_eq!(vv1.value.0, Some(acc1));
+
+        let vv2 = cur.seek_by_key_subkey(addr2, 0).unwrap().expect("addr2 should survive");
+        assert_eq!(vv2.block_number, 2);
+        assert_eq!(vv2.value.0, Some(acc2));
 
         // Verify change sets for blocks 1 and 2 were removed
         let mut pruning_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
@@ -2423,30 +2433,23 @@ mod tests {
         let tx = store.env.tx().unwrap();
         let mut cur = tx.cursor_dup_read::<AccountTrieHistory>().unwrap();
 
-        // path1 at block 1 should be gone
-        assert!(
-            cur.seek_by_key_subkey(StoredNibbles::from(path1), 1).unwrap().is_none(),
-            "path1 at block 1 should be pruned"
-        );
-        // path1 at block 3 (deletion) should also be gone
-        assert!(
-            cur.seek_by_key_subkey(StoredNibbles::from(path1), 3).unwrap().is_none(),
-            "path1 at block 3 should be pruned"
-        );
+        // path1 at block 1 should be gone; seeking 1 finds survivor (tombstone at 3)
+        if let Some(v) = cur.seek_by_key_subkey(StoredNibbles::from(path1), 1).unwrap() {
+            assert!(v.block_number >= 3, "path1 at block 1 should be pruned");
+        }
+
+        // path1 survivor at block 3 (tombstone) should remain
+        let v3 =
+            cur.seek_by_key_subkey(StoredNibbles::from(path1), 3).unwrap().expect("Tombstone at 3");
+        assert_eq!(v3.block_number, 3);
+        assert!(v3.value.0.is_none());
 
         // path2 entries should be pruned (blocks < 5)
-        assert!(
-            cur.seek_by_key_subkey(StoredNibbles::from(path2), 2).unwrap().is_none(),
-            "path2 at block 2 should be pruned"
-        );
-
-        // path2 should exist at block 0 as part of the new initial state
-        let vv = cur
-            .seek_by_key_subkey(StoredNibbles::from(path2), 0)
-            .unwrap()
-            .expect("path2 should exist at block 0");
-        assert_eq!(vv.block_number, 0);
-        assert_eq!(vv.value.0, Some(node2));
+        // Survivor for path2 is at block 2.
+        let v2 =
+            cur.seek_by_key_subkey(StoredNibbles::from(path2), 0).unwrap().expect("path2 survivor");
+        assert_eq!(v2.block_number, 2);
+        assert_eq!(v2.value.0, Some(node2));
     }
 
     #[tokio::test]
@@ -2455,14 +2458,10 @@ mod tests {
         let store = MdbxProofsStorage::new(dir.path()).expect("env");
         store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
 
-        // Use different addresses - addr1 in old history, addr2 in new initial state
-        // This reflects the real-world use case where pruning replaces old account history
-        // with a new set of accounts as the initial state
+        // Use overlapping key (addr1 updated in blocks 1 and 2)
         let addr1 = B256::random();
-        let addr2 = B256::random();
         let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
         let acc2 = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
-        let new_acc = Account { nonce: 10, balance: U256::from(500), ..Default::default() };
 
         let block_1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
         let mut diff1_post_state = HashedPostState::default();
@@ -2482,39 +2481,18 @@ mod tests {
         };
         store.store_trie_updates(block_2, diff2).await.unwrap();
 
-        // Prune to block 3, with new initial state including:
-        // - addr1 with its final value (acc2) from block 2
-        // - addr2 as a new account
+        // Prune to block 3
         let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
         store.prune_earliest_state(block_3).await.unwrap();
 
-        // Verify old versions of addr1 were pruned
         let tx = store.env.tx().unwrap();
         let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
-        assert!(
-            cur.seek_by_key_subkey(addr1, 1).unwrap().is_none(),
-            "Block 1 entry should be pruned"
-        );
-        assert!(
-            cur.seek_by_key_subkey(addr1, 2).unwrap().is_none(),
-            "Block 2 entry should be pruned"
-        );
 
-        // Verify new initial state at block 0 for addr1 (with final value acc2)
-        let vv1 = cur
-            .seek_by_key_subkey(addr1, 0)
-            .unwrap()
-            .expect("addr1 initial state should exist at block 0");
-        assert_eq!(vv1.block_number, 0);
+        // Verify survivor (acc2 at block 2) remains
+        let vv1 =
+            cur.seek_by_key_subkey(addr1, 0).unwrap().expect("addr1 should having surviving state");
+        assert_eq!(vv1.block_number, 2);
         assert_eq!(vv1.value.0, Some(acc2));
-
-        // Verify new initial state at block 0 for addr2
-        let vv2 = cur
-            .seek_by_key_subkey(addr2, 0)
-            .unwrap()
-            .expect("New initial state should exist at block 0");
-        assert_eq!(vv2.block_number, 0);
-        assert_eq!(vv2.value.0, Some(new_acc));
     }
 
     #[tokio::test]
@@ -2524,15 +2502,10 @@ mod tests {
         store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
 
         // Setup complex scenario with accounts, storage, and trie nodes
-        // Use addr1 for old history, addr2 for new initial state
         let addr1 = B256::random();
-        let addr2 = B256::random();
         let slot1 = B256::random();
-        let slot2 = B256::random();
         let path1 = Nibbles::from_nibbles_unchecked([0x01]);
-        let path2 = Nibbles::from_nibbles_unchecked([0x02]);
         let storage_path1 = Nibbles::from_nibbles_unchecked([0x03]);
-        let storage_path2 = Nibbles::from_nibbles_unchecked([0x04]);
 
         let acc1 = Account { nonce: 1, balance: U256::from(100), ..Default::default() };
         let node1 = BranchNodeCompact::new(0b1, 0, 0, vec![], Some(B256::random()));
@@ -2554,90 +2527,63 @@ mod tests {
         diff1_trie_updates.storage_tries.insert(addr1, storage_updates1.clone());
 
         let diff_1 = BlockStateDiff {
-            sorted_trie_updates: diff1_trie_updates.into_sorted(),
             sorted_post_state: diff1_post_state.into_sorted(),
+            sorted_trie_updates: diff1_trie_updates.into_sorted(),
         };
         store.store_trie_updates(block_1, diff_1).await.unwrap();
 
-        // Block 2: Update account
+        // Block 2: Update account (overwriting addr1)
         let acc2 = Account { nonce: 2, balance: U256::from(200), ..Default::default() };
         let block_2 = BlockWithParent::new(block_1.block.hash, NumHash::new(2, B256::random()));
 
         let mut diff2_post_state = HashedPostState::default();
-
         diff2_post_state.accounts.insert(addr1, Some(acc2));
-
         let diff2 = BlockStateDiff {
-            sorted_trie_updates: TrieUpdatesSorted::default(),
             sorted_post_state: diff2_post_state.into_sorted(),
+            ..Default::default()
         };
         store.store_trie_updates(block_2, diff2).await.unwrap();
 
-        // Prune to block 3 with new initial state for DIFFERENT keys (addr2, path2, etc.)
-        let new_acc = Account { nonce: 10, balance: U256::from(1000), ..Default::default() };
-        let new_node = BranchNodeCompact::new(0b11, 0, 0, vec![], Some(B256::random()));
-        let new_storage_node = BranchNodeCompact::new(0b100, 0, 0, vec![], Some(B256::random()));
-
+        // Prune to block 3
         let block_3 = BlockWithParent::new(block_2.block.hash, NumHash::new(3, B256::random()));
         store.prune_earliest_state(block_3).await.unwrap();
 
         let tx = store.env.tx().unwrap();
 
-        // Verify account history - old addr1 entries pruned
+        // Verify account history - acc1 at block 1 pruned
         let mut acc_cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
-        assert!(
-            acc_cur.seek_by_key_subkey(addr1, 1).unwrap().is_none(),
-            "Old account entries should be pruned"
-        );
-        assert!(
-            acc_cur.seek_by_key_subkey(addr1, 2).unwrap().is_none(),
-            "Old account entries should be pruned"
-        );
-        // New addr2 entry at block 0
-        let new_acc_vv =
-            acc_cur.seek_by_key_subkey(addr2, 0).unwrap().expect("New account at block 0");
-        assert_eq!(new_acc_vv.value.0, Some(new_acc));
+        // Survivor acc2 at block 2 remains
+        let acc_vv = acc_cur.seek_by_key_subkey(addr1, 0).unwrap().expect("Survivor at block 2");
+        assert_eq!(acc_vv.value.0, Some(acc2));
+        assert_eq!(acc_vv.block_number, 2);
 
-        // Verify account trie history - old path1 pruned, new path2 at block 0
+        // Verify account trie history - path1 at block 1 remains because it's the latest for that
+        // key
         let mut trie_cur = tx.cursor_dup_read::<AccountTrieHistory>().unwrap();
-        assert!(
-            trie_cur.seek_by_key_subkey(StoredNibbles::from(path1), 1).unwrap().is_none(),
-            "Old trie entry should be pruned"
-        );
-        let new_trie_vv = trie_cur
-            .seek_by_key_subkey(StoredNibbles::from(path2), 0)
+        let trie_vv = trie_cur
+            .seek_by_key_subkey(StoredNibbles::from(path1), 0)
             .unwrap()
-            .expect("New trie at block 0");
-        assert_eq!(new_trie_vv.value.0, Some(new_node));
+            .expect("Survivor at block 1");
+        assert_eq!(trie_vv.value.0, Some(node1));
+        assert_eq!(trie_vv.block_number, 1);
 
-        // Verify storage history - old addr1/slot1 pruned, new addr2/slot2 at block 0
+        // Verify storage history - slot1 at block 1 remains
         let mut storage_cur = tx.new_cursor::<HashedStorageHistory>().unwrap();
-        let old_storage_key = HashedStorageKey::new(addr1, slot1);
-        assert!(
-            storage_cur.seek_by_key_subkey(old_storage_key, 1).unwrap().is_none(),
-            "Old storage should be pruned"
-        );
-        let new_storage_key = HashedStorageKey::new(addr2, slot2);
-        let new_storage_vv = storage_cur
-            .seek_by_key_subkey(new_storage_key, 0)
-            .unwrap()
-            .expect("New storage at block 0");
-        assert_eq!(new_storage_vv.value.0.as_ref().unwrap().0, U256::from(9999));
+        let storage_key = HashedStorageKey::new(addr1, slot1);
+        let storage_vv =
+            storage_cur.seek_by_key_subkey(storage_key, 0).unwrap().expect("Survivor at block 1");
+        assert_eq!(storage_vv.value.0.as_ref().unwrap().0, U256::from(1234));
+        assert_eq!(storage_vv.block_number, 1);
 
-        // Verify storage trie history - old addr1/storage_path1 pruned, new addr2/storage_path2 at
-        // block 0
+        // Verify storage trie history
         let mut storage_trie_cur = tx.cursor_dup_read::<StorageTrieHistory>().unwrap();
-        let old_storage_trie_key = StorageTrieKey::new(addr1, StoredNibbles::from(storage_path1));
-        assert!(
-            storage_trie_cur.seek_by_key_subkey(old_storage_trie_key, 1).unwrap().is_none(),
-            "Old storage trie should be pruned"
-        );
-        let new_storage_trie_key = StorageTrieKey::new(addr2, StoredNibbles::from(storage_path2));
-        let new_storage_trie_vv = storage_trie_cur
-            .seek_by_key_subkey(new_storage_trie_key, 0)
+        let storage_trie_key = StorageTrieKey::new(addr1, StoredNibbles::from(storage_path1));
+        let storage_trie_vv = storage_trie_cur
+            .seek_by_key_subkey(storage_trie_key, 0)
             .unwrap()
-            .expect("New storage trie at block 0");
-        assert_eq!(new_storage_trie_vv.value.0, Some(new_storage_node));
+            .expect("Survivor at block 1");
+        assert_eq!(storage_trie_vv.value.0, Some(storage_node1));
+        assert_eq!(storage_trie_vv.block_number, 1);
 
         // Verify change sets pruned
         let mut change_cur = tx.new_cursor::<BlockChangeSet>().unwrap();
