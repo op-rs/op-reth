@@ -55,7 +55,7 @@ install: ## Build and install the reth binary under `$(CARGO_HOME)/bin`.
 
 .PHONY: install-op
 install-op: ## Build and install the op-reth binary under `$(CARGO_HOME)/bin`.
-	cargo install --path crates/optimism/bin --bin op-reth --force --locked \
+	cargo install --path crates/optimism/bin/op-reth --bin op-reth --force --locked \
 		--features "$(FEATURES)" \
 		--profile "$(PROFILE)" \
 		$(CARGO_INSTALL_EXTRA_FLAGS)
@@ -89,18 +89,17 @@ build-debug: ## Build the reth binary into `target/debug` directory.
 	cargo build --bin reth --features "$(FEATURES)"
 .PHONY: build-debug-op
 build-debug-op: ## Build the op-reth binary into `target/debug` directory.
-	cargo build --bin op-reth --features "$(FEATURES)" --manifest-path crates/optimism/bin/Cargo.toml
+	cargo build --bin op-reth --features "$(FEATURES)" --manifest-path crates/optimism/bin/op-reth/Cargo.toml
 
 .PHONY: build-op
 build-op: ## Build the op-reth binary into `target` directory.
-	cargo build --bin op-reth --features "$(FEATURES)" --profile "$(PROFILE)" --manifest-path crates/optimism/bin/Cargo.toml
-
+	cargo build --bin op-reth --features "$(FEATURES)" --profile "$(PROFILE)" --manifest-path crates/optimism/bin/op-reth/Cargo.toml
 # Builds the reth binary natively.
 build-native-%:
 	cargo build --bin reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)"
 
 op-build-native-%:
-	cargo build --bin op-reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)" --manifest-path crates/optimism/bin/Cargo.toml
+	cargo build --bin op-reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)" --manifest-path crates/optimism/bin/op-reth/Cargo.toml
 
 # The following commands use `cross` to build a cross-compile.
 #
@@ -132,7 +131,7 @@ build-%:
 
 op-build-%:
 	RUSTFLAGS="-C link-arg=-lgcc -Clink-arg=-static-libgcc" \
-		cross build --bin op-reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)" --manifest-path crates/optimism/bin/Cargo.toml
+		cross build --bin op-reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)" --manifest-path crates/optimism/bin/op-reth/Cargo.toml
 
 # Unfortunately we can't easily use cross to build for Darwin because of licensing issues.
 # If we wanted to, we would need to build a custom Docker image with the SDK available.
@@ -410,7 +409,7 @@ profiling: ## Builds `reth` with optimisations, but also symbols.
 
 .PHONY: profiling-op
 profiling-op: ## Builds `op-reth` with optimisations, but also symbols.
-	RUSTFLAGS="-C target-cpu=native" cargo build --profile profiling --features jemalloc,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml
+	RUSTFLAGS="-C target-cpu=native" cargo build --profile profiling --features jemalloc,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/op-reth/Cargo.toml
 
 .PHONY: maxperf
 maxperf: ## Builds `reth` with the most aggressive optimisations.
@@ -418,7 +417,7 @@ maxperf: ## Builds `reth` with the most aggressive optimisations.
 
 .PHONY: maxperf-op
 maxperf-op: ## Builds `op-reth` with the most aggressive optimisations.
-	RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf --features jemalloc,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml
+	RUSTFLAGS="-C target-cpu=native" cargo build --profile maxperf --features jemalloc,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/op-reth/Cargo.toml
 
 .PHONY: maxperf-no-asm
 maxperf-no-asm: ## Builds `reth` with the most aggressive optimisations, minus the "asm-keccak" feature.
