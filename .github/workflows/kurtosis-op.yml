@@ -25,7 +25,7 @@ jobs:
       image_tag: ghcr.io/paradigmxyz/op-reth:kurtosis-ci
       binary_name: op-reth
       cargo_features: asm-keccak
-      cargo_package: crates/optimism/bin/Cargo.toml
+      cargo_package: crates/optimism/bin/op-reth/Cargo.toml
 
   test:
     timeout-minutes: 60
