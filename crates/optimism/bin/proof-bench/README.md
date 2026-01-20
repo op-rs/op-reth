@@ -1,6 +1,6 @@
 # Reth Proof Benchmark Tool
 
-`reth-proof-bench` is a specialized CLI tool designed to benchmark the performance of the `eth_getProof` RPC method on Optimism/Ethereum nodes. It iterates through a range of blocks, sending concurrent proof requests to valid addresses, and reports detailed latency and throughput metrics.
+`op-reth-proof-bench` is a specialized CLI tool designed to benchmark the performance of the `eth_getProof` RPC method on Optimism/Ethereum nodes. It iterates through a range of blocks, sending concurrent proof requests to valid addresses, and reports detailed latency and throughput metrics.
 
 ## Features
 

@@ -6565,6 +6565,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-reth-proof-bench"
+version = "1.10.0"
+dependencies = [
+ "alloy-primitives",
+ "anyhow",
+ "clap",
+ "futures",
+ "hdrhistogram",
+ "reqwest",
+ "reth-cli-runner",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "op-revm"
 version = "14.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10371,22 +10387,6 @@ dependencies = [
  "serde_json",
  "serde_with",
  "thiserror 2.0.17",
-]
-
-[[package]]
-name = "reth-proof-bench"
-version = "1.10.0"
-dependencies = [
- "alloy-primitives",
- "anyhow",
- "clap",
- "futures",
- "hdrhistogram",
- "reqwest",
- "reth-cli-runner",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]

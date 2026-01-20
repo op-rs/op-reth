@@ -12,7 +12,7 @@ exclude_crates=(
   reth-basic-payload-builder
   reth-bench
   reth-bench-compare
-  reth-proof-bench
+  op-reth-proof-bench
   reth-cli
   reth-cli-commands
   reth-cli-runner
