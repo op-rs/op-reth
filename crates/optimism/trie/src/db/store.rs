@@ -2645,6 +2645,157 @@ mod tests {
         assert!(change_cur.seek_exact(2).unwrap().is_none());
     }
 
+    #[tokio::test]
+    async fn test_prune_earliest_state_churn_create_delete_recreate() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        let addr = B256::random();
+
+        // Block 1: Create
+        let b1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let acc1 = Account { nonce: 1, ..Default::default() };
+        let mut diff1 = HashedPostState::default();
+        diff1.accounts.insert(addr, Some(acc1));
+        store
+            .store_trie_updates(
+                b1,
+                BlockStateDiff { sorted_post_state: diff1.into_sorted(), ..Default::default() },
+            )
+            .await
+            .unwrap();
+
+        // Block 2: Delete
+        let b2 = BlockWithParent::new(b1.block.hash, NumHash::new(2, B256::random()));
+        let mut diff2 = HashedPostState::default();
+        diff2.accounts.insert(addr, None);
+        store
+            .store_trie_updates(
+                b2,
+                BlockStateDiff { sorted_post_state: diff2.into_sorted(), ..Default::default() },
+            )
+            .await
+            .unwrap();
+
+        // Block 3: Recreate
+        let b3 = BlockWithParent::new(b2.block.hash, NumHash::new(3, B256::random()));
+        let acc3 = Account { nonce: 3, ..Default::default() };
+        let mut diff3 = HashedPostState::default();
+        diff3.accounts.insert(addr, Some(acc3));
+        store
+            .store_trie_updates(
+                b3,
+                BlockStateDiff { sorted_post_state: diff3.into_sorted(), ..Default::default() },
+            )
+            .await
+            .unwrap();
+
+        // Prune to Block 3
+        store.prune_earliest_state(b3).await.unwrap();
+
+        let tx = store.env.tx().unwrap();
+        let mut cur = tx.new_cursor::<HashedAccountHistory>().unwrap();
+
+        // Block 1 (Older than 3) should be deleted.
+        // Since Block 3 exists, seek(1) will land on Block 3.
+        if let Some(val) = cur.seek_by_key_subkey(addr, 1).unwrap() {
+            assert!(
+                val.block_number >= 3,
+                "Block 1 should use be pruned, found {}",
+                val.block_number
+            );
+        }
+
+        // Block 2 (Older than 3) should be deleted
+        if let Some(val) = cur.seek_by_key_subkey(addr, 2).unwrap() {
+            assert!(
+                val.block_number >= 3,
+                "Block 2 should use be pruned, found {}",
+                val.block_number
+            );
+        }
+
+        // Block 3 (Survivor) should exist
+        let val = cur.seek_by_key_subkey(addr, 3).unwrap().expect("Block 3 should survive");
+        assert_eq!(val.block_number, 3);
+        assert_eq!(val.value.0, Some(acc3));
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_returns_correct_counts() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        let addr = B256::random();
+
+        // Block 1: Insert
+        let b1 = BlockWithParent::new(B256::ZERO, NumHash::new(1, B256::random()));
+        let acc1 = Account { nonce: 1, ..Default::default() };
+        let mut diff1 = HashedPostState::default();
+        diff1.accounts.insert(addr, Some(acc1));
+        store
+            .store_trie_updates(
+                b1,
+                BlockStateDiff { sorted_post_state: diff1.into_sorted(), ..Default::default() },
+            )
+            .await
+            .unwrap();
+
+        // Block 2: Update
+        let b2 = BlockWithParent::new(b1.block.hash, NumHash::new(2, B256::random()));
+        let acc2 = Account { nonce: 2, ..Default::default() };
+        let mut diff2 = HashedPostState::default();
+        diff2.accounts.insert(addr, Some(acc2));
+        store
+            .store_trie_updates(
+                b2,
+                BlockStateDiff { sorted_post_state: diff2.into_sorted(), ..Default::default() },
+            )
+            .await
+            .unwrap();
+
+        // Prune to Block 2.
+        // Survivor is at Block 2.
+        // Block 1 should be deleted.
+        // Count should be 1.
+        let counts = store.prune_earliest_state(b2).await.unwrap();
+
+        assert_eq!(counts.hashed_accounts_written_total, 1);
+        assert_eq!(counts.account_trie_updates_written_total, 0);
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_empty_window_updates_pointer() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+        store.set_earliest_block_number(0, B256::ZERO).await.unwrap();
+
+        let target = BlockWithParent::new(B256::random(), NumHash::new(5, B256::random()));
+
+        // Prune empty
+        store.prune_earliest_state(target).await.unwrap();
+
+        let earliest = store.get_earliest_block_number().await.unwrap();
+        assert_eq!(earliest, Some((5, target.block.hash)));
+    }
+
+    #[tokio::test]
+    async fn test_prune_earliest_state_uninitialized_guard() {
+        let dir = TempDir::new().unwrap();
+        let store = MdbxProofsStorage::new(dir.path()).expect("env");
+
+        // Earliest not set
+        let target = BlockWithParent::new(B256::random(), NumHash::new(5, B256::random()));
+
+        let counts = store.prune_earliest_state(target).await.unwrap();
+        assert_eq!(counts, WriteCounts::default());
+
+        // Check earliest is still None
+        assert_eq!(store.get_earliest_block_number().await.unwrap(), None);
+    }
+
     #[test]
     fn test_block_change_set_crud_operations() {
         let dir = TempDir::new().unwrap();
