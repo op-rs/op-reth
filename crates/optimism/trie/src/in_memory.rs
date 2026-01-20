@@ -618,7 +618,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         let leaves_diff = diff.sorted_post_state;
 
         // Apply branch updates to the earliest state (block 0)
-        for (path, branch) in &branches_diff.account_nodes {
+        for (path, branch) in branches_diff.account_nodes_ref() {
             write_counts.account_trie_updates_written_total += 1;
             match branch {
                 Some(br) => _ = inner.account_branches.insert((0, *path), Some(br.clone())),
@@ -627,7 +627,7 @@ impl OpProofsStore for InMemoryProofsStorage {
         }
 
         // Apply storage trie updates
-        for (hashed_address, storage_updates) in &branches_diff.storage_tries {
+        for (hashed_address, storage_updates) in branches_diff.storage_tries_ref() {
             for (path, branch) in &storage_updates.storage_nodes {
                 match branch {
                     Some(br) => {

@@ -327,13 +327,13 @@ impl MdbxProofsStorage {
     ) -> OpProofsStorageResult<ChangeSet> {
         let BlockStateDiff { sorted_trie_updates, sorted_post_state } = block_state_diff;
 
-        let storage_trie_len = sorted_trie_updates.storage_tries.len();
+        let storage_trie_len = sorted_trie_updates.storage_tries_ref().len();
         let hashed_storage_len = sorted_post_state.storages.len();
 
         let account_trie_keys = self.persist_history_batch(
             tx,
             block_number,
-            sorted_trie_updates.account_nodes.into_iter(),
+            sorted_trie_updates.account_nodes_ref(),
             append_mode,
         )?;
         let hashed_account_keys = self.persist_history_batch(
@@ -344,7 +344,7 @@ impl MdbxProofsStorage {
         )?;
 
         let mut storage_trie_keys = Vec::<StorageTrieKey>::with_capacity(storage_trie_len);
-        for (hashed_address, nodes) in sorted_trie_updates.storage_tries {
+        for (hashed_address, nodes) in sorted_trie_updates.storage_tries_ref() {
             // Handle wiped - mark all storage trie as deleted at the current block number
             if nodes.is_deleted && append_mode {
                 // Yet to have any update for the current block number - So just using up to
@@ -1671,8 +1671,8 @@ mod tests {
 
         store.store_trie_updates(block, diff).await.expect("store");
         let got = store.fetch_trie_updates(1).await.expect("fetch");
-        assert!(got.sorted_trie_updates.account_nodes.is_empty());
-        assert!(got.sorted_trie_updates.storage_tries.is_empty());
+        assert!(got.sorted_trie_updates.account_nodes_ref().is_empty());
+        assert!(got.sorted_trie_updates.storage_tries_ref().is_empty());
         assert!(got.sorted_post_state.accounts.is_empty());
         assert!(got.sorted_post_state.storages.is_empty());
     }
