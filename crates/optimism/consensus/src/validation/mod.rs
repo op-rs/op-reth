@@ -130,7 +130,7 @@ pub fn validate_block_post_execution<R: DepositReceipt>(
                 .map(|r| Bytes::from(r.with_bloom_ref().encoded_2718()))
                 .collect::<Vec<_>>();
             tracing::debug!(%error, ?receipts, "receipts verification failed");
-            return Err(OpConsensusError::Eth(error))
+            Err(error)?
         }
     }
 
