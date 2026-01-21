@@ -578,12 +578,8 @@ where
     }
 
     #[inline]
-    async fn set_initial_state_anchor(
-        &self,
-        block_num: u64,
-        block_hash: B256,
-    ) -> OpProofsStorageResult<()> {
-        self.storage.set_initial_state_anchor(block_num, block_hash).await
+    async fn set_initial_state_anchor(&self, anchor: BlockNumHash) -> OpProofsStorageResult<()> {
+        self.storage.set_initial_state_anchor(anchor).await
     }
 
     #[inline]

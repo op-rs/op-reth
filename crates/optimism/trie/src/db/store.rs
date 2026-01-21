@@ -1037,17 +1037,10 @@ impl OpProofsInitialStateStore for MdbxProofsStorage {
         })
     }
 
-    async fn set_initial_state_anchor(
-        &self,
-        block_number: u64,
-        block_hash: B256,
-    ) -> OpProofsStorageResult<()> {
+    async fn set_initial_state_anchor(&self, anchor: BlockNumHash) -> OpProofsStorageResult<()> {
         self.env.update(|tx| {
             let mut cur = tx.cursor_write::<ProofWindow>()?;
-            cur.insert(
-                ProofWindowKey::InitialStateAnchor,
-                &BlockNumberHash::new(block_number, block_hash),
-            )?;
+            cur.insert(ProofWindowKey::InitialStateAnchor, &anchor.into())?;
             Ok(())
         })?
     }

@@ -239,8 +239,7 @@ pub trait OpProofsInitialStateStore: Send + Sync + Debug {
     /// Returns `Err` if an anchor already exists (prevents accidental overwrite).
     fn set_initial_state_anchor(
         &self,
-        block_num: u64,
-        block_hash: B256,
+        anchor: BlockNumHash,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
 
     /// Commit the initial state - mark the anchor as completed and also set the earliest block

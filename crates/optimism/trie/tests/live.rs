@@ -241,7 +241,7 @@ where
     {
         let provider = provider_factory.db_ref();
         let tx = provider.tx()?;
-        let backfill_job = BackfillJob::new(storage.clone().inner().clone(), &tx);
+        let backfill_job = BackfillJob::new(storage.clone(), &tx);
         backfill_job.run(last_block_number, last_block_hash).await?;
     }
 

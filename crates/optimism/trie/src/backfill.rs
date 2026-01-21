@@ -5,6 +5,7 @@ use crate::{
     db::{HashedStorageKey, StorageTrieKey},
     OpProofsStorageError, OpProofsStore,
 };
+use alloy_eips::BlockNumHash;
 use alloy_primitives::B256;
 use reth_db::{
     cursor::{DbCursorRO, DbDupCursorRO},
@@ -420,7 +421,9 @@ impl<'a, Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
         match anchor.status {
             InitialStateStatus::Completed => return Ok(()),
             InitialStateStatus::NotStarted => {
-                self.storage.set_initial_state_anchor(best_number, best_hash).await?;
+                self.storage
+                    .set_initial_state_anchor(BlockNumHash::new(best_number, best_hash))
+                    .await?;
             }
             InitialStateStatus::InProgress => {
                 self.validate_anchor_block(&anchor, best_number, best_hash)?;
@@ -780,7 +783,10 @@ mod tests {
         let storage = Arc::new(MdbxProofsStorage::new(dir.path()).expect("env"));
 
         // set and commit initial state anchor
-        storage.set_initial_state_anchor(50, B256::repeat_byte(0x01)).await.expect("set anchor");
+        storage
+            .set_initial_state_anchor(BlockNumHash::new(50, B256::repeat_byte(0x01)))
+            .await
+            .expect("set anchor");
         storage.commit_initial_state().await.expect("commit anchor");
 
         let tx = db.tx().unwrap();
@@ -810,7 +816,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Arc::new(MdbxProofsStorage::new(dir.path()).expect("env"));
 
-        store.set_initial_state_anchor(0, B256::default()).await.expect("set anchor");
+        store
+            .set_initial_state_anchor(BlockNumHash::new(0, B256::default()))
+            .await
+            .expect("set anchor");
 
         // Phase 1 in source: k1, k2
         let k1 = k(1);
@@ -890,7 +899,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Arc::new(MdbxProofsStorage::new(dir.path()).expect("env"));
 
-        store.set_initial_state_anchor(0, B256::default()).await.expect("set anchor");
+        store
+            .set_initial_state_anchor(BlockNumHash::new(0, B256::default()))
+            .await
+            .expect("set anchor");
 
         let a1 = k(0x10);
         let a2 = k(0x20);
@@ -983,7 +995,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Arc::new(MdbxProofsStorage::new(dir.path()).expect("env"));
 
-        store.set_initial_state_anchor(0, B256::default()).await.expect("set anchor");
+        store
+            .set_initial_state_anchor(BlockNumHash::new(0, B256::default()))
+            .await
+            .expect("set anchor");
 
         let p1 = StoredNibbles(Nibbles::from_nibbles_unchecked(vec![1]));
         let p2 = StoredNibbles(Nibbles::from_nibbles_unchecked(vec![2]));
@@ -1051,7 +1066,10 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = Arc::new(MdbxProofsStorage::new(dir.path()).expect("env"));
 
-        store.set_initial_state_anchor(0, B256::default()).await.expect("set anchor");
+        store
+            .set_initial_state_anchor(BlockNumHash::new(0, B256::default()))
+            .await
+            .expect("set anchor");
 
         let a1 = k(0x10);
         let a2 = k(0x20);
