@@ -330,6 +330,16 @@ impl MdbxProofsStorage {
                 loop {
                     if entry.block_number >= survivor_block {
                         // Reached the survivor version (or newer). Stop deleting for this key.
+
+                        // If the survivor is a tombstone (None), delete it too.
+                        // Since we just deleted all older history, a tombstone at the start of
+                        // history is redundant (it implies "does not
+                        // exist").
+                        if entry.block_number == survivor_block && entry.value.0.is_none() {
+                            cur.delete_current()?;
+                            deleted_count += 1;
+                        }
+
                         break;
                     }
 
