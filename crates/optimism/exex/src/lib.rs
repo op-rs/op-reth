@@ -698,7 +698,7 @@ mod tests {
         let exex = build_test_exex(ctx, proofs.clone());
 
         // Notification: chain committed 1..5
-        let new_chain = Arc::new(mk_chain_with_updates(1, 5, None));
+        let new_chain = Arc::new(mk_chain_with_updates(1, 1, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
         let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
@@ -709,7 +709,7 @@ mod tests {
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
-        assert_eq!(latest, 5);
+        assert_eq!(latest, 1);
     }
 
     #[tokio::test]
@@ -732,14 +732,15 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain committed 1..5
-        let new_chain = Arc::new(mk_chain_with_updates(1, 5, None));
-        let notif = ExExNotification::ChainCommitted { new: new_chain };
-
         let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
-        exex.handle_notification(notif, &collector, &sync_target_tx)
-            .await
-            .expect("handle chain commit");
+        // Process blocks 1..5 sequentially to trigger real-time path (synchronous)
+        for i in 1..=5 {
+            let new_chain = Arc::new(mk_chain_with_updates(i, i, None));
+            let notif = ExExNotification::ChainCommitted { new: new_chain };
+            exex.handle_notification(notif, &collector, &sync_target_tx)
+                .await
+                .expect("handle chain commit");
+        }
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -776,14 +777,15 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain committed 1..10
-        let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
-        let notif = ExExNotification::ChainCommitted { new: new_chain };
-
         let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
-        exex.handle_notification(notif, &collector, &sync_target_tx)
-            .await
-            .expect("handle chain commit");
+
+        for i in 1..=10 {
+            let new_chain = Arc::new(mk_chain_with_updates(i, i, None));
+            let notif = ExExNotification::ChainCommitted { new: new_chain };
+            exex.handle_notification(notif, &collector, &sync_target_tx)
+                .await
+                .expect("handle chain commit");
+        }
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -824,14 +826,16 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain committed 1..10
-        let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
-        let notif = ExExNotification::ChainCommitted { new: new_chain };
-
         let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
-        exex.handle_notification(notif, &collector, &sync_target_tx)
-            .await
-            .expect("handle chain commit");
+
+        for i in 1..=10 {
+            let new_chain = Arc::new(mk_chain_with_updates(i, i, None));
+            let notif = ExExNotification::ChainCommitted { new: new_chain };
+
+            exex.handle_notification(notif, &collector, &sync_target_tx)
+                .await
+                .expect("handle chain commit");
+        }
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -872,14 +876,16 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain committed 1..10
-        let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
-        let notif = ExExNotification::ChainCommitted { new: new_chain };
-
         let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
-        exex.handle_notification(notif, &collector, &sync_target_tx)
-            .await
-            .expect("handle chain commit");
+
+        for i in 1..=10 {
+            let new_chain = Arc::new(mk_chain_with_updates(i, i, None));
+            let notif = ExExNotification::ChainCommitted { new: new_chain };
+
+            exex.handle_notification(notif, &collector, &sync_target_tx)
+                .await
+                .expect("handle chain commit");
+        }
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -919,14 +925,16 @@ mod tests {
 
         let exex = build_test_exex(ctx, proofs.clone());
 
-        // Notification: chain committed 1..10
-        let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
-        let notif = ExExNotification::ChainCommitted { new: new_chain };
-
         let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
-        exex.handle_notification(notif, &collector, &sync_target_tx)
-            .await
-            .expect("handle chain commit");
+
+        for i in 1..=5 {
+            let new_chain = Arc::new(mk_chain_with_updates(i, i, None));
+            let notif = ExExNotification::ChainCommitted { new: new_chain };
+
+            exex.handle_notification(notif, &collector, &sync_target_tx)
+                .await
+                .expect("handle chain commit");
+        }
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -1030,5 +1038,51 @@ mod tests {
         let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
         let err = exex.handle_notification(notif, &collector, &sync_target_tx).await.unwrap_err();
         assert_eq!(err.to_string(), "No blocks stored in proofs storage");
+    }
+
+    #[tokio::test]
+    async fn handle_notification_schedules_async_on_gap() {
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
+
+        init_storage(proofs.clone()).await;
+
+        let (ctx, _handle) =
+            reth_exex_test_utils::test_exex_context().await.expect("exex test context");
+
+        let collector = LiveTrieCollector::new(
+            ctx.components.components.evm_config.clone(),
+            ctx.components.provider.clone(),
+            &proofs,
+        );
+        let exex = build_test_exex(ctx, proofs.clone());
+
+        // Notification: chain committed 5..10 (Blocks 1,2,3,4 are missing from storage)
+        let new_chain = Arc::new(mk_chain_with_updates(5, 10, None));
+        let notif = ExExNotification::ChainCommitted { new: new_chain };
+
+        let (sync_target_tx, mut sync_target_rx) = tokio::sync::watch::channel(0u64);
+
+        // Process notification
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit should return ok immediately");
+
+        // Verify async signal was sent
+        // The target in the channel should now be 10 (the tip of the new chain)
+        assert_eq!(
+            *sync_target_rx.borrow_and_update(),
+            10,
+            "Should have scheduled sync to block 10"
+        );
+
+        // Verify Main Thread did NOT process it
+        // Because we didn't spawn the actual worker thread in this test, storage should still be at
+        // 0. This proves the 'handle_notification' returned instantly without doing the
+        // heavy lifting.
+        let latest = proofs.get_latest_block_number().await.expect("get").expect("ok").0;
+        assert_eq!(latest, 0, "Main thread should not have processed the blocks synchronously");
     }
 }
