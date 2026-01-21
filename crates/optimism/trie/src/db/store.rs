@@ -988,7 +988,7 @@ impl OpProofsStore for MdbxProofsStorage {
             // todo: refactor to use block hash from the block to add. We need to pass the
             // BlockNumHash type for the latest_common_block_number
             let mut proof_window_cursor = tx.new_cursor::<ProofWindow>()?;
-            proof_window_cursor.append(
+            proof_window_cursor.upsert(
                 ProofWindowKey::LatestBlock,
                 &BlockNumberHash::new(
                     latest_common_block_number,
