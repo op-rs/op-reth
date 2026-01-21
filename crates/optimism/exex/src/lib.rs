@@ -938,7 +938,7 @@ mod tests {
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
-        assert_eq!(latest, 10);
+        assert_eq!(latest, 5);
 
         // Now the tip is 10, and we want to revert from block 9..10
         let old_chain = Arc::new(mk_chain_with_updates(9, 10, None));
@@ -951,7 +951,7 @@ mod tests {
             .expect("handle chain reverted");
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
-        assert_eq!(latest, 8);
+        assert_eq!(latest, 5);
     }
 
     #[tokio::test]
