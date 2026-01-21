@@ -333,7 +333,7 @@ impl MdbxProofsStorage {
         let account_trie_keys = self.persist_history_batch(
             tx,
             block_number,
-            sorted_trie_updates.account_nodes_ref(),
+            sorted_trie_updates.account_nodes_ref().iter().cloned(),
             append_mode,
         )?;
         let hashed_account_keys = self.persist_history_batch(
@@ -349,9 +349,9 @@ impl MdbxProofsStorage {
             if nodes.is_deleted && append_mode {
                 // Yet to have any update for the current block number - So just using up to
                 // previous block number
-                let mut ro = self.storage_trie_cursor(hashed_address, block_number - 1)?;
+                let mut ro = self.storage_trie_cursor(*hashed_address, block_number - 1)?;
                 let keys =
-                    self.wipe_storage(tx, block_number, hashed_address, || Ok(ro.next()?))?;
+                    self.wipe_storage(tx, block_number, *hashed_address, || Ok(ro.next()?))?;
 
                 storage_trie_keys.extend(keys);
 
