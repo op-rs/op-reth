@@ -138,10 +138,10 @@ pub fn validate_block_post_execution<R: DepositReceipt>(
     let cumulative_gas_used =
         receipts.last().map(|receipt| receipt.cumulative_gas_used()).unwrap_or(0);
     if header.gas_used() != cumulative_gas_used {
-        return Err(OpConsensusError::Eth(ConsensusError::BlockGasUsed {
+        Err(ConsensusError::BlockGasUsed {
             gas: GotExpected { got: cumulative_gas_used, expected: header.gas_used() },
             gas_spent_by_tx: gas_spent_by_transactions(receipts),
-        }))
+        })?
     }
 
     Ok(())
