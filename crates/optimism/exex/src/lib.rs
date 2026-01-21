@@ -18,14 +18,23 @@ use reth_node_types::NodeTypes;
 use reth_optimism_trie::{
     live::LiveTrieCollector, OpProofStoragePrunerTask, OpProofsStorage, OpProofsStore,
 };
-use reth_provider::{BlockReader, TransactionVariant};
+use reth_provider::{BlockNumReader, BlockReader, TransactionVariant};
 use reth_trie::{updates::TrieUpdatesSorted, HashedPostStateSorted, SortedTrieData};
 use std::{sync::Arc, time::Duration};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 // Safety threshold for maximum blocks to prune automatically on startup.
 // If the required prune exceeds this, the node will error out and require manual pruning.
 const MAX_PRUNE_BLOCKS_STARTUP: u64 = 1000;
+
+/// How many blocks to process in a single batch before yielding
+const SYNC_BATCH_SIZE: usize = 50;
+
+/// How close to tip before we process blocks in real-time vs batch
+const REAL_TIME_THRESHOLD: u64 = 1024;
+
+/// How long to sleep when sync task is caught up
+const SYNC_IDLE_SLEEP_SECS: u64 = 5;
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
 ///
@@ -147,6 +156,7 @@ where
     /// Main execution loop for the ExEx
     pub async fn run(mut self) -> eyre::Result<()> {
         self.ensure_initialized().await?;
+        let sync_target_tx = self.spawn_sync_task();
 
         let prune_task = OpProofStoragePrunerTask::new(
             self.storage.clone(),
@@ -165,7 +175,7 @@ where
         );
 
         while let Some(notification) = self.ctx.notifications.try_next().await? {
-            self.handle_notification(notification, &collector).await?;
+            self.handle_notification(notification, &collector, &sync_target_tx).await?;
         }
 
         Ok(())
@@ -223,10 +233,100 @@ where
         Ok(())
     }
 
+    /// Spawn the background sync task and return the target sender
+    fn spawn_sync_task(&self) -> tokio::sync::watch::Sender<u64> {
+        let (sync_target_tx, sync_target_rx) = tokio::sync::watch::channel(0u64);
+
+        let task_storage = self.storage.clone();
+        let task_provider = self.ctx.provider().clone();
+        let task_evm_config = self.ctx.evm_config().clone();
+
+        self.ctx.task_executor().spawn_critical(
+            "optimism::exex::proofs_storage_sync_loop",
+            async move {
+                let storage = task_storage.clone();
+                let task_collector =
+                    LiveTrieCollector::new(task_evm_config, task_provider.clone(), &storage);
+                Self::sync_loop(sync_target_rx, task_storage, task_provider, &task_collector).await;
+            },
+        );
+
+        sync_target_tx
+    }
+
+    /// Background sync loop that processes blocks up to the target
+    async fn sync_loop(
+        mut sync_target_rx: tokio::sync::watch::Receiver<u64>,
+        storage: OpProofsStorage<Storage>,
+        provider: Node::Provider,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+    ) {
+        debug!(target: "optimism::exex", "Starting proofs storage sync loop");
+
+        loop {
+            let target = *sync_target_rx.borrow_and_update();
+            let latest = match storage.get_latest_block_number().await {
+                Ok(Some((n, _))) => n,
+                Ok(None) => {
+                    error!(target: "optimism::exex", "No blocks stored in proofs storage during sync loop");
+                    continue;
+                }
+                Err(e) => {
+                    error!(target: "optimism::exex", error = ?e, "Failed to get latest block");
+                    continue;
+                }
+            };
+
+            if latest >= target {
+                tokio::time::sleep(tokio::time::Duration::from_secs(SYNC_IDLE_SLEEP_SECS)).await;
+                continue;
+            }
+
+            // Process one batch
+            if let Err(e) =
+                Self::process_batch(latest, target, &provider, collector, SYNC_BATCH_SIZE).await
+            {
+                error!(target: "optimism::exex", error = ?e, "Batch processing failed");
+            }
+
+            // Yield to allow other tasks to run
+            debug!(target: "optimism::exex", latest_stored = latest, target, "Batch processed, yielding");
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Process a batch of blocks from start to target (up to `batch_size`)
+    async fn process_batch(
+        start: u64,
+        target: u64,
+        provider: &Node::Provider,
+        collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+        batch_size: usize,
+    ) -> eyre::Result<()> {
+        let end = (start + batch_size as u64).min(target);
+        debug!(
+            target: "optimism::exex",
+            start,
+            end,
+            "Processing proofs storage sync batch"
+        );
+
+        for block_num in (start + 1)..=end {
+            let block = provider
+                .recovered_block(block_num.into(), TransactionVariant::NoHash)?
+                .ok_or_else(|| eyre::eyre!("Missing block {}", block_num))?;
+
+            collector.execute_and_store_block_updates(&block).await?;
+        }
+
+        Ok(())
+    }
+
     async fn handle_notification(
         &self,
         notification: ExExNotification<Primitives>,
         collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+        sync_target_tx: &tokio::sync::watch::Sender<u64>,
     ) -> eyre::Result<()> {
         let latest_stored = match self.storage.get_latest_block_number().await? {
             Some((n, _)) => n,
@@ -237,7 +337,8 @@ where
 
         match &notification {
             ExExNotification::ChainCommitted { new } => {
-                self.handle_chain_committed(new.clone(), latest_stored, collector).await?
+                self.handle_chain_committed(new.clone(), latest_stored, collector, sync_target_tx)
+                    .await?
             }
             ExExNotification::ChainReorged { old, new } => {
                 self.handle_chain_reorged(old.clone(), new.clone(), latest_stored, collector)
@@ -260,6 +361,7 @@ where
         new: Arc<Chain<Primitives>>,
         latest_stored: u64,
         collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
+        sync_target_tx: &tokio::sync::watch::Sender<u64>,
     ) -> eyre::Result<()> {
         debug!(
             target: "optimism::exex",
@@ -279,10 +381,37 @@ where
             return Ok(());
         }
 
-        // Process each block from latest_stored + 1 to tip
-        let start = latest_stored.saturating_add(1);
-        for block_number in start..=new.tip().number() {
-            self.process_block(block_number, &new, collector).await?;
+        let best_block = self.ctx.provider().best_block_number()?;
+        let is_sequential = new.tip().number() == latest_stored + 1;
+        let is_near_tip = best_block.saturating_sub(new.tip().number()) < REAL_TIME_THRESHOLD;
+
+        if is_sequential && is_near_tip {
+            debug!(
+                target: "optimism::exex",
+                block_number = new.tip().number(),
+                latest_stored,
+                best_block,
+                "Processing in real-time"
+            );
+
+            // Process each block from latest_stored + 1 to tip
+            let start = latest_stored.saturating_add(1);
+            for block_number in start..=new.tip().number() {
+                self.process_block(block_number, &new, collector).await?;
+            }
+        } else {
+            debug!(
+                target: "optimism::exex",
+                block_number = new.tip().number(),
+                latest_stored,
+                best_block,
+                is_sequential,
+                is_near_tip,
+                "Scheduling batch processing via sync task"
+            );
+
+            // Update the sync target to the new tip
+            sync_target_tx.send(new.tip().number())?;
         }
 
         Ok(())
@@ -572,7 +701,11 @@ mod tests {
         let new_chain = Arc::new(mk_chain_with_updates(1, 5, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain commit");
+        let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
+
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit");
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -603,7 +736,10 @@ mod tests {
         let new_chain = Arc::new(mk_chain_with_updates(1, 5, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain commit");
+        let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit");
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -612,7 +748,9 @@ mod tests {
         // Try to handle already processed notification
         let new_chain = Arc::new(mk_chain_with_updates(5, 5, Some(hash_for_num(10))));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
-        exex.handle_notification(notif, &collector).await.expect("handle chain commit");
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit");
         let latest = proofs.get_latest_block_number().await.expect("get latest block").expect("ok");
         assert_eq!(latest.0, 5);
         assert_eq!(latest.1, hash_for_num(5)); // block was not updated
@@ -642,7 +780,10 @@ mod tests {
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain commit");
+        let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit");
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -655,7 +796,9 @@ mod tests {
         // Notification: chain reorged 6..12
         let notif = ExExNotification::ChainReorged { new: new_chain, old: old_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain re-orged");
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain re-orged");
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
         assert_eq!(latest, 12);
@@ -685,7 +828,10 @@ mod tests {
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain commit");
+        let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit");
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -698,7 +844,9 @@ mod tests {
         // Notification: chain reorged 12..15
         let notif = ExExNotification::ChainReorged { new: new_chain, old: old_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain re-orged");
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain re-orged");
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
         assert_eq!(latest, 10);
@@ -728,7 +876,10 @@ mod tests {
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain commit");
+        let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit");
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -740,7 +891,9 @@ mod tests {
         // Notification: chain reverted 9..10
         let notif = ExExNotification::ChainReverted { old: old_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain reverted");
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain reverted");
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
         assert_eq!(latest, 8);
@@ -770,7 +923,10 @@ mod tests {
         let new_chain = Arc::new(mk_chain_with_updates(1, 10, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain commit");
+        let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain commit");
 
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
@@ -782,7 +938,9 @@ mod tests {
         // Notification: chain reverted 9..10
         let notif = ExExNotification::ChainReverted { old: old_chain };
 
-        exex.handle_notification(notif, &collector).await.expect("handle chain reverted");
+        exex.handle_notification(notif, &collector, &sync_target_tx)
+            .await
+            .expect("handle chain reverted");
         let latest =
             proofs.get_latest_block_number().await.expect("get latest block").expect("ok").0;
         assert_eq!(latest, 8);
@@ -869,7 +1027,8 @@ mod tests {
         let new_chain = Arc::new(mk_chain_with_updates(1, 5, None));
         let notif = ExExNotification::ChainCommitted { new: new_chain };
 
-        let err = exex.handle_notification(notif, &collector).await.unwrap_err();
+        let (sync_target_tx, _) = tokio::sync::watch::channel(0u64);
+        let err = exex.handle_notification(notif, &collector, &sync_target_tx).await.unwrap_err();
         assert_eq!(err.to_string(), "No blocks stored in proofs storage");
     }
 }
