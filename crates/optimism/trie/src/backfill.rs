@@ -9,7 +9,7 @@ use reth_db::{
     DatabaseError,
 };
 use reth_primitives_traits::{Account, StorageEntry};
-use reth_trie::{BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles};
+use reth_trie_common::{BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles};
 use std::{collections::HashMap, time::Instant};
 use tracing::info;
 
@@ -371,20 +371,20 @@ mod tests {
     use reth_primitives_traits::Account;
     use reth_trie::{
         hashed_cursor::HashedCursor, trie_cursor::TrieCursor, BranchNodeCompact, StorageTrieEntry,
-        StoredNibbles, StoredNibblesSubKey,
+        StoredNibbles, StoredNibblesSubKey, TrieMask,
     };
     use std::sync::Arc;
 
     /// Helper function to create a test branch node
     fn create_test_branch_node() -> BranchNodeCompact {
-        let mut state_mask = reth_trie::TrieMask::default();
+        let mut state_mask = TrieMask::default();
         state_mask.set_bit(0);
         state_mask.set_bit(1);
 
         BranchNodeCompact {
             state_mask,
-            tree_mask: reth_trie::TrieMask::default(),
-            hash_mask: reth_trie::TrieMask::default(),
+            tree_mask: TrieMask::default(),
+            hash_mask: TrieMask::default(),
             hashes: Arc::new(vec![]),
             root_hash: None,
         }
