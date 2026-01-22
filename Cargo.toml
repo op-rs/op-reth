@@ -341,10 +341,10 @@ incremental = false
 [workspace.dependencies]
 # reth
 op-reth = { path = "crates/optimism/bin/op-reth" }
-reth = { path = "bin/reth" }
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-storage-rpc-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-bench = { path = "bin/reth-bench" }
+reth-bench = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-bench-compare = { path = "bin/reth-bench-compare" }
 op-reth-proof-bench = { path = "crates/optimism/bin/proof-bench" }
 reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
