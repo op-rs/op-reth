@@ -14,8 +14,9 @@ use reth_db::{
     DatabaseError,
 };
 use reth_primitives_traits::{Account, StorageEntry};
-use reth_trie_common::{BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles,
-StoredNibblesSubKey};
+use reth_trie_common::{
+    BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey,
+};
 use std::{collections::HashMap, time::Instant};
 use tracing::info;
 

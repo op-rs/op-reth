@@ -14,8 +14,7 @@ use reth_trie::{
     trie_cursor::{TrieCursor, TrieStorageCursor},
 };
 use reth_trie_common::{
-    updates::TrieUpdatesSorted, BranchNodeCompact, HashedPostStateSorted, Nibbles,
-StoredNibbles,
+    updates::TrieUpdatesSorted, BranchNodeCompact, HashedPostStateSorted, Nibbles, StoredNibbles,
 };
 use std::{fmt::Debug, time::Duration};
 
