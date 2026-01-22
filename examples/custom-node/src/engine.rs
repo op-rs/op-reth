@@ -19,7 +19,9 @@ use reth_ethereum::{
     storage::StateProviderFactory,
     trie::{KeccakKeyHasher, KeyHasher},
 };
-use reth_node_builder::{rpc::PayloadValidatorBuilder, InvalidPayloadAttributesError};
+use reth_node_builder::{
+    rpc::PayloadValidatorBuilder, InvalidPayloadAttributesError, NodePrimitives,
+};
 use reth_op::{
     node::{
         engine::OpEngineValidator, payload::OpAttributes, OpBuiltPayload, OpEngineTypes,
