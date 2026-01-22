@@ -11,40 +11,40 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-reth-static-file-types = { workspace = true, features = ["clap"] }
-reth-cli.workspace = true
-reth-cli-commands.workspace = true
-reth-consensus.workspace = true
-reth-rpc-server-types.workspace = true
-reth-primitives-traits.workspace = true
-reth-db = { workspace = true, features = ["mdbx", "op"] }
-reth-db-api.workspace = true
-reth-db-common.workspace = true
-reth-downloaders.workspace = true
-reth-provider.workspace = true
-reth-prune.workspace = true
-reth-stages.workspace = true
-reth-static-file.workspace = true
-reth-execution-types.workspace = true
-reth-node-core.workspace = true
-reth-optimism-node.workspace = true
-reth-fs-util.workspace = true
+reth-static-file-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["clap"] }
+reth-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["mdbx", "op"] }
+reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-downloaders = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-prune = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-stages = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-static-file = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-fs-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 # so jemalloc metrics can be included
 reth-node-metrics.workspace = true
 
 ## optimism
-reth-optimism-primitives.workspace = true
-reth-optimism-chainspec = { workspace = true, features = ["superchain-configs"] }
-reth-optimism-consensus.workspace = true
+reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["superchain-configs"] }
+reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-trie.workspace = true
 
-reth-chainspec.workspace = true
-reth-node-events.workspace = true
-reth-optimism-evm.workspace = true
-reth-cli-runner.workspace = true
-reth-node-builder = { workspace = true, features = ["op"] }
-reth-tracing.workspace = true
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-events = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-cli-runner = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["op"] }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 # eth
 alloy-eips.workspace = true
@@ -69,10 +69,10 @@ op-alloy-consensus.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-reth-stages = { workspace = true, features = ["test-utils"] }
+reth-stages = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
 
 [build-dependencies]
-reth-optimism-chainspec = { workspace = true, features = ["std", "superchain-configs"] }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["std", "superchain-configs"] }
 
 [features]
 default = []
