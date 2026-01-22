@@ -13,12 +13,12 @@ workspace = true
 
 [dependencies]
 # reth
-reth-exex.workspace = true
-reth-execution-types.workspace = true
-reth-node-types.workspace = true
-reth-node-api.workspace = true
-reth-trie.workspace = true
-reth-provider.workspace = true
+reth-exe = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 # op-reth
 # proofs exex handles `TrieUpdates` in notifications
@@ -37,12 +37,12 @@ tracing.workspace = true
 tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 futures.workspace = true
 reth-db = { workspace = true, features = ["op", "test-utils"] }
-reth-node-builder.workspace = true
-reth-optimism-node.workspace = true
-reth-optimism-chainspec.workspace = true
-reth-primitives-traits.workspace = true
-reth-ethereum-primitives.workspace = true
-reth-exex-test-utils.workspace = true
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 tempfile.workspace = true
 
 [features]

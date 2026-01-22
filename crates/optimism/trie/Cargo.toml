@@ -48,24 +48,24 @@ tracing.workspace = true
 derive_more.workspace = true
 
 [dev-dependencies]
-reth-codecs = { workspace = true, features = ["test-utils"] }
+reth-codecs = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
 test-case.workspace = true
-reth-db = { workspace = true, features = ["test-utils"] }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
 # workaround for failing doc test <https://github.com/op-rs/op-reth/pull/234>
-reth-db-api = { workspace = true, features = ["test-utils"] }
-reth-trie = { workspace = true, features = ["test-utils"] }
-reth-provider = { workspace = true, features = ["test-utils"] }
-reth-node-api.workspace = true
+reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
+reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 alloy-consensus.workspace = true
 alloy-genesis.workspace = true
-reth-chainspec.workspace = true
-reth-db-common.workspace = true
-reth-ethereum-primitives.workspace = true
-reth-evm-ethereum.workspace = true
-reth-testing-utils.workspace = true
-reth-storage-errors.workspace = true
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-storage-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 secp256k1.workspace = true
 mockall.workspace = true
 
