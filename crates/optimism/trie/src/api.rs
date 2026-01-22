@@ -1,7 +1,10 @@
 //! Storage API for external storage of intermediary trie nodes.
 
-use crate::OpProofsStorageResult;
-use alloy_eips::eip1898::BlockWithParent;
+use crate::{
+    db::{HashedStorageKey, StorageTrieKey},
+    OpProofsStorageResult,
+};
+use alloy_eips::{eip1898::BlockWithParent, BlockNumHash};
 use alloy_primitives::{map::HashMap, B256, U256};
 use auto_impl::auto_impl;
 use derive_more::{AddAssign, Constructor};
@@ -12,6 +15,7 @@ use reth_trie::{
 };
 use reth_trie_common::{
     updates::TrieUpdatesSorted, BranchNodeCompact, HashedPostStateSorted, Nibbles,
+StoredNibbles,
 };
 use std::{fmt::Debug, time::Duration};
 
@@ -171,7 +175,6 @@ pub trait OpProofsStore: Send + Sync + Debug {
     fn prune_earliest_state(
         &self,
         new_earliest_block_ref: BlockWithParent,
-        diff: BlockStateDiff,
     ) -> impl Future<Output = OpProofsStorageResult<WriteCounts>> + Send;
 
     /// Remove account, storage and trie updates from historical storage for all blocks till
@@ -194,4 +197,56 @@ pub trait OpProofsStore: Send + Sync + Debug {
         block_number: u64,
         hash: B256,
     ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
+}
+
+/// Status of the initial state anchor.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum InitialStateStatus {
+    /// Init isn't yet started
+    #[default]
+    NotStarted,
+    /// Init is in progress (some tables may already be populated)
+    InProgress,
+    /// Init completed successfully (all tables done + earliest block set)
+    Completed,
+}
+
+/// Anchor for the initial state.
+#[derive(Debug, Clone, Default)]
+pub struct InitialStateAnchor {
+    /// The block for which the initial state is being initialized. None if initialization is not
+    /// yet started.
+    pub block: Option<BlockNumHash>,
+    /// Whether initialization is still running or completed.
+    pub status: InitialStateStatus,
+    /// The latest key stored for `AccountTrieHistory`.
+    pub latest_account_trie_key: Option<StoredNibbles>,
+    /// The latest key stored for `StorageTrieHistory`.
+    pub latest_storage_trie_key: Option<StorageTrieKey>,
+    /// The latest key stored for `HashedAccountHistory`.
+    pub latest_hashed_account_key: Option<B256>,
+    /// The latest key stored for `HashedStorageHistory`.
+    pub latest_hashed_storage_key: Option<HashedStorageKey>,
+}
+
+/// Trait for storing and retrieving the initial state anchor.
+#[auto_impl(Arc)]
+pub trait OpProofsInitialStateStore: Send + Sync + Debug {
+    /// Read the current anchor.
+    fn initial_state_anchor(
+        &self,
+    ) -> impl Future<Output = OpProofsStorageResult<InitialStateAnchor>> + Send;
+
+    /// Create the anchor if it doesn't exist.
+    /// Returns `Err` if an anchor already exists (prevents accidental overwrite).
+    fn set_initial_state_anchor(
+        &self,
+        anchor: BlockNumHash,
+    ) -> impl Future<Output = OpProofsStorageResult<()>> + Send;
+
+    /// Commit the initial state - mark the anchor as completed and also set the earliest block
+    /// number to anchor.
+    fn commit_initial_state(
+        &self,
+    ) -> impl Future<Output = OpProofsStorageResult<BlockNumHash>> + Send;
 }
