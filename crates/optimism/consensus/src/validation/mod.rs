@@ -8,7 +8,7 @@ pub mod jovian;
 use reth_execution_types::BlockExecutionResult;
 pub use reth_optimism_chainspec::decode_holocene_base_fee;
 
-use crate::proof::calculate_receipt_root_optimism;
+use crate::{proof::calculate_receipt_root_optimism, OpConsensusError};
 use alloc::vec::Vec;
 use alloy_consensus::{BlockHeader, TxReceipt, EMPTY_OMMER_ROOT_HASH};
 use alloy_eips::Encodable2718;
@@ -94,7 +94,7 @@ pub fn validate_block_post_execution<R: DepositReceipt>(
     chain_spec: impl OpHardforks,
     result: &BlockExecutionResult<R>,
     receipt_root_bloom: Option<(B256, Bloom)>,
-) -> Result<(), ConsensusError> {
+) -> Result<(), OpConsensusError> {
     // Validate that the blob gas used is present and correctly computed if Jovian is active.
     if chain_spec.is_jovian_active_at_timestamp(header.timestamp()) {
         jovian::validate_blob_gas_used(&header, result)?;
@@ -130,7 +130,7 @@ pub fn validate_block_post_execution<R: DepositReceipt>(
                 .map(|r| Bytes::from(r.with_bloom_ref().encoded_2718()))
                 .collect::<Vec<_>>();
             tracing::debug!(%error, ?receipts, "receipts verification failed");
-            return Err(error)
+            Err(error)?
         }
     }
 
@@ -138,10 +138,10 @@ pub fn validate_block_post_execution<R: DepositReceipt>(
     let cumulative_gas_used =
         receipts.last().map(|receipt| receipt.cumulative_gas_used()).unwrap_or(0);
     if header.gas_used() != cumulative_gas_used {
-        return Err(ConsensusError::BlockGasUsed {
+        Err(ConsensusError::BlockGasUsed {
             gas: GotExpected { got: cumulative_gas_used, expected: header.gas_used() },
             gas_spent_by_tx: gas_spent_by_transactions(receipts),
-        })
+        })?
     }
 
     Ok(())
@@ -573,7 +573,7 @@ mod tests {
         };
         assert!(matches!(
             validate_block_post_execution(&header, &chainspec, &result, None).unwrap_err(),
-            ConsensusError::BlobGasUsedDiff(diff)
+            OpConsensusError::DAFootprintGasDiff(diff)
                 if diff.got == BLOB_GAS_USED && diff.expected == BLOB_GAS_USED + 1
         ));
     }

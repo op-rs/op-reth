@@ -4,7 +4,7 @@ use alloy_primitives::B256;
 use reth_db::DatabaseError;
 use reth_execution_errors::BlockExecutionError;
 use reth_provider::ProviderError;
-use reth_trie::Nibbles;
+use reth_trie_common::Nibbles;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::TryLockError;
@@ -90,12 +90,12 @@ pub enum OpProofsStorageError {
     /// Error occurred while interacting with the provider.
     #[error(transparent)]
     ProviderError(Arc<ProviderError>),
-    /// Backfill detected inconsistent state between proofs storage and source DB.
+    /// Initialization detected inconsistent state between proofs storage and source DB.
     #[error(
-        "Backfill detected inconsistent state. Proofs storage does not match source DB. \
-         Please clear proofs data and retry backfill."
+        "Initialization Proofs storage detected inconsistent state. Storage does not match source DB. \
+         Please clear proofs data and retry initialization."
     )]
-    BackfillInconsistentState,
+    InitializeStorageInconsistentState,
 }
 
 impl From<TryLockError> for OpProofsStorageError {
