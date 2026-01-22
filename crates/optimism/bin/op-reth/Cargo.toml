@@ -10,7 +10,7 @@ exclude.workspace = true
 
 [dependencies]
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-optimism-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-cli.workspace = true
 reth-optimism-rpc.workspace = true
 reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
