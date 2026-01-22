@@ -362,7 +362,11 @@ impl MdbxProofsStorage {
             let keys = self.persist_history_batch(
                 tx,
                 block_number,
-                nodes.storage_nodes.into_iter().map(|(path, node)| (hashed_address, path, node)),
+                nodes
+                    .storage_nodes_ref()
+                    .iter()
+                    .cloned()
+                    .map(|(path, node)| (*hashed_address, path, node)),
                 append_mode,
             )?;
             storage_trie_keys.extend(keys);
@@ -1993,12 +1997,12 @@ mod tests {
 
         // verify trie updates
         assert_eq!(
-            got.sorted_trie_updates.account_nodes,
-            block_state_diff.sorted_trie_updates.account_nodes,
+            got.sorted_trie_updates.account_nodes_ref(),
+            block_state_diff.sorted_trie_updates.account_nodes_ref(),
         );
         assert_eq!(
-            got.sorted_trie_updates.storage_tries,
-            block_state_diff.sorted_trie_updates.storage_tries,
+            got.sorted_trie_updates.storage_tries_ref(),
+            block_state_diff.sorted_trie_updates.storage_tries_ref(),
         );
 
         // verify post state
