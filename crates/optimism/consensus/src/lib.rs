@@ -491,7 +491,7 @@ mod tests {
         );
 
         // validate blob, it should fail blob gas used validation post execution.
-        let err = post_execution.unwrap_err();
+        let err: OpConsensusError = post_execution.unwrap_err().into();
         match err {
             ConsensusError::Custom(e) => {
                 let msg = e.to_string();
