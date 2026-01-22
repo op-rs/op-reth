@@ -3,6 +3,7 @@
 use alloc::sync::Arc;
 use alloy_primitives::B256;
 use reth_consensus::ConsensusError;
+use reth_primitives_traits::GotExpected;
 use reth_storage_errors::provider::ProviderError;
 
 /// Optimism consensus error.
@@ -28,6 +29,12 @@ pub enum OpConsensusError {
     /// L1 [`ConsensusError`], that also occurs on L2.
     #[error(transparent)]
     Eth(ConsensusError),
+    /// DA footprint gas missing from header
+    #[error("DA footprint gas missing from header")]
+    DAFootprintGasMissing,
+    /// DA footprint gas mismatch
+    #[error("DA footprint gas mismatch: {0:?}")]
+    DAFootprintGasDiff(GotExpected<u64>),
 }
 
 impl From<OpConsensusError> for ConsensusError {
