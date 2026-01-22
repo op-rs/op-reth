@@ -40,7 +40,7 @@ reth-optimism-payload-builder = { git = "https://github.com/paradigmxyz/reth", t
 reth-optimism-txpool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["reth-codec", "serde-bincode-compat", "serde"] }
 reth-optimism-forks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-optimism-trie = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-trie.workspace = true
 
 # ethereum
 alloy-eips.workspace = true
