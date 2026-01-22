@@ -3358,11 +3358,7 @@ dependencies = [
  "reth-db 1.10.1",
  "reth-db-api 1.10.1",
  "reth-db-common 1.10.1",
-<<<<<<< Updated upstream
  "reth-ethereum-consensus 1.10.1",
-=======
- "reth-ethereum-consensus",
->>>>>>> Stashed changes
  "reth-ethereum-primitives 1.10.1",
  "reth-evm 1.10.1",
  "reth-evm-ethereum 1.10.1",
@@ -3618,15 +3614,9 @@ dependencies = [
  "reth-network 1.10.1",
  "reth-network-api 1.10.1",
  "reth-network-peers 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
  "reth-payload-primitives 1.10.1",
  "reth-primitives 1.10.1",
-=======
- "reth-node-ethereum",
- "reth-payload-primitives 1.10.1",
- "reth-primitives",
->>>>>>> Stashed changes
  "reth-primitives-traits 1.10.1",
  "reth-provider 1.10.1",
  "reth-tracing 1.10.1",
@@ -3675,11 +3665,7 @@ dependencies = [
  "eyre",
  "reth-basic-payload-builder 1.10.1",
  "reth-ethereum",
-<<<<<<< Updated upstream
  "reth-ethereum-payload-builder 1.10.1",
-=======
- "reth-ethereum-payload-builder",
->>>>>>> Stashed changes
  "reth-payload-builder 1.10.1",
  "reth-tracing 1.10.1",
  "serde",
@@ -3773,11 +3759,7 @@ dependencies = [
  "futures-util",
  "reth-basic-payload-builder 1.10.1",
  "reth-ethereum",
-<<<<<<< Updated upstream
  "reth-ethereum-payload-builder 1.10.1",
-=======
- "reth-ethereum-payload-builder",
->>>>>>> Stashed changes
  "reth-payload-builder 1.10.1",
  "tracing",
 ]
@@ -6550,11 +6532,7 @@ dependencies = [
  "reth-db-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-node-builder 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-<<<<<<< Updated upstream
- "reth-optimism-cli 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
  "reth-optimism-cli",
->>>>>>> Stashed changes
  "reth-optimism-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-evm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-exex",
@@ -6579,7 +6557,7 @@ dependencies = [
  "futures",
  "hdrhistogram",
  "reqwest",
- "reth-cli-runner 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
+ "reth-cli-runner 1.10.1",
  "serde",
  "serde_json",
  "tokio",
@@ -7755,21 +7733,13 @@ dependencies = [
  "clap",
  "eyre",
  "reth-chainspec 1.10.1",
-<<<<<<< Updated upstream
  "reth-cli-runner 1.10.1",
-=======
- "reth-cli-runner",
->>>>>>> Stashed changes
  "reth-cli-util 1.10.1",
  "reth-consensus 1.10.1",
  "reth-consensus-common 1.10.1",
  "reth-db 1.10.1",
  "reth-ethereum-cli",
-<<<<<<< Updated upstream
  "reth-ethereum-payload-builder 1.10.1",
-=======
- "reth-ethereum-payload-builder",
->>>>>>> Stashed changes
  "reth-ethereum-primitives 1.10.1",
  "reth-evm 1.10.1",
  "reth-network 1.10.1",
@@ -7777,19 +7747,11 @@ dependencies = [
  "reth-node-api 1.10.1",
  "reth-node-builder 1.10.1",
  "reth-node-core 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
  "reth-node-metrics 1.10.1",
  "reth-payload-builder 1.10.1",
  "reth-payload-primitives 1.10.1",
  "reth-primitives 1.10.1",
-=======
- "reth-node-ethereum",
- "reth-node-metrics 1.10.1",
- "reth-payload-builder 1.10.1",
- "reth-payload-primitives 1.10.1",
- "reth-primitives",
->>>>>>> Stashed changes
  "reth-provider 1.10.1",
  "reth-ress-protocol",
  "reth-ress-provider",
@@ -7883,11 +7845,7 @@ dependencies = [
  "op-alloy-rpc-types-engine",
  "reqwest",
  "reth-chainspec 1.10.1",
-<<<<<<< Updated upstream
  "reth-cli-runner 1.10.1",
-=======
- "reth-cli-runner",
->>>>>>> Stashed changes
  "reth-cli-util 1.10.1",
  "reth-engine-primitives 1.10.1",
  "reth-ethereum-primitives 1.10.1",
@@ -7922,11 +7880,7 @@ dependencies = [
  "eyre",
  "nix 0.29.0",
  "reth-chainspec 1.10.1",
-<<<<<<< Updated upstream
  "reth-cli-runner 1.10.1",
-=======
- "reth-cli-runner",
->>>>>>> Stashed changes
  "reth-cli-util 1.10.1",
  "reth-node-core 1.10.1",
  "reth-tracing 1.10.1",
@@ -7960,11 +7914,7 @@ dependencies = [
  "reth-metrics 1.10.1",
  "reth-primitives-traits 1.10.1",
  "reth-storage-api 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-trie 1.10.1",
  "revm-database",
  "revm-state",
@@ -7982,11 +7932,8 @@ dependencies = [
  "alloy-consensus",
  "alloy-eips",
  "alloy-primitives",
-<<<<<<< Updated upstream
  "alloy-signer",
  "alloy-signer-local",
-=======
->>>>>>> Stashed changes
  "derive_more",
  "metrics",
  "parking_lot",
@@ -8055,7 +8002,6 @@ dependencies = [
  "alloy-genesis",
  "clap",
  "eyre",
-<<<<<<< Updated upstream
  "reth-cli-runner 1.10.1",
  "reth-db 1.10.1",
  "serde_json",
@@ -8072,10 +8018,6 @@ dependencies = [
  "eyre",
  "reth-cli-runner 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-cli-runner",
- "reth-db 1.10.1",
->>>>>>> Stashed changes
  "serde_json",
  "shellexpand",
 ]
@@ -8107,13 +8049,8 @@ dependencies = [
  "ratatui",
  "reqwest",
  "reth-chainspec 1.10.1",
-<<<<<<< Updated upstream
  "reth-cli 1.10.1",
  "reth-cli-runner 1.10.1",
-=======
- "reth-cli",
- "reth-cli-runner",
->>>>>>> Stashed changes
  "reth-cli-util 1.10.1",
  "reth-codecs 1.10.1",
  "reth-config 1.10.1",
@@ -8259,7 +8196,6 @@ name = "reth-cli-runner"
 version = "1.10.1"
 dependencies = [
  "reth-tasks 1.10.1",
-<<<<<<< Updated upstream
  "tokio",
  "tracing",
 ]
@@ -8270,8 +8206,6 @@ version = "1.10.1"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
 dependencies = [
  "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "tokio",
  "tracing",
 ]
@@ -8351,20 +8285,14 @@ dependencies = [
  "alloy-genesis",
  "alloy-primitives",
  "alloy-trie",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "bytes",
  "modular-bitfield",
  "op-alloy-consensus",
  "reth-codecs-derive 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-zstd-compressors 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "serde",
-<<<<<<< Updated upstream
  "visibility",
-=======
->>>>>>> Stashed changes
 ]
 
 [[package]]
@@ -8567,10 +8495,7 @@ dependencies = [
  "eyre",
  "metrics",
  "page_size",
-<<<<<<< Updated upstream
  "parking_lot",
-=======
->>>>>>> Stashed changes
  "reth-db-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-fs-util 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-libmdbx 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -8582,10 +8507,7 @@ dependencies = [
  "rustc-hash",
  "strum 0.27.2",
  "sysinfo",
-<<<<<<< Updated upstream
  "tempfile",
-=======
->>>>>>> Stashed changes
  "thiserror 2.0.18",
 ]
 
@@ -8627,26 +8549,17 @@ dependencies = [
  "alloy-consensus",
  "alloy-genesis",
  "alloy-primitives",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "bytes",
  "derive_more",
  "metrics",
  "modular-bitfield",
  "parity-scale-codec",
-<<<<<<< Updated upstream
  "proptest",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-db-models 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-db-models 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
->>>>>>> Stashed changes
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-prune-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-stages-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -8739,10 +8652,7 @@ source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a42
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "bytes",
  "modular-bitfield",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -8930,7 +8840,6 @@ dependencies = [
  "reth-provider 1.10.1",
  "reth-storage-api 1.10.1",
  "reth-tasks 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
  "reth-tracing 1.10.1",
  "tempfile",
@@ -8968,39 +8877,7 @@ dependencies = [
  "reth-storage-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-testing-utils 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-testing-utils",
- "reth-tracing 1.10.1",
->>>>>>> Stashed changes
  "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
-name = "reth-downloaders"
-version = "1.10.1"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
-dependencies = [
- "alloy-consensus",
- "alloy-eips",
- "alloy-primitives",
- "futures",
- "futures-util",
- "metrics",
- "pin-project",
- "rayon",
- "reth-config 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-metrics 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-network-p2p 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-network-peers 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-storage-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -9027,11 +8904,7 @@ dependencies = [
  "futures-util",
  "jsonrpsee",
  "reth-chainspec 1.10.1",
-<<<<<<< Updated upstream
  "reth-cli-commands 1.10.1",
-=======
- "reth-cli-commands",
->>>>>>> Stashed changes
  "reth-config 1.10.1",
  "reth-consensus 1.10.1",
  "reth-db 1.10.1",
@@ -9045,19 +8918,11 @@ dependencies = [
  "reth-node-api 1.10.1",
  "reth-node-builder 1.10.1",
  "reth-node-core 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
  "reth-payload-builder 1.10.1",
  "reth-payload-builder-primitives 1.10.1",
  "reth-payload-primitives 1.10.1",
  "reth-primitives 1.10.1",
-=======
- "reth-node-ethereum",
- "reth-payload-builder 1.10.1",
- "reth-payload-builder-primitives 1.10.1",
- "reth-payload-primitives 1.10.1",
- "reth-primitives",
->>>>>>> Stashed changes
  "reth-primitives-traits 1.10.1",
  "reth-provider 1.10.1",
  "reth-rpc-api 1.10.1",
@@ -9068,7 +8933,6 @@ dependencies = [
  "reth-tasks 1.10.1",
  "reth-tokio-util 1.10.1",
  "reth-tracing 1.10.1",
-<<<<<<< Updated upstream
  "revm",
  "serde_json",
  "tempfile",
@@ -9127,8 +8991,6 @@ dependencies = [
  "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tokio-util 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tracing 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "revm",
  "serde_json",
  "tempfile",
@@ -9302,22 +9164,14 @@ dependencies = [
  "reth-consensus 1.10.1",
  "reth-engine-primitives 1.10.1",
  "reth-engine-tree 1.10.1",
-<<<<<<< Updated upstream
  "reth-ethereum-consensus 1.10.1",
-=======
- "reth-ethereum-consensus",
->>>>>>> Stashed changes
  "reth-ethereum-engine-primitives 1.10.1",
  "reth-ethereum-primitives 1.10.1",
  "reth-evm 1.10.1",
  "reth-evm-ethereum 1.10.1",
  "reth-exex-types 1.10.1",
  "reth-network-p2p 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-node-types 1.10.1",
  "reth-payload-builder 1.10.1",
  "reth-primitives-traits 1.10.1",
@@ -9385,17 +9239,10 @@ dependencies = [
  "reth-consensus 1.10.1",
  "reth-db 1.10.1",
  "reth-db-common 1.10.1",
-<<<<<<< Updated upstream
  "reth-e2e-test-utils 1.10.1",
  "reth-engine-primitives 1.10.1",
  "reth-errors 1.10.1",
  "reth-ethereum-consensus 1.10.1",
-=======
- "reth-e2e-test-utils",
- "reth-engine-primitives 1.10.1",
- "reth-errors 1.10.1",
- "reth-ethereum-consensus",
->>>>>>> Stashed changes
  "reth-ethereum-engine-primitives 1.10.1",
  "reth-ethereum-primitives 1.10.1",
  "reth-evm 1.10.1",
@@ -9404,11 +9251,7 @@ dependencies = [
  "reth-exex-types 1.10.1",
  "reth-metrics 1.10.1",
  "reth-network-p2p 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-payload-builder 1.10.1",
  "reth-payload-primitives 1.10.1",
  "reth-primitives-traits 1.10.1",
@@ -9420,11 +9263,7 @@ dependencies = [
  "reth-stages-api 1.10.1",
  "reth-static-file 1.10.1",
  "reth-tasks 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tracing 1.10.1",
  "reth-trie 1.10.1",
  "reth-trie-common 1.10.1",
@@ -9465,10 +9304,7 @@ dependencies = [
  "parking_lot",
  "rayon",
  "reth-chain-state 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-<<<<<<< Updated upstream
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "reth-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-engine-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -9483,7 +9319,6 @@ dependencies = [
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-provider 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-prune 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-<<<<<<< Updated upstream
  "reth-prune-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-revm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-stages 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -9491,11 +9326,6 @@ dependencies = [
  "reth-static-file 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tracing 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-revm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-stages-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
->>>>>>> Stashed changes
  "reth-trie 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie-common 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -9752,10 +9582,7 @@ dependencies = [
  "alloy-chains",
  "alloy-primitives",
  "alloy-rlp",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "bytes",
  "derive_more",
  "futures",
@@ -9812,16 +9639,11 @@ dependencies = [
  "alloy-hardforks",
  "alloy-primitives",
  "alloy-rlp",
-<<<<<<< Updated upstream
  "arbitrary",
  "bytes",
  "derive_more",
  "proptest",
  "proptest-arbitrary-interop",
-=======
- "bytes",
- "derive_more",
->>>>>>> Stashed changes
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-codecs-derive 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -9845,11 +9667,7 @@ dependencies = [
  "reth-engine-local 1.10.1",
  "reth-eth-wire 1.10.1",
  "reth-ethereum-cli",
-<<<<<<< Updated upstream
  "reth-ethereum-consensus 1.10.1",
-=======
- "reth-ethereum-consensus",
->>>>>>> Stashed changes
  "reth-ethereum-primitives 1.10.1",
  "reth-evm 1.10.1",
  "reth-evm-ethereum 1.10.1",
@@ -9859,11 +9677,7 @@ dependencies = [
  "reth-node-api 1.10.1",
  "reth-node-builder 1.10.1",
  "reth-node-core 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-primitives-traits 1.10.1",
  "reth-provider 1.10.1",
  "reth-revm 1.10.1",
@@ -9885,24 +9699,14 @@ dependencies = [
  "clap",
  "eyre",
  "reth-chainspec 1.10.1",
-<<<<<<< Updated upstream
  "reth-cli 1.10.1",
  "reth-cli-commands 1.10.1",
  "reth-cli-runner 1.10.1",
-=======
- "reth-cli",
- "reth-cli-commands",
- "reth-cli-runner",
->>>>>>> Stashed changes
  "reth-db 1.10.1",
  "reth-node-api 1.10.1",
  "reth-node-builder 1.10.1",
  "reth-node-core 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-node-metrics 1.10.1",
  "reth-rpc-server-types 1.10.1",
  "reth-tracing 1.10.1",
@@ -9923,7 +9727,6 @@ dependencies = [
  "reth-ethereum-primitives 1.10.1",
  "reth-execution-types 1.10.1",
  "reth-primitives-traits 1.10.1",
-<<<<<<< Updated upstream
  "tracing",
 ]
 
@@ -9940,8 +9743,6 @@ dependencies = [
  "reth-consensus-common 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-execution-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "tracing",
 ]
 
@@ -10002,10 +9803,7 @@ dependencies = [
  "alloy-eip2124",
  "alloy-hardforks",
  "alloy-primitives",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "auto_impl",
  "once_cell",
  "rustc-hash",
@@ -10035,7 +9833,6 @@ dependencies = [
  "reth-revm 1.10.1",
  "reth-storage-api 1.10.1",
  "reth-transaction-pool 1.10.1",
-<<<<<<< Updated upstream
  "revm",
  "tracing",
 ]
@@ -10065,8 +9862,6 @@ dependencies = [
  "reth-revm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-storage-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-transaction-pool 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "revm",
  "tracing",
 ]
@@ -10109,10 +9904,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-rpc-types-eth",
  "alloy-serde",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "modular-bitfield",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -10209,11 +10001,7 @@ dependencies = [
  "reth-execution-types 1.10.1",
  "reth-primitives-traits 1.10.1",
  "reth-storage-errors 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "revm",
  "secp256k1 0.30.0",
 ]
@@ -10228,11 +10016,8 @@ dependencies = [
  "alloy-evm",
  "alloy-primitives",
  "alloy-rpc-types-engine",
-<<<<<<< Updated upstream
  "derive_more",
  "parking_lot",
-=======
->>>>>>> Stashed changes
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-ethereum-forks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -10339,11 +10124,7 @@ dependencies = [
  "reth-revm 1.10.1",
  "reth-stages-api 1.10.1",
  "reth-tasks 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tracing 1.10.1",
  "reth-trie-common 1.10.1",
  "rmp-serde",
@@ -10413,17 +10194,12 @@ dependencies = [
  "reth-node-api 1.10.1",
  "reth-node-builder 1.10.1",
  "reth-node-core 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-payload-builder 1.10.1",
  "reth-primitives-traits 1.10.1",
  "reth-provider 1.10.1",
  "reth-tasks 1.10.1",
  "reth-transaction-pool 1.10.1",
-<<<<<<< Updated upstream
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -10456,8 +10232,6 @@ dependencies = [
  "reth-provider 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-transaction-pool 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -10535,11 +10309,7 @@ dependencies = [
  "reth-provider 1.10.1",
  "reth-revm 1.10.1",
  "reth-rpc-api 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tracing 1.10.1",
  "reth-trie 1.10.1",
  "revm",
@@ -10938,10 +10708,7 @@ dependencies = [
  "auto_impl",
  "derive_more",
  "futures",
-<<<<<<< Updated upstream
  "parking_lot",
-=======
->>>>>>> Stashed changes
  "reth-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-eth-wire-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -11137,11 +10904,7 @@ dependencies = [
  "reth-network-p2p 1.10.1",
  "reth-node-api 1.10.1",
  "reth-node-core 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-node-ethstats 1.10.1",
  "reth-node-events 1.10.1",
  "reth-node-metrics 1.10.1",
@@ -11375,21 +11138,12 @@ dependencies = [
  "rand 0.9.2",
  "reth-chainspec 1.10.1",
  "reth-db 1.10.1",
-<<<<<<< Updated upstream
  "reth-e2e-test-utils 1.10.1",
  "reth-engine-local 1.10.1",
  "reth-engine-primitives 1.10.1",
  "reth-ethereum-consensus 1.10.1",
  "reth-ethereum-engine-primitives 1.10.1",
  "reth-ethereum-payload-builder 1.10.1",
-=======
- "reth-e2e-test-utils",
- "reth-engine-local 1.10.1",
- "reth-engine-primitives 1.10.1",
- "reth-ethereum-consensus",
- "reth-ethereum-engine-primitives 1.10.1",
- "reth-ethereum-payload-builder",
->>>>>>> Stashed changes
  "reth-ethereum-primitives 1.10.1",
  "reth-evm 1.10.1",
  "reth-evm-ethereum 1.10.1",
@@ -11410,11 +11164,7 @@ dependencies = [
  "reth-rpc-server-types 1.10.1",
  "reth-stages-types 1.10.1",
  "reth-tasks 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tracing 1.10.1",
  "reth-transaction-pool 1.10.1",
  "revm",
@@ -11595,32 +11345,15 @@ dependencies = [
  "eyre",
  "http",
  "http-body-util",
-<<<<<<< Updated upstream
- "jemalloc_pprof",
  "jsonrpsee-server",
- "mappings",
-=======
- "jsonrpsee-server",
->>>>>>> Stashed changes
  "metrics",
  "metrics-exporter-prometheus",
  "metrics-process",
  "metrics-util",
-<<<<<<< Updated upstream
- "pprof_util",
- "procfs 0.17.0",
- "reqwest",
- "reth-fs-util 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-metrics 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "tempfile",
- "tikv-jemalloc-ctl",
-=======
  "procfs 0.17.0",
  "reqwest",
  "reth-metrics 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
->>>>>>> Stashed changes
  "tokio",
  "tower",
  "tracing",
@@ -11653,7 +11386,6 @@ dependencies = [
 name = "reth-op"
 version = "1.10.1"
 dependencies = [
-<<<<<<< Updated upstream
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-cli-util 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -11670,7 +11402,7 @@ dependencies = [
  "reth-node-builder 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-node-core 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-cli 1.10.1",
+ "reth-optimism-cli",
  "reth-optimism-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-evm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-node 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -11688,42 +11420,6 @@ dependencies = [
  "reth-transaction-pool 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-chainspec 1.10.1",
- "reth-cli-util 1.10.1",
- "reth-codecs 1.10.1",
- "reth-consensus 1.10.1",
- "reth-consensus-common 1.10.1",
- "reth-db 1.10.1",
- "reth-engine-local 1.10.1",
- "reth-eth-wire 1.10.1",
- "reth-evm 1.10.1",
- "reth-exex 1.10.1",
- "reth-network 1.10.1",
- "reth-network-api 1.10.1",
- "reth-node-api 1.10.1",
- "reth-node-builder 1.10.1",
- "reth-node-core 1.10.1",
- "reth-optimism-chainspec 1.10.1",
- "reth-optimism-cli",
- "reth-optimism-consensus 1.10.1",
- "reth-optimism-evm 1.10.1",
- "reth-optimism-node 1.10.1",
- "reth-optimism-primitives 1.10.1",
- "reth-optimism-rpc 1.10.1",
- "reth-primitives-traits 1.10.1",
- "reth-provider 1.10.1",
- "reth-revm 1.10.1",
- "reth-rpc 1.10.1",
- "reth-rpc-api 1.10.1",
- "reth-rpc-builder 1.10.1",
- "reth-rpc-eth-types 1.10.1",
- "reth-storage-api 1.10.1",
- "reth-tasks 1.10.1",
- "reth-transaction-pool 1.10.1",
- "reth-trie 1.10.1",
- "reth-trie-db 1.10.1",
->>>>>>> Stashed changes
 ]
 
 [[package]]
@@ -11748,7 +11444,6 @@ dependencies = [
  "reth-optimism-forks 1.10.1",
  "reth-optimism-primitives 1.10.1",
  "reth-primitives-traits 1.10.1",
-<<<<<<< Updated upstream
  "serde",
  "serde_json",
  "tar-no-std",
@@ -11777,8 +11472,6 @@ dependencies = [
  "reth-optimism-forks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-optimism-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "serde",
  "serde_json",
  "tar-no-std",
@@ -11786,32 +11479,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reth-optimism-chainspec"
-version = "1.10.1"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
-dependencies = [
- "alloy-chains",
- "alloy-consensus",
- "alloy-eips",
- "alloy-genesis",
- "alloy-hardforks",
- "alloy-primitives",
- "derive_more",
- "miniz_oxide",
- "op-alloy-consensus",
- "op-alloy-rpc-types",
- "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-ethereum-forks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-network-peers 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-forks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "reth-optimism-cli"
 version = "1.10.1"
 dependencies = [
@@ -11825,7 +11492,6 @@ dependencies = [
  "futures-util",
  "op-alloy-consensus",
  "proptest",
-<<<<<<< Updated upstream
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-cli 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-cli-commands 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -11855,88 +11521,8 @@ dependencies = [
  "reth-static-file 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-static-file-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tracing 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-chainspec 1.10.1",
- "reth-cli",
- "reth-cli-commands",
- "reth-cli-runner",
- "reth-consensus 1.10.1",
- "reth-db 1.10.1",
- "reth-db-api 1.10.1",
- "reth-db-common 1.10.1",
- "reth-downloaders 1.10.1",
- "reth-execution-types 1.10.1",
- "reth-fs-util 1.10.1",
- "reth-node-builder 1.10.1",
- "reth-node-core 1.10.1",
- "reth-node-events 1.10.1",
- "reth-node-metrics 1.10.1",
- "reth-optimism-chainspec 1.10.1",
- "reth-optimism-consensus 1.10.1",
- "reth-optimism-evm 1.10.1",
- "reth-optimism-node 1.10.1",
- "reth-optimism-primitives 1.10.1",
- "reth-optimism-trie",
- "reth-primitives-traits 1.10.1",
- "reth-provider 1.10.1",
- "reth-prune 1.10.1",
- "reth-rpc-server-types 1.10.1",
- "reth-stages 1.10.1",
- "reth-static-file 1.10.1",
- "reth-static-file-types 1.10.1",
- "reth-tracing 1.10.1",
->>>>>>> Stashed changes
  "serde",
  "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
-name = "reth-optimism-cli"
-version = "1.10.1"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
-dependencies = [
- "alloy-consensus",
- "alloy-eips",
- "alloy-primitives",
- "alloy-rlp",
- "clap",
- "derive_more",
- "eyre",
- "futures-util",
- "op-alloy-consensus",
- "proptest",
- "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-cli 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-cli-commands 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-cli-runner 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-db-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-db-common 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-downloaders 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-execution-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-fs-util 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-node-builder 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-node-core 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-node-events 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-node-metrics 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-evm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-node 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-provider 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-prune 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-rpc-server-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-stages 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-static-file 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-static-file-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-tracing 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "serde",
  "tokio",
  "tokio-util",
  "tracing",
@@ -12065,7 +11651,6 @@ dependencies = [
  "futures",
  "futures-util",
  "reth-db 1.10.1",
-<<<<<<< Updated upstream
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-execution-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-exex 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -12079,21 +11664,6 @@ dependencies = [
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-provider 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-ethereum-primitives 1.10.1",
- "reth-execution-types 1.10.1",
- "reth-exex 1.10.1",
- "reth-exex-test-utils",
- "reth-node-api 1.10.1",
- "reth-node-builder 1.10.1",
- "reth-node-types 1.10.1",
- "reth-optimism-chainspec 1.10.1",
- "reth-optimism-node 1.10.1",
- "reth-optimism-trie",
- "reth-primitives-traits 1.10.1",
- "reth-provider 1.10.1",
- "reth-trie 1.10.1",
->>>>>>> Stashed changes
  "tempfile",
  "tokio",
  "tracing",
@@ -12216,11 +11786,7 @@ dependencies = [
  "reth-chainspec 1.10.1",
  "reth-consensus 1.10.1",
  "reth-db 1.10.1",
-<<<<<<< Updated upstream
  "reth-e2e-test-utils 1.10.1",
-=======
- "reth-e2e-test-utils",
->>>>>>> Stashed changes
  "reth-engine-local 1.10.1",
  "reth-evm 1.10.1",
  "reth-network 1.10.1",
@@ -12253,7 +11819,6 @@ dependencies = [
  "reth-transaction-pool 1.10.1",
  "reth-trie-common 1.10.1",
  "reth-trie-db 1.10.1",
-<<<<<<< Updated upstream
  "revm",
  "serde",
  "serde_json",
@@ -12304,57 +11869,9 @@ dependencies = [
  "reth-tracing 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-transaction-pool 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie-common 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "revm",
  "serde",
  "serde_json",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "reth-optimism-node"
-version = "1.10.1"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
-dependencies = [
- "alloy-consensus",
- "alloy-primitives",
- "alloy-rpc-types-engine",
- "alloy-rpc-types-eth",
- "clap",
- "eyre",
- "op-alloy-consensus",
- "op-alloy-rpc-types-engine",
- "op-revm",
- "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-engine-local 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-evm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-network 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-node-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-node-builder 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-node-core 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-evm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-forks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-payload-builder 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-rpc 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-storage 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-optimism-txpool 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-payload-builder 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-provider 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-rpc-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-rpc-engine-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-rpc-server-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-tracing 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-transaction-pool 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-trie-common 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "revm",
- "serde",
  "tokio",
  "url",
 ]
@@ -12512,7 +12029,6 @@ dependencies = [
  "op-alloy-rpc-types-engine",
  "op-revm",
  "reqwest",
-<<<<<<< Updated upstream
  "reth-basic-payload-builder 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-chain-state 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -12541,36 +12057,6 @@ dependencies = [
  "reth-storage-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-tasks 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-transaction-pool 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-basic-payload-builder 1.10.1",
- "reth-chain-state 1.10.1",
- "reth-chainspec 1.10.1",
- "reth-evm 1.10.1",
- "reth-metrics 1.10.1",
- "reth-node-api 1.10.1",
- "reth-node-builder 1.10.1",
- "reth-optimism-chainspec 1.10.1",
- "reth-optimism-evm 1.10.1",
- "reth-optimism-flashblocks 1.10.1",
- "reth-optimism-forks 1.10.1",
- "reth-optimism-payload-builder 1.10.1",
- "reth-optimism-primitives 1.10.1",
- "reth-optimism-trie",
- "reth-optimism-txpool 1.10.1",
- "reth-payload-util 1.10.1",
- "reth-primitives-traits 1.10.1",
- "reth-provider 1.10.1",
- "reth-revm 1.10.1",
- "reth-rpc 1.10.1",
- "reth-rpc-api 1.10.1",
- "reth-rpc-engine-api 1.10.1",
- "reth-rpc-eth-api 1.10.1",
- "reth-rpc-eth-types 1.10.1",
- "reth-rpc-server-types 1.10.1",
- "reth-storage-api 1.10.1",
- "reth-tasks 1.10.1",
- "reth-transaction-pool 1.10.1",
->>>>>>> Stashed changes
  "revm",
  "serde",
  "serde_json",
@@ -12680,7 +12166,6 @@ dependencies = [
  "eyre",
  "metrics",
  "mockall",
-<<<<<<< Updated upstream
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -12700,27 +12185,6 @@ dependencies = [
  "reth-testing-utils 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie-common 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-chainspec 1.10.1",
- "reth-codecs 1.10.1",
- "reth-db 1.10.1",
- "reth-db-api 1.10.1",
- "reth-db-common 1.10.1",
- "reth-ethereum-primitives 1.10.1",
- "reth-evm 1.10.1",
- "reth-evm-ethereum 1.10.1",
- "reth-execution-errors 1.10.1",
- "reth-metrics 1.10.1",
- "reth-node-api 1.10.1",
- "reth-primitives-traits 1.10.1",
- "reth-provider 1.10.1",
- "reth-revm 1.10.1",
- "reth-storage-errors 1.10.1",
- "reth-tasks 1.10.1",
- "reth-testing-utils",
- "reth-trie 1.10.1",
- "reth-trie-common 1.10.1",
->>>>>>> Stashed changes
  "secp256k1 0.30.0",
  "serde",
  "serial_test",
@@ -12973,7 +12437,6 @@ dependencies = [
  "reth-ethereum-primitives 1.10.1",
  "reth-primitives-traits 1.10.1",
  "reth-static-file-types 1.10.1",
-<<<<<<< Updated upstream
 ]
 
 [[package]]
@@ -12987,8 +12450,6 @@ dependencies = [
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-static-file-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
 ]
 
 [[package]]
@@ -13096,11 +12557,7 @@ dependencies = [
  "reth-static-file-types 1.10.1",
  "reth-storage-api 1.10.1",
  "reth-storage-errors 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tracing 1.10.1",
  "reth-trie 1.10.1",
  "reth-trie-db 1.10.1",
@@ -13136,10 +12593,7 @@ dependencies = [
  "reth-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-db-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-errors 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-<<<<<<< Updated upstream
  "reth-ethereum-engine-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-execution-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-metrics 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -13154,14 +12608,10 @@ dependencies = [
  "reth-trie 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "revm-database",
-<<<<<<< Updated upstream
  "revm-state",
  "rocksdb",
  "strum 0.27.2",
  "tokio",
-=======
- "strum 0.27.2",
->>>>>>> Stashed changes
  "tracing",
 ]
 
@@ -13188,11 +12638,7 @@ dependencies = [
  "reth-stages 1.10.1",
  "reth-stages-types 1.10.1",
  "reth-static-file-types 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tokio-util 1.10.1",
  "reth-tracing 1.10.1",
  "rustc-hash",
@@ -13258,10 +12704,7 @@ version = "1.10.1"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
 dependencies = [
  "alloy-primitives",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "derive_more",
  "modular-bitfield",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -13417,11 +12860,7 @@ dependencies = [
  "reth-rpc-server-types 1.10.1",
  "reth-storage-api 1.10.1",
  "reth-tasks 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-transaction-pool 1.10.1",
  "reth-trie-common 1.10.1",
  "revm",
@@ -13629,11 +13068,7 @@ dependencies = [
  "reth-network-api 1.10.1",
  "reth-network-peers 1.10.1",
  "reth-node-core 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-payload-builder 1.10.1",
  "reth-primitives-traits 1.10.1",
  "reth-provider 1.10.1",
@@ -13762,15 +13197,9 @@ dependencies = [
  "futures-util",
  "jsonrpsee",
  "reth-chainspec 1.10.1",
-<<<<<<< Updated upstream
  "reth-e2e-test-utils 1.10.1",
  "reth-node-api 1.10.1",
  "reth-node-ethereum 1.10.1",
-=======
- "reth-e2e-test-utils",
- "reth-node-api 1.10.1",
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-rpc-api 1.10.1",
  "reth-tracing 1.10.1",
  "serde_json",
@@ -13797,11 +13226,7 @@ dependencies = [
  "reth-ethereum-primitives 1.10.1",
  "reth-metrics 1.10.1",
  "reth-network-api 1.10.1",
-<<<<<<< Updated upstream
  "reth-node-ethereum 1.10.1",
-=======
- "reth-node-ethereum",
->>>>>>> Stashed changes
  "reth-payload-builder 1.10.1",
  "reth-payload-builder-primitives 1.10.1",
  "reth-payload-primitives 1.10.1",
@@ -13810,11 +13235,7 @@ dependencies = [
  "reth-rpc-api 1.10.1",
  "reth-storage-api 1.10.1",
  "reth-tasks 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-transaction-pool 1.10.1",
  "serde",
  "thiserror 2.0.18",
@@ -14126,11 +13547,7 @@ dependencies = [
  "reth-era 1.10.1",
  "reth-era-downloader 1.10.1",
  "reth-era-utils 1.10.1",
-<<<<<<< Updated upstream
  "reth-ethereum-consensus 1.10.1",
-=======
- "reth-ethereum-consensus",
->>>>>>> Stashed changes
  "reth-ethereum-primitives 1.10.1",
  "reth-etl 1.10.1",
  "reth-evm 1.10.1",
@@ -14150,7 +13567,6 @@ dependencies = [
  "reth-static-file-types 1.10.1",
  "reth-storage-api 1.10.1",
  "reth-storage-errors 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
  "reth-trie 1.10.1",
  "reth-trie-db 1.10.1",
@@ -14203,57 +13619,7 @@ dependencies = [
  "reth-testing-utils 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-trie-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
- "reth-testing-utils",
- "reth-trie 1.10.1",
- "reth-trie-db 1.10.1",
->>>>>>> Stashed changes
  "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "reth-stages"
-version = "1.10.1"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
-dependencies = [
- "alloy-consensus",
- "alloy-eips",
- "alloy-primitives",
- "bincode 1.3.3",
- "eyre",
- "futures-util",
- "itertools 0.14.0",
- "num-traits",
- "rayon",
- "reqwest",
- "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-config 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-consensus 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-db-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-era 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-era-downloader 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-era-utils 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-etl 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-evm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-execution-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-exex 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-fs-util 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-network-p2p 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-provider 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-prune 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-prune-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-revm 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-stages-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-static-file-types 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-storage-api 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-storage-errors 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-trie 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
- "reth-trie-db 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -14283,11 +13649,7 @@ dependencies = [
  "reth-stages-types 1.10.1",
  "reth-static-file 1.10.1",
  "reth-static-file-types 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tokio-util 1.10.1",
  "thiserror 2.0.18",
  "tokio",
@@ -14344,10 +13706,7 @@ version = "1.10.1"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
 dependencies = [
  "alloy-primitives",
-<<<<<<< Updated upstream
  "arbitrary",
-=======
->>>>>>> Stashed changes
  "bytes",
  "modular-bitfield",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -14370,11 +13729,7 @@ dependencies = [
  "reth-chainspec 1.10.1",
  "reth-consensus 1.10.1",
  "reth-errors 1.10.1",
-<<<<<<< Updated upstream
  "reth-ethereum-consensus 1.10.1",
-=======
- "reth-ethereum-consensus",
->>>>>>> Stashed changes
  "reth-ethereum-primitives 1.10.1",
  "reth-evm 1.10.1",
  "reth-primitives-traits 1.10.1",
@@ -14404,11 +13759,7 @@ dependencies = [
  "reth-stages-types 1.10.1",
  "reth-static-file-types 1.10.1",
  "reth-storage-errors 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tokio-util 1.10.1",
  "tempfile",
  "tracing",
@@ -14455,10 +13806,7 @@ version = "1.10.1"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
 dependencies = [
  "alloy-primitives",
-<<<<<<< Updated upstream
  "clap",
-=======
->>>>>>> Stashed changes
  "derive_more",
  "fixed-map",
  "serde",
@@ -14562,11 +13910,7 @@ dependencies = [
  "reth-errors 1.10.1",
  "reth-execution-types 1.10.1",
  "reth-node-types 1.10.1",
-<<<<<<< Updated upstream
  "reth-primitives 1.10.1",
-=======
- "reth-primitives",
->>>>>>> Stashed changes
  "reth-provider 1.10.1",
  "reth-prune-types 1.10.1",
  "reth-rpc-convert 1.10.1",
@@ -14626,7 +13970,6 @@ dependencies = [
  "rand 0.9.2",
  "reth-ethereum-primitives 1.10.1",
  "reth-primitives-traits 1.10.1",
-<<<<<<< Updated upstream
  "secp256k1 0.30.0",
 ]
 
@@ -14643,8 +13986,6 @@ dependencies = [
  "rand 0.9.2",
  "reth-ethereum-primitives 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "secp256k1 0.30.0",
 ]
 
@@ -14674,7 +14015,6 @@ dependencies = [
  "clap",
  "eyre",
  "reth-tracing-otlp 1.10.1",
-<<<<<<< Updated upstream
  "rolling-file",
  "tracing",
  "tracing-appender",
@@ -14694,8 +14034,6 @@ dependencies = [
  "clap",
  "eyre",
  "reth-tracing-otlp 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
-=======
->>>>>>> Stashed changes
  "rolling-file",
  "tracing",
  "tracing-appender",
@@ -14705,22 +14043,6 @@ dependencies = [
  "tracing-subscriber 0.3.22",
  "tracing-tracy",
  "tracy-client",
-]
-
-[[package]]
-name = "reth-tracing"
-version = "1.10.1"
-source = "git+https://github.com/paradigmxyz/reth?tag=v1.10.1#c9dad4765df6c96a427d513227e09767e8e56f14"
-dependencies = [
- "clap",
- "eyre",
- "rolling-file",
- "tracing",
- "tracing-appender",
- "tracing-journald",
- "tracing-logfmt",
- "tracing-samply",
- "tracing-subscriber 0.3.22",
 ]
 
 [[package]]
@@ -14748,10 +14070,7 @@ dependencies = [
  "clap",
  "eyre",
  "opentelemetry",
-<<<<<<< Updated upstream
  "opentelemetry-appender-tracing",
-=======
->>>>>>> Stashed changes
  "opentelemetry-otlp",
  "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
@@ -14824,14 +14143,10 @@ dependencies = [
  "futures-util",
  "metrics",
  "parking_lot",
-<<<<<<< Updated upstream
  "paste",
  "pin-project",
  "proptest",
  "proptest-arbitrary-interop",
-=======
- "pin-project",
->>>>>>> Stashed changes
  "rand 0.9.2",
  "reth-chain-state 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-chainspec 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -14913,10 +14228,7 @@ dependencies = [
  "reth-trie-sparse 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "revm-database",
  "tracing",
-<<<<<<< Updated upstream
  "triehash",
-=======
->>>>>>> Stashed changes
 ]
 
 [[package]]
@@ -14963,7 +14275,6 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-serde",
  "alloy-trie",
-<<<<<<< Updated upstream
  "arbitrary",
  "arrayvec",
  "bytes",
@@ -14972,13 +14283,6 @@ dependencies = [
  "itertools 0.14.0",
  "nybbles",
  "plain_hasher",
-=======
- "arrayvec",
- "bytes",
- "derive_more",
- "itertools 0.14.0",
- "nybbles",
->>>>>>> Stashed changes
  "rayon",
  "reth-codecs 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
  "reth-primitives-traits 1.10.1 (git+https://github.com/paradigmxyz/reth?tag=v1.10.1)",
@@ -15117,11 +14421,7 @@ dependencies = [
  "reth-primitives-traits 1.10.1",
  "reth-provider 1.10.1",
  "reth-storage-api 1.10.1",
-<<<<<<< Updated upstream
  "reth-testing-utils 1.10.1",
-=======
- "reth-testing-utils",
->>>>>>> Stashed changes
  "reth-tracing 1.10.1",
  "reth-trie 1.10.1",
  "reth-trie-common 1.10.1",
