@@ -13,7 +13,7 @@ workspace = true
 
 [dependencies]
 # reth
-reth-exe = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-exex = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-node-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
