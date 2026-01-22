@@ -81,7 +81,12 @@ where
         result: &BlockExecutionResult<N::Receipt>,
         receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
-        validate_block_post_execution(block.header(), &self.chain_spec, result, receipt_root_bloom)
+        Ok(validate_block_post_execution(
+            block.header(),
+            &self.chain_spec,
+            result,
+            receipt_root_bloom,
+        )?)
     }
 }
 
@@ -251,7 +256,7 @@ mod tests {
     use reth_primitives_traits::{proofs, RecoveredBlock, SealedBlock, SealedHeader};
     use reth_provider::BlockExecutionResult;
 
-    use crate::OpBeaconConsensus;
+    use crate::{OpBeaconConsensus, OpConsensusError};
 
     fn mock_tx(nonce: u64) -> OpTransactionSigned {
         let tx = TxEip7702 {
@@ -486,9 +491,10 @@ mod tests {
         );
 
         // validate blob, it should fail blob gas used validation post execution.
+        let err: OpConsensusError = post_execution.unwrap_err().into();
         assert!(matches!(
-            post_execution.unwrap_err(),
-            ConsensusError::BlobGasUsedDiff(diff)
+            err,
+            OpConsensusError::DAFootprintGasDiff(diff)
                 if diff.got == BLOB_GAS_USED + 1 && diff.expected == BLOB_GAS_USED
         ));
     }
