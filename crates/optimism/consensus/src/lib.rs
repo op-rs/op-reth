@@ -256,7 +256,7 @@ mod tests {
     use reth_primitives_traits::{proofs, RecoveredBlock, SealedBlock, SealedHeader};
     use reth_provider::BlockExecutionResult;
 
-    use crate::OpBeaconConsensus;
+    use crate::{OpBeaconConsensus, OpConsensusError};
 
     fn mock_tx(nonce: u64) -> OpTransactionSigned {
         let tx = TxEip7702 {
@@ -493,13 +493,11 @@ mod tests {
         // validate blob, it should fail blob gas used validation post execution.
         let err: OpConsensusError = post_execution.unwrap_err().into();
         match err {
-            ConsensusError::Custom(e) => {
-                let msg = e.to_string();
-                assert!(msg.contains("DA footprint gas mismatch"));
-                assert!(msg.contains("got: 1001"));
-                assert!(msg.contains("expected: 1000"));
+            OpConsensusError::DAFootprintGasDiff(diff) => {
+                assert_eq!(diff.got, BLOB_GAS_USED + 1);
+                assert_eq!(diff.expected, BLOB_GAS_USED);
             }
-            _ => panic!("Expected ConsensusError::Custom, got {:?}", err),
+            _ => panic!("Expected OpConsensusError::DAFootprintGasDiff, got {:?}", err),
         }
     }
 
