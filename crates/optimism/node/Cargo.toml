@@ -12,36 +12,36 @@ workspace = true
 
 [dependencies]
 # reth
-reth-chainspec.workspace = true
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 ## ensure secp256k1 recovery with rayon support is activated
-reth-primitives-traits = { workspace = true, features = ["secp256k1", "rayon"] }
-reth-payload-builder.workspace = true
-reth-consensus.workspace = true
-reth-node-api.workspace = true
-reth-node-builder.workspace = true
-reth-tracing.workspace = true
-reth-provider.workspace = true
-reth-transaction-pool.workspace = true
-reth-network.workspace = true
-reth-evm.workspace = true
-reth-rpc-server-types.workspace = true
-reth-tasks = { workspace = true, optional = true }
-reth-trie-common.workspace = true
-reth-node-core.workspace = true
-reth-rpc-engine-api.workspace = true
-reth-engine-local = { workspace = true, features = ["op"] }
-reth-rpc-api.workspace = true
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["secp256k1", "rayon"] }
+reth-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-network = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-trie-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-engine-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-engine-local = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["op"] }
+reth-rpc-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 # op-reth
-reth-optimism-payload-builder.workspace = true
-reth-optimism-evm = { workspace = true, features = ["std", "rpc"] }
+reth-optimism-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["std", "rpc"] }
 reth-optimism-rpc.workspace = true
-reth-optimism-storage.workspace = true
-reth-optimism-txpool.workspace = true
-reth-optimism-chainspec.workspace = true
-reth-optimism-consensus = { workspace = true, features = ["std"] }
-reth-optimism-forks.workspace = true
-reth-optimism-primitives = { workspace = true, features = ["serde", "serde-bincode-compat", "reth-codec"] }
+reth-optimism-storage = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-txpool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["std"] }
+reth-optimism-forks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["serde", "serde-bincode-compat", "reth-codec"] }
 
 # revm with required optimism features
 # Note: this must be kept to ensure all features are properly enabled/forwarded
@@ -72,16 +72,16 @@ serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 reth-optimism-node = { workspace = true, features = ["test-utils"] }
-reth-db = { workspace = true, features = ["op", "test-utils"] }
-reth-node-builder = { workspace = true, features = ["test-utils"] }
-reth-provider = { workspace = true, features = ["test-utils"] }
-reth-tasks.workspace = true
-reth-payload-util.workspace = true
-reth-revm = { workspace = true, features = ["std"] }
-reth-rpc.workspace = true
-reth-rpc-eth-types.workspace = true
-reth-stages-types.workspace = true
-reth-trie-db.workspace = true
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["op", "test-utils"] }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["test-utils"] }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-payload-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["std"] }
+reth-rpc = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-stages-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-trie-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 alloy-network.workspace = true
 alloy-op-hardforks.workspace = true
