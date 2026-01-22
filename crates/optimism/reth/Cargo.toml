@@ -12,40 +12,40 @@ workspace = true
 
 [dependencies]
 # reth
-reth-primitives-traits = { workspace = true, features = ["op"] }
-reth-chainspec.workspace = true
-reth-network = { workspace = true, optional = true }
-reth-network-api = { workspace = true, optional = true }
-reth-eth-wire = { workspace = true, optional = true }
-reth-provider = { workspace = true, optional = true }
-reth-db = { workspace = true, optional = true, features = ["mdbx", "op"] }
-reth-codecs = { workspace = true, optional = true }
-reth-storage-api = { workspace = true, optional = true }
-reth-node-api = { workspace = true, optional = true }
-reth-node-core = { workspace = true, optional = true }
-reth-consensus = { workspace = true, optional = true }
-reth-consensus-common = { workspace = true, optional = true }
-reth-evm = { workspace = true, optional = true }
-reth-revm = { workspace = true, optional = true }
-reth-rpc = { workspace = true, optional = true }
-reth-rpc-api = { workspace = true, optional = true }
-reth-rpc-eth-types = { workspace = true, optional = true }
-reth-rpc-builder = { workspace = true, optional = true }
-reth-exex = { workspace = true, optional = true }
-reth-transaction-pool = { workspace = true, optional = true }
-reth-trie = { workspace = true, optional = true }
-reth-trie-db = { workspace = true, optional = true }
-reth-node-builder = { workspace = true, optional = true }
-reth-tasks = { workspace = true, optional = true }
-reth-cli-util = { workspace = true, optional = true }
-reth-engine-local = { workspace = true, optional = true }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", features = ["op"] }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-network = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-network-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true, features = ["mdbx", "op"] }
+reth-codecs = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-consensus-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-rpc = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-rpc-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-exex = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-trie-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-engine-local = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
 
 # reth-op
-reth-optimism-primitives.workspace = true
-reth-optimism-chainspec.workspace = true
-reth-optimism-consensus = { workspace = true, optional = true }
-reth-optimism-evm = { workspace = true, optional = true }
-reth-optimism-node = { workspace = true, optional = true }
+reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
+reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", optional = true }
 reth-optimism-rpc = { workspace = true, optional = true }
 reth-optimism-cli = { workspace = true, optional = true }
 
