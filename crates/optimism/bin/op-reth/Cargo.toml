@@ -9,23 +9,23 @@ repository.workspace = true
 exclude.workspace = true
 
 [dependencies]
-reth-cli-util.workspace = true
-reth-optimism-cli.workspace = true
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-rpc.workspace = true
-reth-optimism-node.workspace = true
-reth-optimism-chainspec.workspace = true
-reth-optimism-consensus.workspace = true
-reth-optimism-evm.workspace = true
-reth-optimism-payload-builder.workspace = true
-reth-optimism-primitives.workspace = true
-reth-optimism-forks.workspace = true
+reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-forks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-exex = { workspace = true, features = ["metrics"] }
 reth-optimism-trie = { workspace = true, features = ["metrics"] }
-reth-node-builder.workspace = true
-reth-db-api.workspace = true
-reth-chainspec.workspace = true
-reth-db.workspace = true
-reth-tasks.workspace = true
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 clap = { workspace = true, features = ["derive", "env"] }
 tracing.workspace = true
