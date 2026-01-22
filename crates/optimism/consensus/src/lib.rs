@@ -492,8 +492,6 @@ mod tests {
 
         // validate blob, it should fail blob gas used validation post execution.
         let err: OpConsensusError = post_execution.unwrap_err().into();
-        let err: OpConsensusError = post_execution.unwrap_err().into();
-
         assert!(matches!(
             err,
             OpConsensusError::DAFootprintGasDiff(diff)
