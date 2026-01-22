@@ -492,13 +492,13 @@ mod tests {
 
         // validate blob, it should fail blob gas used validation post execution.
         let err: OpConsensusError = post_execution.unwrap_err().into();
-        match err {
-            OpConsensusError::DAFootprintGasDiff(diff) => {
-                assert_eq!(diff.got, BLOB_GAS_USED + 1);
-                assert_eq!(diff.expected, BLOB_GAS_USED);
-            }
-            _ => panic!("Expected OpConsensusError::DAFootprintGasDiff, got {:?}", err),
-        }
+        let err: OpConsensusError = post_execution.unwrap_err().into();
+
+        assert!(matches!(
+            err,
+            OpConsensusError::DAFootprintGasDiff(diff)
+                if diff.got == BLOB_GAS_USED + 1 && diff.expected == BLOB_GAS_USED
+        ));
     }
 
     #[test]
