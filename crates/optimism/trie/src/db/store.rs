@@ -514,9 +514,9 @@ impl MdbxProofsStorage {
                 tx,
                 block_number,
                 nodes
-                    .storage_nodes
-                    .clone()
-                    .into_iter()
+                    .storage_nodes_ref()
+                    .iter()
+                    .cloned()
                     .map(|(path, node)| (*hashed_address, path, node)),
                 append_mode,
             )?;

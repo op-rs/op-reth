@@ -550,9 +550,9 @@ pub struct TrieUpdatesSortedRef<'a> {
 pub struct TrieUpdatesSorted {
     /// Sorted collection of updated state nodes with corresponding paths. None indicates that a
     /// node was removed.
-    pub account_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,
-    /// Map of hashed addresses to their storage tries stored by path.
-    pub storage_tries: B256Map<StorageTrieUpdatesSorted>,
+    account_nodes: Vec<(Nibbles, Option<BranchNodeCompact>)>,
+    /// Storage tries stored by hashed address of the account the trie belongs to.
+    storage_tries: B256Map<StorageTrieUpdatesSorted>,
 }
 
 impl TrieUpdatesSorted {
