@@ -9,180 +9,18 @@ exclude = [".github/"]
 
 [workspace]
 members = [
-    "bin/reth-bench/",
-    "bin/reth-bench-compare/",
-    "bin/reth/",
-    "crates/storage/rpc-provider/",
-    "crates/chain-state/",
-    "crates/chainspec/",
-    "crates/cli/cli/",
-    "crates/cli/commands/",
-    "crates/cli/runner/",
-    "crates/cli/util/",
-    "crates/config/",
-    "crates/consensus/common/",
-    "crates/consensus/consensus/",
-    "crates/consensus/debug-client/",
-    "crates/e2e-test-utils/",
-    "crates/engine/invalid-block-hooks/",
-    "crates/engine/local",
-    "crates/engine/primitives/",
-    "crates/engine/service",
-    "crates/engine/tree/",
-    "crates/engine/util/",
-    "crates/era",
-    "crates/era-downloader",
-    "crates/era-utils",
-    "crates/errors/",
-    "crates/ethereum/hardforks/",
-    "crates/ethereum/cli/",
-    "crates/ethereum/consensus/",
-    "crates/ethereum/engine-primitives/",
-    "crates/ethereum/evm",
-    "crates/ethereum/node",
-    "crates/ethereum/payload/",
-    "crates/ethereum/primitives/",
-    "crates/ethereum/reth/",
-    "crates/etl/",
-    "crates/evm/evm",
-    "crates/evm/execution-errors",
-    "crates/evm/execution-types",
-    "crates/exex/exex/",
-    "crates/exex/test-utils/",
-    "crates/exex/types/",
-    "crates/metrics/",
-    "crates/net/banlist/",
-    "crates/net/discv4/",
-    "crates/net/discv5/",
-    "crates/net/dns/",
-    "crates/net/downloaders/",
-    "crates/net/ecies/",
-    "crates/net/eth-wire-types",
-    "crates/net/eth-wire/",
-    "crates/net/nat/",
-    "crates/net/network-api/",
-    "crates/net/network-types/",
-    "crates/net/network/",
-    "crates/net/p2p/",
-    "crates/net/peers/",
-    "crates/node/api/",
-    "crates/node/builder/",
-    "crates/node/core/",
-    "crates/node/ethstats",
-    "crates/node/events/",
-    "crates/node/metrics",
-    "crates/node/types",
+    # Include upstream reth binary to support `make build` and standard CI workflows.
+    # This ensures that `cargo build --bin reth` can resolve the target.
+    "bin/reth",
     "crates/optimism/bin/op-reth",
     "crates/optimism/bin/proof-bench",
-    "crates/optimism/chainspec",
     "crates/optimism/cli",
-    "crates/optimism/consensus",
-    "crates/optimism/evm/",
     "crates/optimism/exex/",
-    "crates/optimism/flashblocks/",
-    "crates/optimism/hardforks/",
     "crates/optimism/node/",
-    "crates/optimism/payload/",
-    "crates/optimism/primitives/",
-    "crates/optimism/reth/",
     "crates/optimism/rpc/",
-    "crates/optimism/storage",
     "crates/optimism/trie",
-    "crates/optimism/txpool/",
-    "crates/payload/basic/",
-    "crates/payload/builder/",
-    "crates/payload/builder-primitives/",
-    "crates/payload/primitives/",
-    "crates/payload/validator/",
-    "crates/payload/util/",
-    "crates/primitives-traits/",
-    "crates/primitives/",
-    "crates/prune/db",
-    "crates/prune/prune",
-    "crates/prune/types",
-    "crates/ress/protocol",
-    "crates/ress/provider",
-    "crates/revm/",
-    "crates/rpc/ipc/",
-    "crates/rpc/rpc-api/",
-    "crates/rpc/rpc-builder/",
-    "crates/rpc/rpc-engine-api/",
-    "crates/rpc/rpc-eth-api/",
-    "crates/rpc/rpc-eth-types/",
-    "crates/rpc/rpc-layer",
-    "crates/rpc/rpc-server-types/",
-    "crates/rpc/rpc-testing-util/",
-    "crates/rpc/rpc-e2e-tests/",
-    "crates/rpc/rpc-convert/",
-    "crates/rpc/rpc/",
-    "crates/stages/api/",
-    "crates/stages/stages/",
-    "crates/stages/types/",
-    "crates/stateless",
-    "crates/static-file/static-file",
-    "crates/static-file/types/",
-    "crates/storage/codecs/",
-    "crates/storage/codecs/derive/",
-    "crates/storage/db-api/",
-    "crates/storage/db-common",
-    "crates/storage/db-models/",
-    "crates/storage/db/",
-    "crates/storage/errors/",
-    "crates/storage/libmdbx-rs/",
-    "crates/storage/libmdbx-rs/mdbx-sys/",
-    "crates/storage/nippy-jar/",
-    "crates/storage/provider/",
-    "crates/storage/storage-api/",
-    "crates/storage/zstd-compressors/",
-    "crates/tasks/",
-    "crates/tokio-util/",
-    "crates/tracing/",
-    "crates/transaction-pool/",
-    "crates/trie/common",
-    "crates/trie/db",
-    "crates/trie/parallel/",
-    "crates/trie/sparse",
-    "crates/trie/sparse-parallel/",
-    "crates/trie/trie",
-    "examples/beacon-api-sidecar-fetcher/",
-    "examples/beacon-api-sse/",
-    "examples/bsc-p2p",
-    "examples/custom-dev-node/",
-    "examples/custom-node/",
-    "examples/custom-engine-types/",
-    "examples/custom-evm/",
-    "examples/custom-hardforks/",
-    "examples/custom-inspector/",
-    "examples/custom-node-components/",
-    "examples/custom-payload-builder/",
-    "examples/custom-rlpx-subprotocol",
-    "examples/custom-rpc-middleware",
-    "examples/custom-node",
-    "examples/db-access",
-    "examples/engine-api-access",
-    "examples/exex-hello-world",
-    "examples/exex-subscription",
-    "examples/exex-test",
-    "examples/full-contract-state",
-    "examples/manual-p2p/",
-    "examples/network-txpool/",
-    "examples/network/",
-    "examples/network-proxy/",
-    "examples/node-builder-api/",
-    "examples/node-custom-rpc/",
-    "examples/node-event-hooks/",
-    "examples/op-db-access/",
-    "examples/polygon-p2p/",
-    "examples/rpc-db/",
-    "examples/precompile-cache/",
-    "examples/txpool-tracing/",
-    "examples/custom-beacon-withdrawals",
-    "testing/ef-tests/",
-    "testing/testing-utils",
-    "testing/runner",
-    "crates/tracing-otlp",
 ]
-default-members = ["bin/reth"]
+default-members = ["bin/reth", "crates/optimism/bin/op-reth"]
 exclude = ["docs/cli"]
 
 # Explicitly set the resolver to version 2, which is the default for packages with edition >= 2021
@@ -341,142 +179,142 @@ incremental = false
 [workspace.dependencies]
 # reth
 op-reth = { path = "crates/optimism/bin/op-reth" }
-reth = { path = "bin/reth" }
-reth-storage-rpc-provider = { path = "crates/storage/rpc-provider" }
-reth-basic-payload-builder = { path = "crates/payload/basic" }
-reth-bench = { path = "bin/reth-bench" }
-reth-bench-compare = { path = "bin/reth-bench-compare" }
+reth = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-storage-rpc-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-bench = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-bench-compare = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 op-reth-proof-bench = { path = "crates/optimism/bin/proof-bench" }
-reth-chain-state = { path = "crates/chain-state" }
-reth-chainspec = { path = "crates/chainspec", default-features = false }
-reth-cli = { path = "crates/cli/cli" }
-reth-cli-commands = { path = "crates/cli/commands" }
-reth-cli-runner = { path = "crates/cli/runner" }
-reth-cli-util = { path = "crates/cli/util" }
-reth-codecs = { path = "crates/storage/codecs" }
-reth-codecs-derive = { path = "crates/storage/codecs/derive" }
-reth-config = { path = "crates/config", default-features = false }
-reth-consensus = { path = "crates/consensus/consensus", default-features = false }
-reth-consensus-common = { path = "crates/consensus/common", default-features = false }
-reth-consensus-debug-client = { path = "crates/consensus/debug-client" }
-reth-db = { path = "crates/storage/db", default-features = false }
-reth-db-api = { path = "crates/storage/db-api" }
-reth-db-common = { path = "crates/storage/db-common" }
-reth-db-models = { path = "crates/storage/db-models", default-features = false }
-reth-discv4 = { path = "crates/net/discv4" }
-reth-discv5 = { path = "crates/net/discv5" }
-reth-dns-discovery = { path = "crates/net/dns" }
-reth-downloaders = { path = "crates/net/downloaders" }
-reth-e2e-test-utils = { path = "crates/e2e-test-utils" }
-reth-ecies = { path = "crates/net/ecies" }
-reth-engine-local = { path = "crates/engine/local" }
-reth-engine-primitives = { path = "crates/engine/primitives", default-features = false }
-reth-engine-tree = { path = "crates/engine/tree" }
-reth-engine-service = { path = "crates/engine/service" }
-reth-engine-util = { path = "crates/engine/util" }
-reth-era = { path = "crates/era" }
-reth-era-downloader = { path = "crates/era-downloader" }
-reth-era-utils = { path = "crates/era-utils" }
-reth-errors = { path = "crates/errors" }
-reth-eth-wire = { path = "crates/net/eth-wire" }
-reth-eth-wire-types = { path = "crates/net/eth-wire-types" }
-reth-ethereum-payload-builder = { path = "crates/ethereum/payload" }
-reth-ethereum-cli = { path = "crates/ethereum/cli", default-features = false }
-reth-ethereum-consensus = { path = "crates/ethereum/consensus", default-features = false }
-reth-ethereum-engine-primitives = { path = "crates/ethereum/engine-primitives", default-features = false }
-reth-ethereum-forks = { path = "crates/ethereum/hardforks", default-features = false }
-reth-ethereum-primitives = { path = "crates/ethereum/primitives", default-features = false }
-reth-ethereum = { path = "crates/ethereum/reth" }
-reth-etl = { path = "crates/etl" }
-reth-evm = { path = "crates/evm/evm", default-features = false }
-reth-evm-ethereum = { path = "crates/ethereum/evm", default-features = false }
-reth-optimism-evm = { path = "crates/optimism/evm", default-features = false }
-reth-execution-errors = { path = "crates/evm/execution-errors", default-features = false }
-reth-execution-types = { path = "crates/evm/execution-types", default-features = false }
-reth-exex = { path = "crates/exex/exex" }
-reth-exex-test-utils = { path = "crates/exex/test-utils" }
-reth-exex-types = { path = "crates/exex/types" }
-reth-fs-util = { path = "crates/fs-util" }
-reth-invalid-block-hooks = { path = "crates/engine/invalid-block-hooks" }
-reth-ipc = { path = "crates/rpc/ipc" }
-reth-libmdbx = { path = "crates/storage/libmdbx-rs" }
-reth-mdbx-sys = { path = "crates/storage/libmdbx-rs/mdbx-sys" }
-reth-metrics = { path = "crates/metrics" }
-reth-net-banlist = { path = "crates/net/banlist" }
-reth-net-nat = { path = "crates/net/nat" }
-reth-network = { path = "crates/net/network" }
-reth-network-api = { path = "crates/net/network-api" }
-reth-network-p2p = { path = "crates/net/p2p" }
-reth-network-peers = { path = "crates/net/peers", default-features = false }
-reth-network-types = { path = "crates/net/network-types" }
-reth-nippy-jar = { path = "crates/storage/nippy-jar" }
-reth-node-api = { path = "crates/node/api" }
-reth-node-builder = { path = "crates/node/builder" }
-reth-node-core = { path = "crates/node/core" }
-reth-node-ethereum = { path = "crates/ethereum/node" }
-reth-node-ethstats = { path = "crates/node/ethstats" }
-reth-node-events = { path = "crates/node/events" }
-reth-node-metrics = { path = "crates/node/metrics" }
+reth-chain-state = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-cli-commands = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-cli-runner = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-codecs = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-codecs-derive = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-config = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-consensus-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-consensus-debug-client = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-db-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-db-models = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-discv5 = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-dns-discovery = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-downloaders = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-e2e-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-ecies = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-engine-local = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-engine-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-engine-tree = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-engine-service = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-engine-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-era = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-era-downloader = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-era-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-eth-wire-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-ethereum-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-ethereum-engine-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-ethereum-forks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-etl = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-execution-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-exex = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-exex-test-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-exex-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-fs-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-invalid-block-hooks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-ipc = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-libmdbx = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-mdbx-sys = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-metrics = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-net-banlist = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-net-nat = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-network = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-network-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-network-p2p = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-network-peers = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-network-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-nippy-jar = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-ethstats = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-events = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-node-metrics = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-node = { path = "crates/optimism/node" }
-reth-node-types = { path = "crates/node/types" }
-reth-op = { path = "crates/optimism/reth", default-features = false }
-reth-optimism-chainspec = { path = "crates/optimism/chainspec", default-features = false }
+reth-node-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-op = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
 reth-optimism-cli = { path = "crates/optimism/cli", default-features = false }
-reth-optimism-consensus = { path = "crates/optimism/consensus", default-features = false }
+reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
 reth-optimism-exex = { path = "crates/optimism/exex" }
-reth-optimism-forks = { path = "crates/optimism/hardforks", default-features = false }
-reth-optimism-payload-builder = { path = "crates/optimism/payload" }
-reth-optimism-primitives = { path = "crates/optimism/primitives", default-features = false }
+reth-optimism-forks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-optimism-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
 reth-optimism-rpc = { path = "crates/optimism/rpc" }
-reth-optimism-storage = { path = "crates/optimism/storage" }
+reth-optimism-storage = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
 reth-optimism-trie = { path = "crates/optimism/trie" }
-reth-optimism-txpool = { path = "crates/optimism/txpool" }
-reth-payload-builder = { path = "crates/payload/builder" }
-reth-payload-builder-primitives = { path = "crates/payload/builder-primitives" }
-reth-payload-primitives = { path = "crates/payload/primitives" }
-reth-payload-validator = { path = "crates/payload/validator" }
-reth-payload-util = { path = "crates/payload/util" }
-reth-primitives = { path = "crates/primitives", default-features = false }
-reth-primitives-traits = { path = "crates/primitives-traits", default-features = false }
-reth-provider = { path = "crates/storage/provider" }
-reth-prune = { path = "crates/prune/prune" }
-reth-prune-types = { path = "crates/prune/types", default-features = false }
-reth-revm = { path = "crates/revm", default-features = false }
-reth-rpc = { path = "crates/rpc/rpc" }
-reth-rpc-api = { path = "crates/rpc/rpc-api" }
-reth-rpc-api-testing-util = { path = "crates/rpc/rpc-testing-util" }
-reth-rpc-builder = { path = "crates/rpc/rpc-builder" }
-reth-rpc-e2e-tests = { path = "crates/rpc/rpc-e2e-tests" }
-reth-rpc-engine-api = { path = "crates/rpc/rpc-engine-api" }
-reth-rpc-eth-api = { path = "crates/rpc/rpc-eth-api" }
-reth-rpc-eth-types = { path = "crates/rpc/rpc-eth-types", default-features = false }
-reth-rpc-layer = { path = "crates/rpc/rpc-layer" }
-reth-optimism-flashblocks = { path = "crates/optimism/flashblocks" }
-reth-rpc-server-types = { path = "crates/rpc/rpc-server-types" }
-reth-rpc-convert = { path = "crates/rpc/rpc-convert" }
-reth-stages = { path = "crates/stages/stages" }
-reth-stages-api = { path = "crates/stages/api" }
-reth-stages-types = { path = "crates/stages/types", default-features = false }
-reth-stateless = { path = "crates/stateless", default-features = false }
-reth-static-file = { path = "crates/static-file/static-file" }
-reth-static-file-types = { path = "crates/static-file/types", default-features = false }
-reth-storage-api = { path = "crates/storage/storage-api", default-features = false }
-reth-storage-errors = { path = "crates/storage/errors", default-features = false }
-reth-tasks = { path = "crates/tasks" }
-reth-testing-utils = { path = "testing/testing-utils" }
-reth-tokio-util = { path = "crates/tokio-util" }
-reth-tracing = { path = "crates/tracing", default-features = false }
-reth-tracing-otlp = { path = "crates/tracing-otlp" }
-reth-transaction-pool = { path = "crates/transaction-pool" }
-reth-trie = { path = "crates/trie/trie" }
-reth-trie-common = { path = "crates/trie/common", default-features = false }
-reth-trie-db = { path = "crates/trie/db" }
-reth-trie-parallel = { path = "crates/trie/parallel" }
-reth-trie-sparse = { path = "crates/trie/sparse", default-features = false }
-reth-trie-sparse-parallel = { path = "crates/trie/sparse-parallel" }
-reth-zstd-compressors = { path = "crates/storage/zstd-compressors", default-features = false }
-reth-ress-protocol = { path = "crates/ress/protocol" }
-reth-ress-provider = { path = "crates/ress/provider" }
+reth-optimism-txpool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-payload-builder-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-payload-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-payload-validator = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-payload-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-prune = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-prune-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-rpc = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-api-testing-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-e2e-tests = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-engine-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-eth-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-eth-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-rpc-layer = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-flashblocks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-rpc-convert = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-stages = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-stages-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-stages-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-stateless = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-static-file = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-static-file-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-storage-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-storage-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-testing-utils = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-tokio-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-tracing-otlp = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-transaction-pool = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-trie-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-trie-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-trie-parallel = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-trie-sparse = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-trie-sparse-parallel = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-zstd-compressors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1", default-features = false }
+reth-ress-protocol = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-ress-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 # revm
 revm = { version = "34.0.0", default-features = false }
