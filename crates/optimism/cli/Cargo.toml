@@ -27,7 +27,7 @@ reth-stages = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-static-file = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-node-core = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-node.workspace = true
 reth-fs-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 
 # so jemalloc metrics can be included

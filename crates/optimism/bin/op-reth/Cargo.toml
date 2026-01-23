@@ -12,7 +12,7 @@ exclude.workspace = true
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-cli.workspace = true
 reth-optimism-rpc.workspace = true
-reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-node.workspace = true
 reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }

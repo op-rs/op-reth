@@ -38,7 +38,7 @@ tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"
 futures.workspace = true
 reth-db = { workspace = true, features = ["op", "test-utils"] }
 reth-node-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-optimism-node.workspace = true
 reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
 reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
