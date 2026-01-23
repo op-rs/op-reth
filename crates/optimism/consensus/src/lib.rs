@@ -241,7 +241,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use alloc::sync::Arc;
 
     use alloy_consensus::{BlockBody, Eip658Value, Header, Receipt, TxEip7702, TxReceipt};
     use alloy_eips::{eip4895::Withdrawals, eip7685::Requests};

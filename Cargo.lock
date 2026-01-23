@@ -6548,7 +6548,7 @@ dependencies = [
 
 [[package]]
 name = "op-reth-proof-bench"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "alloy-primitives",
  "anyhow",
