@@ -1,11 +1,13 @@
 # Runs benchmarks.
 
+# Benchmarks are currently disabled as the relevant crates are git dependencies.
 on:
-  pull_request:
+  workflow_dispatch:
+  # pull_request:
   # TODO: Disabled temporarily for https://github.com/CodSpeedHQ/runner/issues/55
   # merge_group:
-  push:
-    branches: [unstable, main]
+  # push:
+  #   branches: [unstable, main]
 
 env:
   CARGO_TERM_COLOR: always
