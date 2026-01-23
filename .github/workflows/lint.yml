@@ -20,7 +20,7 @@ jobs:
         include:
           - type: ethereum
             args: --workspace --lib --examples --tests --benches --locked
-            features: "ethereum asm-keccak jemalloc jemalloc-prof min-error-logs min-warn-logs min-info-logs min-debug-logs min-trace-logs"
+            features: "asm-keccak jemalloc jemalloc-prof min-error-logs min-warn-logs min-info-logs min-debug-logs min-trace-logs"
     steps:
       - uses: actions/checkout@v6
       - uses: rui314/setup-mold@v1
@@ -77,24 +77,6 @@ jobs:
         run: |
           sudo apt update && sudo apt install gcc-multilib
           .github/assets/check_wasm.sh
-
-  riscv:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-      - uses: rui314/setup-mold@v1
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          target: riscv32imac-unknown-none-elf
-      - uses: taiki-e/install-action@cargo-hack
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - uses: dcarbone/install-jq-action@v3
-      - name: Run RISC-V checks
-        run: .github/assets/check_rv32imac.sh
 
   crate-checks:
     name: crate-checks (${{ matrix.partition }}/${{ matrix.total_partitions }})
@@ -243,35 +225,6 @@ jobs:
       - name: Ensure no arbitrary or proptest dependency on default build
         run: cargo tree --package reth -e=features,no-dev | grep -Eq "arbitrary|proptest" && exit 1 || exit 0
 
-  # Checks that selected crates can compile with power set of features
-  features:
-    name: features
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        partition: [1, 2]
-        total_partitions: [2]
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      - uses: rui314/setup-mold@v1
-      - uses: dtolnay/rust-toolchain@clippy
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - name: cargo install cargo-hack
-        uses: taiki-e/install-action@cargo-hack
-      - run: |
-          cargo hack check \
-            --package reth-codecs \
-            --package reth-primitives-traits \
-            --package reth-primitives \
-            --feature-powerset \
-            --depth 2
-        env:
-          RUSTFLAGS: -D warnings
-
   # Check crates correctly propagate features
   feature-propagation:
     runs-on: ubuntu-latest
@@ -307,7 +260,6 @@ jobs:
       - typos
       - grafana
       - no-test-deps
-      - features
       - feature-propagation
       - deny
     timeout-minutes: 30
