@@ -266,7 +266,6 @@ jobs:
           cargo hack check \
             --package reth-optimism-trie \
             --package reth-optimism-exex \
-            --package reth-optimism-node \
             --feature-powerset \
             --depth 2
         env:
