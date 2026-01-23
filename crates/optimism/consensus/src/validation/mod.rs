@@ -199,6 +199,7 @@ fn compare_receipts_root_and_logs_bloom(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::sync::Arc;
     use alloy_consensus::Header;
     use alloy_eips::eip7685::Requests;
     use alloy_primitives::{b256, hex, Bytes, U256};
@@ -207,7 +208,6 @@ mod tests {
     use reth_optimism_chainspec::{OpChainSpec, BASE_SEPOLIA};
     use reth_optimism_forks::{OpHardfork, BASE_SEPOLIA_HARDFORKS};
     use reth_optimism_primitives::OpReceipt;
-    use std::sync::Arc;
 
     const HOLOCENE_TIMESTAMP: u64 = 1700000000;
     const ISTHMUS_TIMESTAMP: u64 = 1750000000;
