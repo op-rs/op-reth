@@ -9,25 +9,18 @@ exclude = [".github/"]
 
 [workspace]
 members = [
+    # Include upstream reth binary to support `make build` and standard CI workflows.
+    # This ensures that `cargo build --bin reth` can resolve the target.
+    "bin/reth",
     "crates/optimism/bin/op-reth",
     "crates/optimism/bin/proof-bench",
-    "crates/optimism/chainspec",
     "crates/optimism/cli",
-    "crates/optimism/consensus",
-    "crates/optimism/evm/",
     "crates/optimism/exex/",
-    "crates/optimism/flashblocks/",
-    "crates/optimism/hardforks/",
     "crates/optimism/node/",
-    "crates/optimism/payload/",
-    "crates/optimism/primitives/",
-    "crates/optimism/reth/",
     "crates/optimism/rpc/",
-    "crates/optimism/storage",
     "crates/optimism/trie",
-    "crates/optimism/txpool/",
 ]
-default-members = ["crates/optimism/bin/op-reth"]
+default-members = ["bin/reth", "crates/optimism/bin/op-reth"]
 exclude = ["docs/cli"]
 
 # Explicitly set the resolver to version 2, which is the default for packages with edition >= 2021
