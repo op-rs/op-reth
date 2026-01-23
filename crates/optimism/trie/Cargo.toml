@@ -68,6 +68,7 @@ reth-testing-utils.workspace = true
 reth-storage-errors.workspace = true
 secp256k1.workspace = true
 mockall.workspace = true
+eyre.workspace = true
 
 # misc
 serial_test.workspace = true
