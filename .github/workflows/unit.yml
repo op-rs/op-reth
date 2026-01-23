@@ -51,7 +51,7 @@ jobs:
           cargo nextest run \
             --features "${{ matrix.features }} $EDGE_FEATURES" --locked \
             ${{ matrix.exclude_args }} --workspace \
-            --no-tests=warn \
+            --exclude ef-tests --no-tests=warn \
             -E "!kind(test) and not binary(e2e_testsuite)"
 
   doc:
