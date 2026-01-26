@@ -21,6 +21,7 @@ use reth_optimism_trie::{
 use reth_provider::{BlockNumReader, BlockReader, TransactionVariant};
 use reth_trie::{updates::TrieUpdatesSorted, HashedPostStateSorted, SortedTrieData};
 use std::{sync::Arc, time::Duration};
+use tokio::{sync::watch, task, time::Duration};
 use tracing::{debug, error, info};
 
 // Safety threshold for maximum blocks to prune automatically on startup.
@@ -29,10 +30,10 @@ use tracing::{debug, error, info};
 const MAX_PRUNE_BLOCKS_STARTUP: u64 = 1000;
 
 /// How many blocks to process in a single batch before yielding. Default is 50 blocks.
-const SYNC_BATCH_SIZE: usize = 50;
+const SYNC_BLOCKS_BATCH_SIZE: usize = 50;
 
 /// How close to tip before we process blocks in real-time vs batch. Default is 1024 blocks.
-const REAL_TIME_THRESHOLD: u64 = 1024;
+const REAL_TIME_BLOCKS_THRESHOLD: u64 = 1024;
 
 /// How long to sleep when sync task is caught up. Default is 5 seconds.
 const SYNC_IDLE_SLEEP_SECS: u64 = 5;
@@ -235,8 +236,8 @@ where
     }
 
     /// Spawn the background sync task and return the target sender
-    fn spawn_sync_task(&self) -> tokio::sync::watch::Sender<u64> {
-        let (sync_target_tx, sync_target_rx) = tokio::sync::watch::channel(0u64);
+    fn spawn_sync_task(&self) -> watch::Sender<u64> {
+        let (sync_target_tx, sync_target_rx) = watch::channel(0u64);
 
         let task_storage = self.storage.clone();
         let task_provider = self.ctx.provider().clone();
@@ -257,7 +258,7 @@ where
 
     /// Background sync loop that processes blocks up to the target
     async fn sync_loop(
-        mut sync_target_rx: tokio::sync::watch::Receiver<u64>,
+        mut sync_target_rx: watch::Receiver<u64>,
         storage: OpProofsStorage<Storage>,
         provider: Node::Provider,
         collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
@@ -279,20 +280,21 @@ where
             };
 
             if latest >= target {
-                tokio::time::sleep(tokio::time::Duration::from_secs(SYNC_IDLE_SLEEP_SECS)).await;
+                ime::sleep(Duration::from_secs(SYNC_IDLE_SLEEP_SECS)).await;
                 continue;
             }
 
             // Process one batch
             if let Err(e) =
-                Self::process_batch(latest, target, &provider, collector, SYNC_BATCH_SIZE).await
+                Self::process_batch(latest, target, &provider, collector, SYNC_BLOCKS_BATCH_SIZE)
+                    .await
             {
                 error!(target: "optimism::exex", error = ?e, "Batch processing failed");
             }
 
             // Yield to allow other tasks to run
             debug!(target: "optimism::exex", latest_stored = latest, target, "Batch processed, yielding");
-            tokio::task::yield_now().await;
+            task::yield_now().await;
         }
     }
 
@@ -327,7 +329,7 @@ where
         &self,
         notification: ExExNotification<Primitives>,
         collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
-        sync_target_tx: &tokio::sync::watch::Sender<u64>,
+        sync_target_tx: &watch::Sender<u64>,
     ) -> eyre::Result<()> {
         let latest_stored = match self.storage.get_latest_block_number().await? {
             Some((n, _)) => n,
@@ -362,7 +364,7 @@ where
         new: Arc<Chain<Primitives>>,
         latest_stored: u64,
         collector: &LiveTrieCollector<'_, Node::Evm, Node::Provider, Storage>,
-        sync_target_tx: &tokio::sync::watch::Sender<u64>,
+        sync_target_tx: &watch::Sender<u64>,
     ) -> eyre::Result<()> {
         debug!(
             target: "optimism::exex",
@@ -384,7 +386,8 @@ where
 
         let best_block = self.ctx.provider().best_block_number()?;
         let is_sequential = new.tip().number() == latest_stored + 1;
-        let is_near_tip = best_block.saturating_sub(new.tip().number()) < REAL_TIME_THRESHOLD;
+        let is_near_tip =
+            best_block.saturating_sub(new.tip().number()) < REAL_TIME_BLOCKS_THRESHOLD;
 
         if is_sequential && is_near_tip {
             debug!(
