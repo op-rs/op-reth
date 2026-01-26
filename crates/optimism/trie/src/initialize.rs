@@ -20,7 +20,7 @@ use reth_trie_common::{
     BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey,
 };
 use std::{collections::HashMap, time::Instant};
-use tracing::info;
+use tracing::{debug, info};
 
 /// Batch size threshold for storing entries during initialization
 const INITIALIZE_STORAGE_THRESHOLD: usize = 100000;
@@ -151,16 +151,16 @@ async fn initialize<
     let start_time = Instant::now();
 
     let mut source = source.peekable();
-    let initial_progress = source
-        .peek()
-        .map(|entry| entry.clone().map(|entry| entry.0.estimate_progress()))
-        .transpose()?;
+    let Some(first_entry) = source.peek() else {
+        debug!(target: "reth::cli", "No entries to store for table");
+        return Ok(0)
+    };
+    let initial_progress = match first_entry {
+        Ok(i) => i.0.estimate_progress(),
+        Err(e) => Err(e.clone())?,
+    };
 
     for entry in source {
-        let Some(initial_progress) = initial_progress else {
-            // If there are any items, there must be an initial progress
-            unreachable!();
-        };
         let entry = entry?;
 
         entries.push(entry.clone());
