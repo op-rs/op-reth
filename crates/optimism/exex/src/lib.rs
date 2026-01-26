@@ -24,16 +24,17 @@ use std::{sync::Arc, time::Duration};
 use tracing::{debug, error, info};
 
 // Safety threshold for maximum blocks to prune automatically on startup.
-// If the required prune exceeds this, the node will error out and require manual pruning.
+// If the required prune exceeds this, the node will error out and require manual pruning. Default
+// is 1000 blocks.
 const MAX_PRUNE_BLOCKS_STARTUP: u64 = 1000;
 
 /// How many blocks to process in a single batch before yielding. Default is 50 blocks.
 const SYNC_BATCH_SIZE: usize = 50;
 
-/// How close to tip before we process blocks in real-time vs batch
+/// How close to tip before we process blocks in real-time vs batch. Default is 1024 blocks.
 const REAL_TIME_THRESHOLD: u64 = 1024;
 
-/// How long to sleep when sync task is caught up
+/// How long to sleep when sync task is caught up. Default is 5 seconds.
 const SYNC_IDLE_SLEEP_SECS: u64 = 5;
 
 /// OP Proofs ExEx - processes blocks and tracks state changes within fault proof window.
