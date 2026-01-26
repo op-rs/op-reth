@@ -27,7 +27,7 @@ use tracing::{debug, error, info};
 // If the required prune exceeds this, the node will error out and require manual pruning.
 const MAX_PRUNE_BLOCKS_STARTUP: u64 = 1000;
 
-/// How many blocks to process in a single batch before yielding
+/// How many blocks to process in a single batch before yielding. Default is 50 blocks.
 const SYNC_BATCH_SIZE: usize = 50;
 
 /// How close to tip before we process blocks in real-time vs batch
