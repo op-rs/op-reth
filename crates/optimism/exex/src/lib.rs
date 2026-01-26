@@ -21,7 +21,7 @@ use reth_optimism_trie::{
 use reth_provider::{BlockNumReader, BlockReader, TransactionVariant};
 use reth_trie::{updates::TrieUpdatesSorted, HashedPostStateSorted, SortedTrieData};
 use std::{sync::Arc, time::Duration};
-use tokio::{sync::watch, task, time::Duration};
+use tokio::{sync::watch, task, time};
 use tracing::{debug, error, info};
 
 // Safety threshold for maximum blocks to prune automatically on startup.
@@ -280,7 +280,7 @@ where
             };
 
             if latest >= target {
-                ime::sleep(Duration::from_secs(SYNC_IDLE_SLEEP_SECS)).await;
+                time::sleep(Duration::from_secs(SYNC_IDLE_SLEEP_SECS)).await;
                 continue;
             }
 
