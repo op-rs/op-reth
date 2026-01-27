@@ -25,11 +25,7 @@ async fn launch_node(
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>,
     args: RollupArgs,
 ) -> eyre::Result<(), ErrReport> {
-    // Start from a plain OpNode builder
-    let node_builder = proof_history::node_builder_with_proof_history(builder, args).await?;
-    // Launch the node
-    let handle = node_builder.launch_with_debug_capabilities().await?;
-    handle.node_exit_future.await
+    proof_history::launch_node_with_proof_history(builder, args).await
 }
 
 fn main() {
