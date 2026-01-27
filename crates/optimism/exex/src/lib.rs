@@ -450,10 +450,11 @@ mod tests {
     use super::*;
     use alloy_consensus::private::alloy_primitives::B256;
     use alloy_eips::{eip1898::BlockWithParent, BlockNumHash, NumHash};
+    use reth_db::test_utils::tempdir_path;
     use reth_ethereum_primitives::{Block, Receipt};
     use reth_execution_types::{Chain, ExecutionOutcome};
     use reth_optimism_trie::{
-        BlockStateDiff, InMemoryProofsStorage, OpProofsStorage, OpProofsStore,
+        db::MdbxProofsStorage, BlockStateDiff, OpProofsStorage, OpProofsStore,
     };
     use reth_primitives_traits::RecoveredBlock;
     use reth_trie::{updates::TrieUpdatesSorted, HashedPostStateSorted, LazyTrieData};
@@ -545,9 +546,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_notification_chain_committed() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -573,9 +575,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_notification_chain_committed_skips_already_processed() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -610,9 +613,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_notification_chain_reorged() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -650,9 +654,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_notification_chain_reorged_skips_beyond_stored_blocks() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -690,9 +695,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_notification_chain_reverted() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -729,9 +735,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_notification_chain_reverted_skips_beyond_stored_blocks() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -768,9 +775,10 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_initialized_errors_on_storage_not_initialized() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         let (ctx, _handle) =
             reth_exex_test_utils::test_exex_context().await.expect("exex test context");
@@ -781,9 +789,10 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_initialized_errors_when_prune_exceeds_threshold() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -808,9 +817,10 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_initialized_succeeds() {
-        // In-memory proofs storage
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         init_storage(proofs.clone());
 
@@ -823,9 +833,10 @@ mod tests {
 
     #[tokio::test]
     async fn handle_notification_errors_on_empty_storage() {
-        // In-memory proofs storage - empty
-        let store = Arc::new(InMemoryProofsStorage::default());
-        let proofs: OpProofsStorage<Arc<InMemoryProofsStorage>> = store.clone().into();
+        // MDBX proofs storage
+        let dir = tempdir_path();
+        let store = Arc::new(MdbxProofsStorage::new(dir.as_path()).expect("env"));
+        let proofs: OpProofsStorage<Arc<MdbxProofsStorage>> = store.clone().into();
 
         let (ctx, _handle) =
             reth_exex_test_utils::test_exex_context().await.expect("exex test context");
