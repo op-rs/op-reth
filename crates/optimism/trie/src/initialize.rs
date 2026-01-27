@@ -367,7 +367,7 @@ trait InitTable {
 
     /// Writes given entries to given storage.
     fn store_entries(
-        store: &impl OpProofsStore,
+        store: &impl OpProofsInitialStateStore,
         entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
     ) -> Result<(), OpProofsStorageError>;
 }
@@ -378,7 +378,7 @@ impl<C> InitTable for HashedAccountsInit<C> {
 
     /// Save mapping of hashed addresses to accounts to storage.
     fn store_entries(
-        store: &impl OpProofsStore,
+        store: &impl OpProofsInitialStateStore,
         entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
     ) -> Result<(), OpProofsStorageError> {
         store.store_hashed_accounts(
@@ -394,7 +394,7 @@ impl<C> InitTable for HashedStoragesInit<C> {
 
     /// Save mapping of hashed addresses to storage entries to storage.
     fn store_entries(
-        store: &impl OpProofsStore,
+        store: &impl OpProofsInitialStateStore,
         entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
     ) -> Result<(), OpProofsStorageError> {
         let entries_iter = entries.into_iter();
@@ -420,7 +420,7 @@ impl<C> InitTable for AccountsTrieInit<C> {
 
     /// Save mapping of account trie paths to branch nodes to storage.
     fn store_entries(
-        store: &impl OpProofsStore,
+        store: &impl OpProofsInitialStateStore,
         entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
     ) -> Result<(), OpProofsStorageError> {
         store.store_account_branches(
@@ -437,7 +437,7 @@ impl<C> InitTable for StoragesTrieInit<C> {
 
     /// Save mapping of hashed addresses to storage trie entries to storage.
     fn store_entries(
-        store: &impl OpProofsStore,
+        store: &impl OpProofsInitialStateStore,
         entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
     ) -> Result<(), OpProofsStorageError> {
         let entries_iter = entries.into_iter();
