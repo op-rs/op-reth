@@ -93,7 +93,7 @@ macro_rules! define_dup_cursor_iter {
 define_simple_cursor_iter!(HashedAccountsInit, tables::HashedAccounts, B256, Account);
 define_dup_cursor_iter!(HashedStoragesInit, tables::HashedStorages, B256, StorageEntry);
 define_simple_cursor_iter!(
-    AccountsTrieIter,
+    AccountsTrieInit,
     tables::AccountsTrie,
     StoredNibbles,
     BranchNodeCompact
@@ -276,7 +276,7 @@ impl<Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
                 .ok_or(OpProofsStorageError::InitializeStorageInconsistentState)?;
         }
 
-        let source = AccountsTrieIter::new(start_cursor);
+        let source = AccountsTrieInit::new(start_cursor);
         self.initialize(
             "accounts trie",
             source,
@@ -425,7 +425,7 @@ impl<C> InitTable for HashedStoragesInit<C> {
     }
 }
 
-impl<C> InitTable for AccountsTrieIter<C> {
+impl<C> InitTable for AccountsTrieInit<C> {
     type Key = StoredNibbles;
     type Value = BranchNodeCompact;
 
