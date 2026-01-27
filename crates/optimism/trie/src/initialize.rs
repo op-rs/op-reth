@@ -7,7 +7,8 @@ use crate::{
     OpProofsStorageError, OpProofsStore,
 };
 use alloy_eips::BlockNumHash;
-use alloy_primitives::B256;
+use alloy_primitives::{B256, U256};
+use derive_more::Constructor;
 use reth_db::{
     cursor::{DbCursorRO, DbDupCursorRO},
     tables,
@@ -19,7 +20,7 @@ use reth_trie_common::{
     BranchNodeCompact, Nibbles, StorageTrieEntry, StoredNibbles, StoredNibblesSubKey,
 };
 use std::{collections::HashMap, time::Instant};
-use tracing::info;
+use tracing::{debug, info};
 
 /// Batch size threshold for storing entries during initialization
 const INITIALIZE_STORAGE_THRESHOLD: usize = 100000;
@@ -28,10 +29,10 @@ const INITIALIZE_STORAGE_THRESHOLD: usize = 100000;
 const INITIALIZE_LOG_THRESHOLD: usize = 100000;
 
 /// Initialization job for external storage.
-#[derive(Debug)]
-pub struct InitializationJob<'a, Tx: DbTx, S: OpProofsStore + Send> {
+#[derive(Debug, Constructor)]
+pub struct InitializationJob<Tx: DbTx, S: OpProofsStore + Send> {
     storage: S,
-    tx: &'a Tx,
+    tx: Tx,
 }
 
 /// Macro to generate simple cursor iterators for tables
@@ -89,15 +90,15 @@ macro_rules! define_dup_cursor_iter {
 }
 
 // Generate iterators for all 4 table types
-define_simple_cursor_iter!(HashedAccountsIter, tables::HashedAccounts, B256, Account);
-define_dup_cursor_iter!(HashedStoragesIter, tables::HashedStorages, B256, StorageEntry);
+define_simple_cursor_iter!(HashedAccountsInit, tables::HashedAccounts, B256, Account);
+define_dup_cursor_iter!(HashedStoragesInit, tables::HashedStorages, B256, StorageEntry);
 define_simple_cursor_iter!(
-    AccountsTrieIter,
+    AccountsTrieInit,
     tables::AccountsTrie,
     StoredNibbles,
     BranchNodeCompact
 );
-define_dup_cursor_iter!(StoragesTrieIter, tables::StoragesTrie, B256, StorageTrieEntry);
+define_dup_cursor_iter!(StoragesTrieInit, tables::StoragesTrie, B256, StorageTrieEntry);
 
 /// Trait to estimate the progress of a initialization job based on the key.
 trait CompletionEstimatable {
@@ -130,151 +131,83 @@ impl CompletionEstimatable for StoredNibbles {
     }
 }
 
-/// Initialize a table from a source iterator to a storage function. Handles batching and logging.
-fn initialize<
-    S: Iterator<Item = Result<(Key, Value), DatabaseError>>,
-    Key: CompletionEstimatable + Clone + 'static,
-    Value: Clone + 'static,
->(
-    name: &str,
-    source: S,
-    storage_threshold: usize,
-    log_threshold: usize,
-    save_fn: impl Fn(Vec<(Key, Value)>) -> Result<(), OpProofsStorageError>,
-) -> Result<u64, OpProofsStorageError> {
-    let mut entries = Vec::new();
-
-    let mut total_entries: u64 = 0;
-
-    info!("Starting {} initialization", name);
-    let start_time = Instant::now();
-
-    let mut source = source.peekable();
-    let initial_progress = source
-        .peek()
-        .map(|entry| entry.clone().map(|entry| entry.0.estimate_progress()))
-        .transpose()?;
-
-    for entry in source {
-        let Some(initial_progress) = initial_progress else {
-            // If there are any items, there must be an initial progress
-            unreachable!();
-        };
-        let entry = entry?;
-
-        entries.push(entry.clone());
-        total_entries += 1;
-
-        if total_entries.is_multiple_of(log_threshold as u64) {
-            let progress = entry.0.estimate_progress();
-            let elapsed = start_time.elapsed();
-            let elapsed_secs = elapsed.as_secs_f64();
-
-            let progress_per_second = if elapsed_secs.is_normal() {
-                (progress - initial_progress) / elapsed_secs
-            } else {
-                0.0
-            };
-            let estimated_total_time = if progress_per_second.is_normal() {
-                (1.0 - progress) / progress_per_second
-            } else {
-                0.0
-            };
-            let progress_pct = progress * 100.0;
-            info!(
-                "Processed {} {}, progress: {progress_pct:.2}%, ETA: {}s",
-                name, total_entries, estimated_total_time,
-            );
-        }
-
-        if entries.len() >= storage_threshold {
-            info!("Storing {} entries, total entries: {}", name, total_entries);
-            save_fn(entries)?;
-            entries = Vec::new();
-        }
-    }
-
-    if !entries.is_empty() {
-        info!("Storing final {} entries", name);
-        save_fn(entries)?;
-    }
-
-    info!("{} initialization complete: {} entries", name, total_entries);
-    Ok(total_entries)
-}
-
-impl<'a, Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
-    InitializationJob<'a, Tx, S>
+impl<Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
+    InitializationJob<Tx, S>
 {
-    /// Create a new initialization job.
-    pub const fn new(storage: S, tx: &'a Tx) -> Self {
-        Self { storage, tx }
-    }
-
-    /// Save mapping of hashed addresses to accounts to storage.
-    fn save_hashed_accounts(
+    /// Initialize a table from a source iterator to a storage function. Handles batching and
+    /// logging.
+    fn initialize<
+        I: Iterator<Item = Result<(Key, Value), DatabaseError>> + InitTable<Key = Key, Value = Value>,
+        Key: CompletionEstimatable + Clone + 'static,
+        Value: Clone + 'static,
+    >(
         &self,
-        entries: Vec<(B256, Account)>,
-    ) -> Result<(), OpProofsStorageError> {
-        self.storage.store_hashed_accounts(
-            entries.into_iter().map(|(address, account)| (address, Some(account))).collect(),
-        )?;
+        name: &str,
+        source: I,
+        storage_threshold: usize,
+        log_threshold: usize,
+    ) -> Result<u64, OpProofsStorageError> {
+        let mut entries = Vec::new();
 
-        Ok(())
-    }
+        let mut total_entries: u64 = 0;
 
-    /// Save mapping of account trie paths to branch nodes to storage.
-    fn save_account_branches(
-        &self,
-        entries: Vec<(StoredNibbles, BranchNodeCompact)>,
-    ) -> Result<(), OpProofsStorageError> {
-        self.storage.store_account_branches(
-            entries.into_iter().map(|(path, branch)| (path.0, Some(branch))).collect(),
-        )?;
+        info!("Starting {} initialization", name);
+        let start_time = Instant::now();
 
-        Ok(())
-    }
+        let mut source = source.peekable();
+        let Some(first_entry) = source.peek() else {
+            debug!(target: "reth::cli", "No entries to store for table");
+            return Ok(0)
+        };
+        let initial_progress = match first_entry {
+            Ok(i) => i.0.estimate_progress(),
+            Err(e) => Err(e.clone())?,
+        };
 
-    /// Save mapping of hashed addresses to storage entries to storage.
-    fn save_hashed_storages(
-        &self,
-        entries: Vec<(B256, StorageEntry)>,
-    ) -> Result<(), OpProofsStorageError> {
-        // Group entries by hashed address
-        let mut by_address: HashMap<B256, Vec<(B256, alloy_primitives::U256)>> = HashMap::default();
-        for (address, entry) in entries {
-            by_address.entry(address).or_default().push((entry.key, entry.value));
+        let storage = &self.storage;
+
+        for entry in source {
+            let entry = entry?;
+
+            entries.push(entry.clone());
+            total_entries += 1;
+
+            if total_entries.is_multiple_of(log_threshold as u64) {
+                let progress = entry.0.estimate_progress();
+                let elapsed = start_time.elapsed();
+                let elapsed_secs = elapsed.as_secs_f64();
+
+                let progress_per_second = if elapsed_secs.is_normal() {
+                    (progress - initial_progress) / elapsed_secs
+                } else {
+                    0.0
+                };
+                let estimated_total_time = if progress_per_second.is_normal() {
+                    (1.0 - progress) / progress_per_second
+                } else {
+                    0.0
+                };
+                let progress_pct = progress * 100.0;
+                info!(
+                    "Processed {} {}, progress: {progress_pct:.2}%, ETA: {}s",
+                    name, total_entries, estimated_total_time,
+                );
+            }
+
+            if entries.len() >= storage_threshold {
+                info!("Storing {} entries, total entries: {}", name, total_entries);
+                I::store_entries(storage, entries)?;
+                entries = Vec::new();
+            }
         }
 
-        // Store each address's storage entries
-        for (address, storages) in by_address {
-            self.storage.store_hashed_storages(address, storages)?;
+        if !entries.is_empty() {
+            info!("Storing final {} entries", name);
+            I::store_entries(storage, entries)?;
         }
 
-        Ok(())
-    }
-
-    /// Save mapping of hashed addresses to storage trie entries to storage.
-    fn save_storage_branches(
-        &self,
-        entries: Vec<(B256, StorageTrieEntry)>,
-    ) -> Result<(), OpProofsStorageError> {
-        // Group entries by hashed address
-        let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
-            HashMap::default();
-        for (hashed_address, storage_entry) in entries {
-            by_address
-                .entry(hashed_address)
-                .or_default()
-                .push((storage_entry.nibbles.0, Some(storage_entry.node)));
-        }
-
-        // Store each address's storage trie branches
-        for (address, branches) in by_address {
-            self.storage.store_storage_branches(address, branches)?;
-        }
-
-        Ok(())
+        info!("{} initialization complete: {} entries", name, total_entries);
+        Ok(total_entries)
     }
 
     /// Initialize hashed accounts data
@@ -291,13 +224,12 @@ impl<'a, Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
                 .ok_or(OpProofsStorageError::InitializeStorageInconsistentState)?;
         }
 
-        let source = HashedAccountsIter::new(start_cursor);
-        initialize(
+        let source = HashedAccountsInit::new(start_cursor);
+        self.initialize(
             "hashed accounts",
             source,
             INITIALIZE_STORAGE_THRESHOLD,
             INITIALIZE_LOG_THRESHOLD,
-            |entries| self.save_hashed_accounts(entries),
         )?;
 
         Ok(())
@@ -317,13 +249,12 @@ impl<'a, Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
                 .ok_or(OpProofsStorageError::InitializeStorageInconsistentState)?;
         }
 
-        let source = HashedStoragesIter::new(start_cursor);
-        initialize(
+        let source = HashedStoragesInit::new(start_cursor);
+        self.initialize(
             "hashed storage",
             source,
             INITIALIZE_STORAGE_THRESHOLD,
             INITIALIZE_LOG_THRESHOLD,
-            |entries| self.save_hashed_storages(entries),
         )?;
 
         Ok(())
@@ -343,13 +274,12 @@ impl<'a, Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
                 .ok_or(OpProofsStorageError::InitializeStorageInconsistentState)?;
         }
 
-        let source = AccountsTrieIter::new(start_cursor);
-        initialize(
+        let source = AccountsTrieInit::new(start_cursor);
+        self.initialize(
             "accounts trie",
             source,
             INITIALIZE_STORAGE_THRESHOLD,
             INITIALIZE_LOG_THRESHOLD,
-            |entries| self.save_account_branches(entries),
         )?;
 
         Ok(())
@@ -372,13 +302,12 @@ impl<'a, Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
                 .ok_or(OpProofsStorageError::InitializeStorageInconsistentState)?;
         }
 
-        let source = StoragesTrieIter::new(start_cursor);
-        initialize(
+        let source = StoragesTrieInit::new(start_cursor);
+        self.initialize(
             "storage trie",
             source,
             INITIALIZE_STORAGE_THRESHOLD,
             INITIALIZE_LOG_THRESHOLD,
-            |entries| self.save_storage_branches(entries),
         )?;
 
         Ok(())
@@ -424,6 +353,108 @@ impl<'a, Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
 
         self.initialize_trie(anchor)?;
         self.storage.commit_initial_state()?;
+
+        Ok(())
+    }
+}
+
+/// Handles storing entries for a particular KV-pair type.
+trait InitTable {
+    /// Key of target table.
+    type Key: CompletionEstimatable + 'static;
+    /// Value of target table.
+    type Value: 'static;
+
+    /// Writes given entries to given storage.
+    fn store_entries(
+        store: &impl OpProofsStore,
+        entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
+    ) -> Result<(), OpProofsStorageError>;
+}
+
+impl<C> InitTable for HashedAccountsInit<C> {
+    type Key = B256;
+    type Value = Account;
+
+    /// Save mapping of hashed addresses to accounts to storage.
+    fn store_entries(
+        store: &impl OpProofsStore,
+        entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
+    ) -> Result<(), OpProofsStorageError> {
+        store.store_hashed_accounts(
+            entries.into_iter().map(|(address, account)| (address, Some(account))).collect(),
+        )?;
+        Ok(())
+    }
+}
+
+impl<C> InitTable for HashedStoragesInit<C> {
+    type Key = B256;
+    type Value = StorageEntry;
+
+    /// Save mapping of hashed addresses to storage entries to storage.
+    fn store_entries(
+        store: &impl OpProofsStore,
+        entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
+    ) -> Result<(), OpProofsStorageError> {
+        let entries_iter = entries.into_iter();
+        let mut by_address: HashMap<B256, Vec<(B256, U256)>> =
+            HashMap::with_capacity(entries_iter.size_hint().0);
+
+        // Group entries by hashed address
+        for (address, entry) in entries_iter {
+            by_address.entry(address).or_default().push((entry.key, entry.value));
+        }
+        // Store each address's storage entries
+        for (address, storages) in by_address {
+            store.store_hashed_storages(address, storages)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<C> InitTable for AccountsTrieInit<C> {
+    type Key = StoredNibbles;
+    type Value = BranchNodeCompact;
+
+    /// Save mapping of account trie paths to branch nodes to storage.
+    fn store_entries(
+        store: &impl OpProofsStore,
+        entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
+    ) -> Result<(), OpProofsStorageError> {
+        store.store_account_branches(
+            entries.into_iter().map(|(path, branch)| (path.0, Some(branch))).collect(),
+        )?;
+
+        Ok(())
+    }
+}
+
+impl<C> InitTable for StoragesTrieInit<C> {
+    type Key = B256;
+    type Value = StorageTrieEntry;
+
+    /// Save mapping of hashed addresses to storage trie entries to storage.
+    fn store_entries(
+        store: &impl OpProofsStore,
+        entries: impl IntoIterator<Item = (Self::Key, Self::Value)>,
+    ) -> Result<(), OpProofsStorageError> {
+        let entries_iter = entries.into_iter();
+        let mut by_address: HashMap<B256, Vec<(Nibbles, Option<BranchNodeCompact>)>> =
+            HashMap::with_capacity(entries_iter.size_hint().0);
+
+        // Group entries by hashed address
+        for (hashed_address, storage_entry) in entries_iter {
+            by_address
+                .entry(hashed_address)
+                .or_default()
+                .push((storage_entry.nibbles.0, Some(storage_entry.node)));
+        }
+        // Store each address's storage trie branches
+        for (address, branches) in by_address {
+            store.store_storage_branches(address, branches)?;
+        }
 
         Ok(())
     }
@@ -503,7 +534,7 @@ mod tests {
 
         // Run initialization
         let tx = db.tx().unwrap();
-        let job = InitializationJob::new(storage.clone(), &tx);
+        let job = InitializationJob::new(storage.clone(), tx);
         job.initialize_hashed_accounts(None).unwrap();
 
         // Verify data was stored (will be in sorted order)
@@ -554,7 +585,7 @@ mod tests {
 
         // Run initialization
         let tx = db.tx().unwrap();
-        let job = InitializationJob::new(storage.clone(), &tx);
+        let job = InitializationJob::new(storage.clone(), tx);
         job.initialize_hashed_storages(None).unwrap();
 
         // Verify data was stored for addr1
@@ -602,7 +633,7 @@ mod tests {
 
         // Run initialization
         let tx = db.tx().unwrap();
-        let job = InitializationJob::new(storage.clone(), &tx);
+        let job = InitializationJob::new(storage.clone(), tx);
         job.initialize_accounts_trie(None).unwrap();
 
         // Verify data was stored
@@ -661,7 +692,7 @@ mod tests {
 
         // Run initialization
         let tx = db.tx().unwrap();
-        let job = InitializationJob::new(storage.clone(), &tx);
+        let job = InitializationJob::new(storage.clone(), tx);
         job.initialize_storages_trie(None).unwrap();
 
         // Verify data was stored for addr1
@@ -738,7 +769,7 @@ mod tests {
 
         // Run full initialization
         let tx = db.tx().unwrap();
-        let job = InitializationJob::new(storage.clone(), &tx);
+        let job = InitializationJob::new(storage.clone(), tx);
         let best_number = 100;
         let best_hash = B256::repeat_byte(0x42);
 
@@ -778,7 +809,7 @@ mod tests {
         storage.commit_initial_state().expect("commit anchor");
 
         let tx = db.tx().unwrap();
-        let job = InitializationJob::new(storage.clone(), &tx);
+        let job = InitializationJob::new(storage.clone(), tx);
 
         // Run initialization - should skip
         job.run(100, B256::repeat_byte(0x42)).unwrap();
@@ -822,7 +853,7 @@ mod tests {
         // Initialization #1
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_hashed_accounts(None).unwrap();
         }
 
@@ -848,7 +879,7 @@ mod tests {
         // Initialization #2 (restart)
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_hashed_accounts(Some(k2)).unwrap();
         }
 
@@ -909,7 +940,7 @@ mod tests {
         // Initialization #1
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_hashed_storages(None).unwrap();
         }
 
@@ -933,7 +964,7 @@ mod tests {
         // Initialization #2
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_hashed_storages(Some(HashedStorageKey::new(a2, s21))).unwrap();
         }
 
@@ -994,7 +1025,7 @@ mod tests {
         // Initialization #1
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_accounts_trie(None).unwrap();
         }
 
@@ -1015,7 +1046,7 @@ mod tests {
         // Initialization #2
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_accounts_trie(Some(p2.clone())).unwrap();
         }
 
@@ -1072,7 +1103,7 @@ mod tests {
         // Initialization #1
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_storages_trie(None).unwrap();
         }
 
@@ -1097,7 +1128,7 @@ mod tests {
         // Initialization #2
         {
             let tx = db.tx().unwrap();
-            let job = InitializationJob::new(store.clone(), &tx);
+            let job = InitializationJob::new(store.clone(), tx);
             job.initialize_storages_trie(Some(StorageTrieKey::new(a2, StoredNibbles::from(n2.0))))
                 .unwrap();
         }
