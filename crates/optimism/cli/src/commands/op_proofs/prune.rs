@@ -77,7 +77,7 @@ impl<C: ChainSpecParser<ChainSpec = OpChainSpec>> PruneCommand<C> {
             self.proofs_history_window,
             self.proofs_history_prune_batch_size,
         );
-        pruner.run().await;
+        pruner.run();
         Ok(())
     }
 }

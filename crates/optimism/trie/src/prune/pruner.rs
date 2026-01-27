@@ -172,7 +172,7 @@ where
     }
 
     /// Run the pruner
-    pub async fn run(&self) {
+    pub fn run(&self) {
         let res = self.run_inner();
         if let Err(e) = res {
             error!(target: "trie::pruner", err=%e, "Pruner failed");
