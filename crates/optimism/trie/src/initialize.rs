@@ -147,8 +147,6 @@ impl<Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
         storage_threshold: usize,
         log_threshold: usize,
     ) -> Result<u64, OpProofsStorageError> {
-        let mut total_entries: usize = 0;
-
         info!("Starting {} initialization", name);
         let start_time = Instant::now();
 
@@ -165,6 +163,7 @@ impl<Tx: DbTx + Sync, S: OpProofsStore + OpProofsInitialStateStore + Send>
         let storage = &self.storage;
         let source_size_hint = source.size_hint().0;
         let mut batch = Vec::with_capacity(source_size_hint.min(storage_threshold));
+        let mut total_entries: usize = 0;
 
         for entry in source {
             batch.push(entry?);
