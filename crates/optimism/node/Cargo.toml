@@ -31,6 +31,8 @@ reth-node-core.workspace = true
 reth-rpc-engine-api.workspace = true
 reth-engine-local = { workspace = true, features = ["op"] }
 reth-rpc-api.workspace = true
+reth-db.workspace = true
+reth-db-api.workspace = true
 
 # op-reth
 reth-optimism-payload-builder.workspace = true
@@ -42,6 +44,8 @@ reth-optimism-chainspec.workspace = true
 reth-optimism-consensus = { workspace = true, features = ["std"] }
 reth-optimism-forks.workspace = true
 reth-optimism-primitives = { workspace = true, features = ["serde", "serde-bincode-compat", "reth-codec"] }
+reth-optimism-trie.workspace = true
+reth-optimism-exex.workspace = true
 
 # revm with required optimism features
 # Note: this must be kept to ensure all features are properly enabled/forwarded
@@ -70,6 +74,8 @@ humantime.workspace = true
 reth-e2e-test-utils = { workspace = true, optional = true }
 alloy-genesis = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+futures-util = "0.3.31"
+tracing = "0.1.44"
 
 [dev-dependencies]
 reth-optimism-node = { workspace = true, features = ["test-utils"] }
