@@ -137,3 +137,7 @@ test-utils = [
     "reth-optimism-exex/test-utils",
 ]
 reth-codec = ["reth-optimism-primitives/reth-codec"]
+
+[[test]]
+name = "e2e_testsuite"
+path = "tests/e2e-testsuite/main.rs"
