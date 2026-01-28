@@ -47,7 +47,6 @@ reth-optimism-primitives = { workspace = true, features = ["serde", "serde-binco
 reth-optimism-exex = { workspace = true, features = ["metrics"] }
 reth-optimism-trie = { workspace = true, features = ["metrics"] }
 
-
 # revm with required optimism features
 # Note: this must be kept to ensure all features are properly enabled/forwarded
 revm = { workspace = true, features = ["secp256k1", "blst", "c-kzg", "memory_limit"] }
