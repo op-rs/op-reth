@@ -44,8 +44,8 @@ reth-optimism-chainspec.workspace = true
 reth-optimism-consensus = { workspace = true, features = ["std"] }
 reth-optimism-forks.workspace = true
 reth-optimism-primitives = { workspace = true, features = ["serde", "serde-bincode-compat", "reth-codec"] }
-reth-optimism-trie.workspace = true
-reth-optimism-exex.workspace = true
+reth-optimism-exex = { workspace = true, features = ["metrics"] }
+reth-optimism-trie = { workspace = true, features = ["metrics"] }
 
 
 # revm with required optimism features
