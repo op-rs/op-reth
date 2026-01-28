@@ -190,7 +190,7 @@ jobs:
           files: sequencer_and_verifier_cov.lcov
           flags: e2e
           env_vars: OS,RUST
-          name: verifier-sysgo-tests
+          name: sequencer-and-verifier-sysgo-tests
           verbose: true
 
   e2e-op-historical-proof-success:
