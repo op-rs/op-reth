@@ -25,15 +25,18 @@ pub async fn launch_node_with_proof_history(
     builder: WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, OpChainSpec>>,
     args: RollupArgs,
 ) -> eyre::Result<(), ErrReport> {
-    let proofs_history_enabled = args.proofs_history;
-    let proofs_history_window = args.proofs_history_window;
-    let proofs_history_prune_interval = args.proofs_history_prune_interval;
-    let proofs_history_verification_interval = args.proofs_history_verification_interval;
+    let RollupArgs {
+        proofs_history,
+        proofs_history_window,
+        proofs_history_prune_interval,
+        proofs_history_verification_interval,
+        ..
+    } = args;
 
     // Start from a plain OpNode builder
     let mut node_builder = builder.node(OpNode::new(args.clone()));
 
-    if proofs_history_enabled {
+    if proofs_history {
         let path = args
             .proofs_history_storage_path
             .clone()
