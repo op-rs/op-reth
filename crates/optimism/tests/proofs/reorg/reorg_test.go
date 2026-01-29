@@ -192,7 +192,7 @@ func TestReorgUsingAccountProof(gt *testing.T) {
 
 	// verify that the accounts involved in the conflicting blocks
 	for i, c := range cases {
-		l.Info("Verifying proof for case %d: addr=%s block=%d", i, c.addr.Hex(), c.Block)
+		l.Info("Verifying proof", "case", i, "addr", c.addr.Hex(), "block", c.Block)
 		utils.FetchAndVerifyProofs(t, sys, c.addr, c.slots, c.Block)
 	}
 }
