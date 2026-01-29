@@ -1,42 +1,42 @@
-name: reth
+name: op-reth
 
 services:
-  reth:
+  op-reth:
     restart: unless-stopped
-    image: ghcr.io/paradigmxyz/reth
+    image: ghcr.io/op-rs/op-reth
     ports:
       - "9001:9001" # metrics
       - "30303:30303" # eth/66 peering
       - "8545:8545" # rpc
       - "8551:8551" # engine
     volumes:
-      - mainnet_data:/root/.local/share/reth/mainnet
-      - sepolia_data:/root/.local/share/reth/sepolia
-      - holesky_data:/root/.local/share/reth/holesky
-      - hoodi_data:/root/.local/share/reth/hoodi
+      - op_mainnet_data:/root/.local/share/reth/op-mainnet
+      - op_sepolia_data:/root/.local/share/reth/op-sepolia
+      - base_mainnet_data:/root/.local/share/reth/base-mainnet
+      - base_sepolia_data:/root/.local/share/reth/base-sepolia
       - logs:/root/logs
       - ./jwttoken:/root/jwt/:ro
     # https://paradigmxyz.github.io/reth/run/troubleshooting.html#concurrent-database-access-error-using-containersdocker
     pid: host
-    # For Sepolia, replace `--chain mainnet` with `--chain sepolia`
-    # For Holesky, replace `--chain mainnet` with `--chain holesky`
-    # For Hoodi, replace `--chain mainnet` with `--chain hoodi`
+    # For OP Sepolia, replace `--chain op-mainnet` with `--chain op-sepolia`
+    # For Base Mainnet, replace `--chain op-mainnet` with `--chain base-mainnet`
+    # For Base Sepolia, replace `--chain op-mainnet` with `--chain base-sepolia`
     command: >
       node
-      --chain mainnet
+      --chain op-mainnet
       --metrics 0.0.0.0:9001
       --log.file.directory /root/logs
       --authrpc.addr 0.0.0.0
       --authrpc.port 8551
       --authrpc.jwtsecret /root/jwt/jwt.hex
       --http --http.addr 0.0.0.0 --http.port 8545
-      --http.api "eth,net,web3"
+      --http.api "eth,net,web3,debug,trace"
 
   prometheus:
     restart: unless-stopped
     image: prom/prometheus
     depends_on:
-      - reth
+      - op-reth
     ports:
       - 9090:9090
     volumes:
@@ -46,11 +46,11 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
 
-  grafana:
+  op-grafana:
     restart: unless-stopped
     image: grafana/grafana:latest
     depends_on:
-      - reth
+      - op-reth
       - prometheus
     ports:
       - 3000:3000
@@ -61,26 +61,23 @@ services:
       - ./grafana/datasources:/etc/grafana/provisioning/datasources
       - ./grafana/dashboards:/etc/grafana/provisioning_temp/dashboards
     # 1. Copy dashboards from temp directory to prevent modifying original host files
-    # 2. Remove op-reth specific dashboards (use op-docker-compose.yml for op-reth)
-    # 3. Replace Prometheus datasource placeholders with the actual name
-    # 4. Run Grafana
+    # 2. Replace Prometheus datasource placeholders with the actual name
+    # 3. Run Grafana
     entrypoint: >
       sh -c "cp -r /etc/grafana/provisioning_temp/dashboards/. /etc/grafana/provisioning/dashboards &&
-             rm -f /etc/grafana/provisioning/dashboards/op-reth.json &&
-             rm -f /etc/grafana/provisioning/dashboards/op-proof-history.json &&
              find /etc/grafana/provisioning/dashboards/ -name '*.json' -exec sed -i 's/$${DS_PROMETHEUS}/Prometheus/g' {} \+ &&
              find /etc/grafana/provisioning/dashboards/ -name '*.json' -exec sed -i 's/$${datasource}/Prometheus/g' {} \+ &&
              find /etc/grafana/provisioning/dashboards/ -name '*.json' -exec sed -i 's/$${VAR_INSTANCE_LABEL}/instance/g' {} \+ &&
              /run.sh"
 
 volumes:
-  mainnet_data:
+  op_mainnet_data:
     driver: local
-  sepolia_data:
+  op_sepolia_data:
     driver: local
-  holesky_data:
+  base_mainnet_data:
     driver: local
-  hoodi_data:
+  base_sepolia_data:
     driver: local
   logs:
     driver: local

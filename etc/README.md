@@ -15,6 +15,20 @@ up to date.
 To run Reth, Grafana or Prometheus with Docker Compose, refer to
 the [docker docs](https://reth.rs/installation/docker#using-docker-compose).
 
+#### For Reth (Ethereum L1)
+
+```bash
+docker compose -f etc/docker-compose.yml up -d
+```
+
+#### For OP-Reth (Optimism L2)
+
+```bash
+docker compose -f etc/op-docker-compose.yml up -d
+```
+
+Supported chains for op-reth: `op-mainnet`, `op-sepolia`, `base-mainnet`, `base-sepolia`.
+
 ### Grafana
 
 #### Adding a new metric to Grafana
