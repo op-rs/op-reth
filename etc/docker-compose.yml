@@ -67,7 +67,6 @@ services:
     entrypoint: >
       sh -c "cp -r /etc/grafana/provisioning_temp/dashboards/. /etc/grafana/provisioning/dashboards &&
              rm -f /etc/grafana/provisioning/dashboards/op-reth.json &&
-             rm -f /etc/grafana/provisioning/dashboards/op-proof-history.json &&
              find /etc/grafana/provisioning/dashboards/ -name '*.json' -exec sed -i 's/$${DS_PROMETHEUS}/Prometheus/g' {} \+ &&
              find /etc/grafana/provisioning/dashboards/ -name '*.json' -exec sed -i 's/$${datasource}/Prometheus/g' {} \+ &&
              find /etc/grafana/provisioning/dashboards/ -name '*.json' -exec sed -i 's/$${VAR_INSTANCE_LABEL}/instance/g' {} \+ &&
