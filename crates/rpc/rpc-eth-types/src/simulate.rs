@@ -1,7 +1,7 @@
 //! Utilities for serving `eth_simulateV1`
 
 use crate::{
-    error::{api::FromEthApiError, FromEvmError, ToRpcError},
+    error::{FromEvmError, ToRpcError},
     EthApiError,
 };
 use alloy_consensus::{transaction::TxHashRef, BlockHeader, Transaction as _};
@@ -245,7 +245,6 @@ pub fn build_simulated_block<Err, T>(
 ) -> Result<SimulatedBlock<RpcBlock<T::Network>>, Err>
 where
     Err: std::error::Error
-        + FromEthApiError
         + FromEvmError<T::Evm>
         + From<T::Error>
         + Into<jsonrpsee_types::ErrorObject<'static>>,

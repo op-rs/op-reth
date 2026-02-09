@@ -29,7 +29,6 @@ use reth_revm::{cancelled::CancelOnDrop, database::StateProviderDatabase, db::St
 use reth_rpc_convert::{RpcConvert, RpcTxReq};
 use reth_rpc_eth_types::{
     cache::db::StateProviderTraitObjWrapper,
-    error::{AsEthApiError, FromEthApiError},
     simulate::{self, EthSimulateError},
     EthApiError, StateCacheDb,
 };

@@ -28,9 +28,7 @@ pub use filter::{EngineEthFilter, EthFilterApiServer, QueryLimits};
 pub use node::{RpcNodeCore, RpcNodeCoreExt};
 pub use pubsub::EthPubSubApiServer;
 pub use reth_rpc_convert::*;
-pub use reth_rpc_eth_types::error::{
-    AsEthApiError, FromEthApiError, FromEvmError, IntoEthApiError,
-};
+pub use reth_rpc_eth_types::error::FromEvmError;
 pub use types::{EthApiTypes, FullEthApiTypes, RpcBlock, RpcHeader, RpcReceipt, RpcTransaction};
 
 #[cfg(feature = "client")]

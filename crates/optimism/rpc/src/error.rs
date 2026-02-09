@@ -8,7 +8,7 @@ use jsonrpsee_types::error::{INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE};
 use op_revm::{OpHaltReason, OpTransactionError};
 use reth_evm::execute::ProviderError;
 use reth_optimism_evm::OpBlockExecutionError;
-use reth_rpc_eth_api::{AsEthApiError, EthTxEnvError, TransactionConversionError};
+use reth_rpc_eth_api::{EthTxEnvError, TransactionConversionError};
 use reth_rpc_eth_types::{
     error::api::{FromEvmHalt, FromRevert},
     EthApiError,
@@ -40,12 +40,19 @@ pub enum OpEthApiError {
     Sequencer(#[from] SequencerClientError),
 }
 
-impl AsEthApiError for OpEthApiError {
-    fn as_err(&self) -> Option<&EthApiError> {
+impl ToRpcError for OpEthApiError {
+    fn to_rpc_error(&self) -> jsonrpsee_types::ErrorObject<'static> {
         match self {
-            Self::Eth(err) => Some(err),
-            _ => None,
+            Self::Eth(err) => err.to_rpc_error(),
+            Self::Sequencer(err) => err.to_rpc_error(),
+            _ => internal_rpc_err(self.to_string()),
         }
+    }
+}
+
+impl From<OpEthApiError> for EthApiError {
+    fn from(error: OpEthApiError) -> Self {
+        EthApiError::Other(Box::new(error))
     }
 }
 

@@ -7,7 +7,7 @@ use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rpc_types_eth::{error::EthRpcErrorCode, request::TransactionInputError, BlockError};
 use alloy_sol_types::{ContractError, RevertReason};
 use alloy_transport::{RpcError, TransportErrorKind};
-pub use api::{AsEthApiError, FromEthApiError, FromEvmError, IntoEthApiError};
+pub use api::FromEvmError;
 use core::time::Duration;
 use reth_errors::{BlockExecutionError, BlockValidationError, RethError};
 use reth_primitives_traits::transaction::{error::InvalidTransactionError, signed::RecoveryError};
@@ -25,6 +25,8 @@ use revm::context_interface::result::{
 use revm_inspectors::tracing::{DebugInspectorError, MuxError};
 use std::convert::Infallible;
 use tokio::sync::oneshot::error::RecvError;
+
+use crate::simulate::EthSimulateError;
 
 /// A trait to convert an error to an RPC error.
 pub trait ToRpcError: core::error::Error + Send + Sync + 'static {
@@ -190,7 +192,7 @@ pub enum EthApiError {
     CallManyError {
         /// Bundle index where the error occurred
         bundle_index: usize,
-        /// Transaction index within the bundle where the error occurred  
+        /// Transaction index within the bundle where the error occurred
         tx_index: usize,
         /// The underlying error object
         error: jsonrpsee_types::ErrorObject<'static>,
@@ -214,6 +216,12 @@ impl EthApiError {
     ) -> Self {
         Self::CallManyError { bundle_index, tx_index, error }
     }
+
+    // Returns reference to [`EthApiError`], if this an error variant inherited from core
+    // functionality.
+    // fn as_err(&self) -> Option<&EthApiError> {
+    //     Some(self)
+    // }
 
     /// Returns `true` if error is [`RpcInvalidTransactionError::GasTooHigh`]
     pub const fn is_gas_too_high(&self) -> bool {
@@ -259,6 +267,31 @@ impl EthApiError {
     pub fn into_rpc_err(self) -> jsonrpsee_types::error::ErrorObject<'static> {
         self.into()
     }
+    // Returns [`EthSimulateError`] if this error maps to a simulate-specific error code.
+    // fn as_simulate_error(&self) -> Option<EthSimulateError> {
+    //     let err = self.as_err()?;
+    //     match err {
+    //         EthApiError::InvalidTransaction(tx_err) => match tx_err {
+    //             RpcInvalidTransactionError::NonceTooLow { tx, state } => {
+    //                 Some(EthSimulateError::NonceTooLow { tx: *tx, state: *state })
+    //             }
+    //             RpcInvalidTransactionError::NonceTooHigh => Some(EthSimulateError::NonceTooHigh),
+    //             RpcInvalidTransactionError::FeeCapTooLow => {
+    //                 Some(EthSimulateError::BaseFeePerGasTooLow)
+    //             }
+    //             RpcInvalidTransactionError::GasTooLow =>
+    // Some(EthSimulateError::IntrinsicGasTooLow),
+    // RpcInvalidTransactionError::InsufficientFunds { cost, balance } => {
+    // Some(EthSimulateError::InsufficientFunds { cost: *cost, balance: *balance })
+    // }             RpcInvalidTransactionError::SenderNoEOA =>
+    // Some(EthSimulateError::SenderNotEOA),
+    // RpcInvalidTransactionError::MaxInitCodeSizeExceeded => {
+    // Some(EthSimulateError::MaxInitCodeSizeExceeded)             }
+    //             _ => None,
+    //         },
+    //         _ => None,
+    //     }
+    // }
 }
 
 impl From<EthApiError> for jsonrpsee_types::error::ErrorObject<'static> {
